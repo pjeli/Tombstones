@@ -1,0 +1,14 @@
+## Title: Tombstones
+## Version: 1.0
+## Interface: 100100
+## SavedVariables: deathRecordsDB
+## Author: pman
+## Notes: See the tombstones of your fallen friends!
+
+libs\LibStub\LibStub.lua
+libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+libs\HereBeDragons\HereBeDragons-2.0.lua
+libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
+libs\AceComm-3.0\AceComm-3.0.xml
+
+Tombstones.lua
