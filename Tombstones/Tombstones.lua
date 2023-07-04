@@ -2,6 +2,7 @@
 local ADDON_NAME = "Tombstones"
 local ADDON_CHANNEL = "Tombstones"
 local DEATH_RECORD_WINDOW_SIZE = 5000
+local REALM = GetRealmName()
 
 -- DeathLog Constants
 local death_alerts_channel = "hcdeathalertschannel"
@@ -19,6 +20,7 @@ local COMM_COMMANDS = {
 local deathRecordsDB
 local deathRecordCount = 0
 local showMarkers = true
+local debug = false
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -35,27 +37,32 @@ addon:RegisterEvent("CHAT_MSG_ADDON") -- Changed from CHAT_MSG_SAY
 
 -- Add death marker function
 local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level)
+    if mapID == nil then
+       return
+    end
+
     if deathRecordCount >= DEATH_RECORD_WINDOW_SIZE then
         table.remove(deathRecordsDB.deathRecords, 1)
         deathRecordCount = deathRecordCount - 1
     end
 
-    local marker = { mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words }
+    local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words }
     table.insert(deathRecordsDB.deathRecords, marker)
     deathRecordCount = deathRecordCount + 1
 
     -- Place your custom code here to handle additional logic for the death marker
 
-    print("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+    printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+end
+
+function printDebug(msg)
+    if debug then
+        print(msg)
+    end
 end
 
 local function ClearDeathMarkers()
-    for _, marker in ipairs(deathRecordsDB.deathRecords) do
-        if (marker.texture ~= nil) then
-            hbdp:RemoveAllWorldMapIcons("Tombstones")
-            --marker.texture:Hide()
-        end
-    end
+    hbdp:RemoveAllWorldMapIcons("Tombstones")
 end
 
 
@@ -73,11 +80,11 @@ local function UpdateWorldMapMarkers()
         -- Delay the display of death markers to ensure the map is fully loaded
         C_Timer.After(0.1, function()
             -- Display death markers on the world map
-            local currentContinentID = C_Map.GetMapInfo(worldMapFrame:GetMapID()).parentMapID
             for _, marker in ipairs(deathRecordsDB.deathRecords) do
-                local mapID, contID, posX, posY, level, timestamp = marker.mapID, marker.contID, marker.posX, marker.posY, marker.level, marker.timestamp
-
-                -- Check if the marker is on a different continent
+                    local realm, mapID, contID, posX, posY, level, timestamp = marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.level, marker.timestamp
+                    -- Skip markers that are not in our realm
+                    if (realm == nil or REALM == realm) then
+ 
                     -- Create the marker on the current continent's map
                     local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
                     markerMapButton:SetSize(12, 12) -- Adjust the size of the marker as needed
@@ -103,7 +110,7 @@ local function UpdateWorldMapMarkers()
                            GameTooltip:SetText("R.I.P. " .. marker.user .. " - " .. marker.level)
                        end
                        if (marker.last_words ~= nil) then
-                           GameTooltip:AddLine(marker.last_words, 1, 0, 0)
+                           GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
                        end
                        GameTooltip:Show()
                     end)
@@ -131,6 +138,7 @@ local function UpdateWorldMapMarkers()
                     hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
 
                     marker.texture = markerMapButton
+                    end
             end
         end)
     end
@@ -174,7 +182,7 @@ function addon:SendMessage(message, distribution, target)
     local messageType = "MESSAGE_TYPE" -- Replace with your desired message type
     local distribution = "PARTY" -- Replace with your desired target (e.g., "PARTY", "RAID", "GUILD")
     self:SendCommMessage(prefix, message, distribution, nil)
-    print("Sent message: "..message)
+    printDebug("Sent message: "..message)
 end
 
 function addon:OnCommReceived(prefix, message, distribution, sender)
@@ -184,7 +192,7 @@ function addon:OnCommReceived(prefix, message, distribution, sender)
     if prefix == addonPrefix and distribution == "PARTY" and sender ~= UnitName("player") then
         -- Process the add-on message
         -- Implement your logic here
-        print("Received add-on message: " .. message .. " from " .. sender)
+        printDebug("Received add-on message: " .. message .. " from " .. sender)
         local command, mapID, contID, posX, posY, timestamp = strsplit("|", message)
             if command == "DEATH" and mapID and posX and posY and timestamp then
                 mapID = tonumber(mapID)
@@ -218,7 +226,7 @@ end
 function TdeathlogReceiveChannelMessage(sender, data)
   if data == nil then return end
   local decoded_player_data = TdecodeMessage(data)
-  print("Tombstones decoded a DeathLog death for " .. sender .. "!")
+  printDebug("Tombstones decoded a DeathLog death for " .. sender .. "!")
   if sender ~= decoded_player_data["name"] then return end
   local x, y = strsplit(",", decoded_player_data["map_pos"],2)
   AddDeathMarker(tonumber(decoded_player_data["map_id"]), tonumber(decoded_player_data["cont_id"]), tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]))
@@ -229,7 +237,6 @@ function TdecodeMessage(msg)
   for w in msg:gmatch("(.-)~") do table.insert(values, w) end
   if #values < 9 then
 	-- Return something that causes the calling function to return on the isValidEntry check
-	--print("Malformed deathlog message with " .. #values .. " data values")
 	local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
 	return malformed_player_data
   end
@@ -283,9 +290,12 @@ local function SlashCommandHandler(msg)
     elseif msg == "clear" then
         -- Clear all death records
         ClearDeathRecords()
+    elseif msg == "debug" then
+        debug = not debug
+        print("Tombstones' debug mode is: ".. tostring(debug))
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | clear]")
+        print("Usage: /tombstones or /ts [show | hide | clear | debug]")
     end
 end
 
@@ -298,7 +308,7 @@ addon:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
     if addonName == ADDON_NAME then
-      print("Tombstones is loading...")
+      printDebug("Tombstones is loading...")
 
       LoadDeathRecords()
  
@@ -316,7 +326,7 @@ addon:SetScript("OnEvent", function(self, event, ...)
     local timestamp = time()
 
     if mapID and contID and posX and posY and timestamp then
-      print("Death detected. Making mark...")
+      printDebug("Death detected. Making mark...")
       AddDeathMarker(mapID, contID, posX, posY, timestamp, UnitName("player"))
       self:SendMessage("DEATH|"..mapID.."|"..contID.."|"..posX.."|"..posY.."|"..timestamp)
     end
@@ -325,7 +335,7 @@ addon:SetScript("OnEvent", function(self, event, ...)
     SaveDeathRecords()
   elseif event == "CHAT_MSG_SAY" then
         local message = ...
-        if message == "dead" then
+        if (debug and message == "dead") then
             local mapID = C_Map.GetBestMapForUnit("player")
             local contID = C_Map.GetMapInfo(mapID).parentMapID
             local playerPosition = C_Map.GetPlayerMapPosition(mapID, "player")
@@ -343,13 +353,13 @@ addon:SetScript("OnEvent", function(self, event, ...)
 
     if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
       local player_name_short, _ = string.split("-", arg[2])
-      print("Receiving DeathLog death ping for " .. player_name_short .. ".")
+      printDebug("Receiving DeathLog death ping for " .. player_name_short .. ".")
       TdeathlogReceiveChannelMessage(player_name_short, msg)
     end
 
     if command == COMM_COMMANDS["LAST_WORDS"] then
       local player_name_short, _ = string.split("-", arg[2])
-      print("Receiving DeathLog last_words ping for " .. player_name_short .. ".")
+      printDebug("Receiving DeathLog last_words ping for " .. player_name_short .. ".")
       TdeathlogReceiveLastWords(player_name_short, msg)
     end
   end
