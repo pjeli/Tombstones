@@ -157,7 +157,6 @@ local function UpdateWorldMapMarkers()
                     -- Add the marker to the current continent's map
                     hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
 
-                    marker.texture = markerMapButton
                     end
             end
         end)
@@ -218,9 +217,6 @@ local function LoadDeathRecords()
         deathRecordsDB = {}
         deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
         deathRecordsDB.deathRecords = {}
-        deathRecordsCount = 0
-    else
-        deathRecordsCount = #deathRecordsDB.deathRecords
     end
 end
 
@@ -353,9 +349,12 @@ local function SlashCommandHandler(msg)
     elseif msg == "debug" then
         debug = not debug
         print("Tombstones' debug mode is: ".. tostring(debug))
+    elseif msg == "info" then
+        print("Tombstones has " .. deathRecordCount .. " records this session.")
+        print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | clear | debug]")
+        print("Usage: /tombstones or /ts [show | hide | clear | info | debug]")
     end
 end
 
