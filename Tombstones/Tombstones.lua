@@ -15,6 +15,14 @@ local COMM_COMMANDS = {
   ["BROADCAST_DEATH_PING_CHECKSUM"] = "2",
   ["LAST_WORDS"] = "3",
 }
+local environment_damage = {
+  [-2] = "Drowning",
+  [-3] = "Falling",
+  [-4] = "Fatigue",
+  [-5] = "Fire",
+  [-6] = "Lava",
+  [-7] = "Slime",
+}
 
 -- Variables
 local deathRecordsDB
@@ -36,7 +44,7 @@ addon:RegisterEvent("CHAT_MSG_CHANNEL")
 addon:RegisterEvent("CHAT_MSG_ADDON") -- Changed from CHAT_MSG_SAY
 
 -- Add death marker function
-local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level)
+local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level, source_id, class_id)
     if mapID == nil then
        return
     end
@@ -46,7 +54,7 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level)
         deathRecordCount = deathRecordCount - 1
     end
 
-    local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words }
+    local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id }
     table.insert(deathRecordsDB.deathRecords, marker)
     deathRecordCount = deathRecordCount + 1
 
@@ -104,10 +112,22 @@ local function UpdateWorldMapMarkers()
                     -- Set the tooltip text to the name of the player who died
                     markerMapButton:SetScript("OnEnter", function(self)
                        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                       if (marker.level == nil) then
-                           GameTooltip:SetText("R.I.P. " .. marker.user .. " - ?")
+                       if (marker.level ~= nil and marker.class_id ~= nil) then
+                           local class_str, _, _ = GetClassInfo(marker.class_id)
+                           GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
+                       elseif (marker.level ~= nil and marker.class_id == nil) then
+                           GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
                        else
-                           GameTooltip:SetText("R.I.P. " .. marker.user .. " - " .. marker.level)
+                           GameTooltip:SetText(marker.user .. " - ? - ?")
+                       end
+                       if (marker.source_id ~= nil) then
+                           local source_id = id_to_npc[marker.source_id]
+                           local env_dmg = environment_damage[marker.source_id]
+                           if (source_id ~= nil) then 
+		               GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
+		           elseif (env_dmg ~= nil) then
+		               GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+		           end
                        end
                        if (marker.last_words ~= nil) then
                            GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
@@ -152,6 +172,41 @@ end)
 WorldMapFrame:HookScript("OnHide", function()
     ClearDeathMarkers()
 end)
+
+local function MakeWorldMapButton()
+    local mapButton = CreateFrame("Button", nil, WorldMapFrame, "UIPanelButtonTemplate")
+    mapButton:SetSize(20, 20) -- Adjust the size of the button as needed
+    mapButton:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 30, -35)
+    mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set a custom texture for the button
+    mapButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square") -- Set the highlight texture for the button
+    mapButton:SetScript("OnClick", function()
+        showMarkers = not showMarkers
+    
+        if showMarkers then
+            mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set the new icon texture
+            GameTooltip:SetText("Hide Tombstones")
+            showMarkers = true
+            UpdateWorldMapMarkers()
+        else
+            mapButton:SetNormalTexture("Interface\\Icons\\INV_Misc_Map_01") -- Set the default icon texture
+            GameTooltip:SetText("Show Tombstones")
+            showMarkers = false
+            ClearDeathMarkers()
+        end
+    end)
+    mapButton:SetScript("OnEnter", function(self)
+         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+         if showMarkers then
+            GameTooltip:SetText("Hide Tombstones")
+        else
+            GameTooltip:SetText("Show Tombstones")
+        end
+        GameTooltip:Show()
+    end)
+    mapButton:SetScript("OnLeave", function(self)
+       GameTooltip:Hide()
+    end)
+end
 
 local function SaveDeathRecords()
     _G["deathRecordsDB"] = deathRecordsDB
@@ -229,7 +284,7 @@ function TdeathlogReceiveChannelMessage(sender, data)
   printDebug("Tombstones decoded a DeathLog death for " .. sender .. "!")
   if sender ~= decoded_player_data["name"] then return end
   local x, y = strsplit(",", decoded_player_data["map_pos"],2)
-  AddDeathMarker(tonumber(decoded_player_data["map_id"]), tonumber(decoded_player_data["cont_id"]), tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]))
+  AddDeathMarker(tonumber(decoded_player_data["map_id"]), tonumber(decoded_player_data["cont_id"]), tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]))
 end
 
 function TdecodeMessage(msg)
@@ -251,6 +306,11 @@ function TdecodeMessage(msg)
   local instance_id = tonumber(values[7])
   local map_id = tonumber(values[8])
   local map_pos = values[9]
+  if (map_id == nil) then
+	-- Return something that causes the calling function to return on the isValidEntry check
+	local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
+	return malformed_player_data
+  end
   local mapInfo = C_Map.GetMapInfo(map_id)
   local cont_id = mapInfo.continentID
   local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, cont_id, map_pos, date, last_words)
@@ -310,6 +370,7 @@ addon:SetScript("OnEvent", function(self, event, ...)
     if addonName == ADDON_NAME then
       printDebug("Tombstones is loading...")
 
+      MakeWorldMapButton()
       LoadDeathRecords()
  
       ac:Embed(self)
