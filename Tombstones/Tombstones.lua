@@ -62,7 +62,7 @@ addon:RegisterEvent("CHAT_MSG_CHANNEL")
 addon:RegisterEvent("CHAT_MSG_ADDON") -- Changed from CHAT_MSG_SAY
 
 -- Add death marker function
-local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level, source_id, class_id)
+local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
     if mapID == nil then
        return
     end
@@ -72,7 +72,7 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level,
         deathRecordCount = deathRecordCount - 1
     end
 
-    local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id }
+    local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
     table.insert(deathRecordsDB.deathRecords, marker)
     deathRecordCount = deathRecordCount + 1
 
@@ -133,13 +133,20 @@ local function UpdateWorldMapMarkers()
                     -- Set the tooltip text to the name of the player who died
                     markerMapButton:SetScript("OnEnter", function(self)
                        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                       if (marker.level ~= nil and marker.class_id ~= nil) then
-                           local class_str, _, _ = GetClassInfo(marker.class_id)
+                       local class_str, _, _ = GetClassInfo(marker.class_id)
+                       if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
+                           local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
+                           GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                       elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
                            GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
                        elseif (marker.level ~= nil and marker.class_id == nil) then
                            GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
                        else
-                           GameTooltip:SetText(marker.user .. " - ? - ?")
+                           GameTooltip:SetText(marker.user .. " -  ? - ?")
+                       end
+                       if (marker.timestamp > 0) then
+                           local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
+                           GameTooltip:AddLine(date_str, .8, .8, .8, true)
                        end
                        if (marker.source_id ~= nil) then
                            local source_id = id_to_npc[marker.source_id]
@@ -314,7 +321,7 @@ function TdeathlogReceiveChannelMessage(sender, data)
   printDebug("Tombstones decoded a DeathLog death for " .. sender .. "!")
   if sender ~= decoded_player_data["name"] then return end
   local x, y = strsplit(",", decoded_player_data["map_pos"],2)
-  AddDeathMarker(tonumber(decoded_player_data["map_id"]), tonumber(decoded_player_data["cont_id"]), tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]))
+  AddDeathMarker(tonumber(decoded_player_data["map_id"]), tonumber(decoded_player_data["cont_id"]), tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]))
 end
 
 function TdecodeMessage(msg)
