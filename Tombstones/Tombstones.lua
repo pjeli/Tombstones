@@ -36,6 +36,7 @@ local ac = LibStub("AceComm-3.0")
 
 -- Register events
 local addon = CreateFrame("Frame")
+addon:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 addon:RegisterEvent("PLAYER_DEAD")
 addon:RegisterEvent("PLAYER_LOGOUT")
 addon:RegisterEvent("ADDON_LOADED")
@@ -330,6 +331,65 @@ function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_
   }
 end
 
+
+-- Function to show the zone splash text
+function ShowZoneSplashText()
+    local zoneName = GetRealZoneText()
+    local currentMapID = C_Map.GetBestMapForUnit("player")
+    local deathMarkersInZone = CountDeathMarkersInZone(currentMapID)
+    local deathPercentage = (deathMarkersInZone / #deathRecordsDB.deathRecords) * 100.0
+
+    -- Create and display the splash text frame
+    local splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
+    splashFrame:SetSize(400, 200)
+    splashFrame:SetPoint("CENTER", 0, 340)
+
+    -- Add a texture
+    splashFrame.texture = splashFrame:CreateTexture(nil, "BACKGROUND")
+    splashFrame.texture:SetAllPoints(true)
+    --splashFrame.texture:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+
+    -- Add a font string
+    splashFrame.text = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    splashFrame.text:SetPoint("CENTER", 0, 0)
+    splashFrame.text:SetText(string.format("There are %d tombstones here.\n%.2f%% chance of death.", deathMarkersInZone, deathPercentage))
+    splashFrame.text:SetTextColor(1, 1, 1) -- Set text color as needed
+
+    -- Apply fade-out animation to the splash frame
+    splashFrame.fadeOut = splashFrame:CreateAnimationGroup()
+    local delay = splashFrame.fadeOut:CreateAnimation("Alpha")
+    delay:SetDuration(3) -- Adjust the delay duration as desired
+    delay:SetFromAlpha(1)
+    delay:SetToAlpha(1)
+    delay:SetOrder(1)
+    local fadeOut = splashFrame.fadeOut:CreateAnimation("Alpha")
+    fadeOut:SetDuration(.5) -- Adjust the fade duration as desired
+    fadeOut:SetFromAlpha(1)
+    fadeOut:SetToAlpha(0)
+    fadeOut:SetOrder(2)
+    splashFrame.fadeOut:SetScript("OnFinished", function()
+        splashFrame:Hide()
+    end)
+
+    splashFrame:Show()
+    splashFrame.fadeOut:Play()
+end
+
+-- Function to count death markers in a zone based on mapID
+function CountDeathMarkersInZone(mapID)
+    local count = 0
+
+    -- Iterate over the deathRecordsDB table to count markers in the specified zone
+    for _, marker in pairs(deathRecordsDB.deathRecords) do
+        local markerMapID = marker.mapID
+        if markerMapID == mapID then
+            count = count + 1
+        end
+    end
+
+    return count
+end
+
 -- Define slash commands
 SLASH_TOMBSTONES1 = "/tombstones"
 SLASH_TOMBSTONES2 = "/ts"
@@ -393,6 +453,8 @@ addon:SetScript("OnEvent", function(self, event, ...)
   elseif event == "PLAYER_LOGOUT" then
     -- Handle player logout event
     SaveDeathRecords()
+  elseif event == "ZONE_CHANGED_NEW_AREA" then
+    ShowZoneSplashText()
   elseif event == "CHAT_MSG_SAY" then
         local message = ...
         if (debug and message == "dead") then
