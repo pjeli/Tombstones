@@ -27,6 +27,7 @@ local environment_damage = {
 -- Variables
 local deathRecordsDB
 local deathRecordCount = 0
+local iconSize = 12
 local showMarkers = true
 local debug = false
 local splashFrame
@@ -116,7 +117,7 @@ local function UpdateWorldMapMarkers()
             if (realm == nil or REALM == realm) then
                 -- Create the marker on the current continent's map
                 local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
-                markerMapButton:SetSize(12, 12) -- Adjust the size of the marker as needed
+                markerMapButton:SetSize(iconSize , iconSize) -- Adjust the size of the marker as needed
                 markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
                 markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
                 markerMapButton.texture:SetAllPoints(true)
@@ -470,6 +471,8 @@ local function SlashCommandHandler(msg)
     elseif command == "debug" then
         debug = not debug
         print("Tombstones' debug mode is: ".. tostring(debug))
+    elseif command == "icon_size" then
+        iconSize = tonumber(args)
     elseif command == "info" then
         print("Tombstones has " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
@@ -512,8 +515,8 @@ local function SlashCommandHandler(msg)
         end
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | clear | info | debug]")
-        print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {HOURS} | level {LEVEL} | class {CLASS})]")
+        print("Usage: /tombstones or /ts [show | hide | clear | info | debug | icon_size {#SIZE}]")
+        print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | level {#LEVEL} | class {CLASS})]")
     end
 end
 
