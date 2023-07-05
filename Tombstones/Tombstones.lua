@@ -357,16 +357,21 @@ function ShowZoneSplashText()
 
     -- Apply fade-out animation to the splash frame
     splashFrame.fadeOut = splashFrame:CreateAnimationGroup()
+    local fadeIn = splashFrame.fadeOut:CreateAnimation("Alpha")
+    fadeIn:SetDuration(.5) -- Adjust the delay duration as desired
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetOrder(1)
     local delay = splashFrame.fadeOut:CreateAnimation("Alpha")
-    delay:SetDuration(3) -- Adjust the delay duration as desired
+    delay:SetDuration(2.5) -- Adjust the delay duration as desired
     delay:SetFromAlpha(1)
     delay:SetToAlpha(1)
-    delay:SetOrder(1)
+    delay:SetOrder(2)
     local fadeOut = splashFrame.fadeOut:CreateAnimation("Alpha")
     fadeOut:SetDuration(.5) -- Adjust the fade duration as desired
     fadeOut:SetFromAlpha(1)
     fadeOut:SetToAlpha(0)
-    fadeOut:SetOrder(2)
+    fadeOut:SetOrder(3)
     splashFrame.fadeOut:SetScript("OnFinished", function()
         splashFrame:Hide()
     end)
