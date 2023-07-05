@@ -29,6 +29,7 @@ local deathRecordsDB
 local deathRecordCount = 0
 local showMarkers = true
 local debug = false
+local splashFrame
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -334,13 +335,18 @@ end
 
 -- Function to show the zone splash text
 function ShowZoneSplashText()
+    if (splashFrame ~= nil) then
+      splashFrame:Hide()
+      splashFrame = nil
+    end
+
     local zoneName = GetRealZoneText()
     local currentMapID = C_Map.GetBestMapForUnit("player")
     local deathMarkersInZone = CountDeathMarkersInZone(currentMapID)
     local deathPercentage = (deathMarkersInZone / #deathRecordsDB.deathRecords) * 100.0
 
     -- Create and display the splash text frame
-    local splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
+    splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
     splashFrame:SetSize(400, 200)
     splashFrame:SetPoint("CENTER", 0, 340)
 
