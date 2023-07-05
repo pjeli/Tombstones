@@ -3,6 +3,17 @@ local ADDON_NAME = "Tombstones"
 local ADDON_CHANNEL = "Tombstones"
 local DEATH_RECORD_WINDOW_SIZE = 5000
 local REALM = GetRealmName()
+local COLORS = {
+    Reset = "\27[0m",
+    Red = "\27[31m",
+    Green = "\27[32m",
+    Yellow = "\27[33m",
+    Blue = "\27[34m",
+    Magenta = "\27[35m",
+    Cyan = "\27[36m",
+    White = "\27[37m",
+    Grey = "\27[90m",
+}
 
 -- DeathLog Constants
 local death_alerts_channel = "hcdeathalertschannel"
@@ -35,6 +46,7 @@ local TOMB_FILTERS = {
   ["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
+  ["RACE_ID"] = nil,
   ["LEVEL_THRESH"] = 0,
   ["HOUR_THRESH"] = -1,
 }
@@ -48,6 +60,17 @@ local classNameToID = {
     ["mage"] = 8,
     ["warlock"] = 9,
     ["druid"] = 11,
+}
+local raceNameToID = {
+    ["human"] = 1,
+    ["orc"] = 2,
+    ["dwarf"] = 3,
+    ["night elf"] = 4,
+    ["nelf"] = 4,
+    ["undead"] = 5,
+    ["tauren"] = 6,
+    ["gnome"] = 7,
+    ["troll"] = 8,
 }
 
 -- Libraries
@@ -105,6 +128,7 @@ local function UpdateWorldMapMarkers()
         local filtering = TOMB_FILTERS["ENABLED"]
         local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
         local filter_class = TOMB_FILTERS["CLASS_ID"]
+        local filter_race = TOMB_FILTERS["RACE_ID"]
         local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
         local filter_hour = TOMB_FILTERS["HOUR_THRESH"] 
         -- Clear existing death markers
@@ -192,7 +216,10 @@ local function UpdateWorldMapMarkers()
                         if (marker.last_words == nil) then allow = false end
                     end
                     if (filter_class ~= nil) then
-                        if (marker.class_id ~= filter_class) then allow = false end
+                        if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
+                    end
+                    if (filter_race ~= nil) then
+                        if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
                     end
                     if (filter_level > 0) then
                         if (marker.level < filter_level) then allow = false end
@@ -470,7 +497,7 @@ local function SlashCommandHandler(msg)
         ClearDeathRecords()
     elseif command == "debug" then
         debug = not debug
-        print("Tombstones' debug mode is: ".. tostring(debug))
+        print("Tombstones debug mode is: ".. tostring(debug))
     elseif command == "icon_size" then
         iconSize = tonumber(args)
     elseif command == "info" then
@@ -484,15 +511,17 @@ local function SlashCommandHandler(msg)
            end
         end
         if argsArray[1] == "info" then
-            print("Tombstone filtering enabled: " .. tostring(TOMB_FILTERS["ENABLED"]))
-            print("Tombstone 'Last Words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
-            print("Tombstone 'ClassID' filtering on: " .. tostring(TOMB_FILTERS["CLASS_ID"]))
-            print("Tombstone 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
-            print("Tombstone 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
+            print("Tombstones filtering enabled: " .. tostring(TOMB_FILTERS["ENABLED"]))
+            print("Tombstones 'Last Words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
+            print("Tombstones 'ClassID' filtering on: " .. tostring(TOMB_FILTERS["CLASS_ID"]))
+            print("Tombstones 'RaceID' filtering on: " .. tostring(TOMB_FILTERS["RACE_ID"]))
+            print("Tombstones 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
+            print("Tombstones 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
         elseif argsArray[1] == "off" then
             TOMB_FILTERS["ENABLED"] = false
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
             TOMB_FILTERS["CLASS_ID"] = nil
+            TOMB_FILTERS["RACE_ID"] = nil
             TOMB_FILTERS["LEVEL_THRESH"] = 0
             TOMB_FILTERS["HOUR_THRESH"] = -1
         elseif argsArray[1] == "last_words" then
@@ -510,13 +539,23 @@ local function SlashCommandHandler(msg)
                 TOMB_FILTERS["ENABLED"] = true
                 TOMB_FILTERS["CLASS_ID"] = classNameToID[className]
             else
-                print("Class ID not found.")
+                print("Tombstones ERROR : Class not found.")
+                print("Tombstones WARN : Try 'paladin','priest','warrior','rogue','mage','warlock','druid','shaman','hunter'.")
+            end
+        elseif argsArray[1] == "race" then
+            local raceName = argsArray[2]
+            if (raceName ~= nil) then
+                TOMB_FILTERS["ENABLED"] = true
+                TOMB_FILTERS["RACE_ID"] = raceNameToID[raceName]
+            else
+                print("Tombstones ERROR : Race not found.")
+                print("Tombstones WARN : Try 'human','dwarf','gnome','night elf | nelf','orc','troll','undead','tauren'.")
             end
         end
     else
         -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | clear | info | debug | icon_size {#SIZE}]")
-        print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | level {#LEVEL} | class {CLASS})]")
+        print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
     end
 end
 
