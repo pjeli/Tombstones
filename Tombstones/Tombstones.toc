@@ -13,3 +13,4 @@ libs\AceComm-3.0\AceComm-3.0.xml
 
 Tombstones.lua
 id_to_npc_classic.lua
+npc_to_id_classic.lua
