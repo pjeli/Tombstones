@@ -30,6 +30,22 @@ local deathRecordCount = 0
 local showMarkers = true
 local debug = false
 local splashFrame
+local TOMB_FILTERS = {
+  ["ENABLED"] = false,
+  ["HAS_LAST_WORDS"] = false,
+  ["CLASS_ID"] = nil,
+}
+local classNameToID = {
+    ["warrior"] = 1,
+    ["paladin"] = 2,
+    ["hunter"] = 3,
+    ["rogue"] = 4,
+    ["priest"] = 5,
+    ["shaman"] = 7,
+    ["mage"] = 8,
+    ["warlock"] = 9,
+    ["druid"] = 11,
+}
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -83,6 +99,9 @@ local function UpdateWorldMapMarkers()
         local mapCanvasScale = mapCanvas:GetEffectiveScale()
         local mapCanvasWidth, mapCanvasHeight = mapCanvas:GetSize()
 
+        local filtering = TOMB_FILTERS["ENABLED"]
+        local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
+        local filter_class = TOMB_FILTERS["CLASS_ID"]
 
         -- Clear existing death markers
         ClearDeathMarkers()
@@ -155,10 +174,23 @@ local function UpdateWorldMapMarkers()
                     if timeDifference >= secondsIn24Hours then
                        markerMapButton.texture:SetVertexColor(.5, .5, .5, 0.5)
                     end
-
+                    
+                    -- Check if filters enabled
                     -- Add the marker to the current continent's map
-                    hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
-
+                    if (filtering) then
+                        local allow = true
+                        if (filter_has_words == true) then
+                           if (marker.last_words == nil) then allow = false end
+                        end
+                        if (filter_class ~= nil) then
+                           if (marker.class_id ~= filter_class) then allow = false end
+                        end
+                        if (allow == true) then
+                            hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
+                        end
+                    else
+                        hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
+                    end
                     end
             end
         end)
@@ -407,25 +439,47 @@ SLASH_TOMBSTONES2 = "/ts"
 
 -- Slash command handler function
 local function SlashCommandHandler(msg)
+    local command, args = strsplit(" ", msg, 2) -- Split the command and arguments
     -- Process the command and perform the desired actions
-    if msg == "show" then
+    if command == "show" then
         -- Show death markers
         showMarkers = true
-    elseif msg == "hide" then
+    elseif command == "hide" then
         showMarkers = false
         ClearDeathMarkers()
-    elseif msg == "clear" then
+    elseif command == "clear" then
         -- Clear all death records
         ClearDeathRecords()
-    elseif msg == "debug" then
+    elseif command == "debug" then
         debug = not debug
         print("Tombstones' debug mode is: ".. tostring(debug))
-    elseif msg == "info" then
+    elseif command == "info" then
         print("Tombstones has " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
+    elseif command == "filter" then
+        if args == "info" then
+            print("Tombstone filtering enabled: " .. tostring(TOMB_FILTERS["ENABLED"]))
+            print("Tombstone 'last words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
+            print("Tombstone 'ClassID' filtering on: " .. tostring(TOMB_FILTERS["CLASS_ID"]))
+        elseif args == "off" then
+            TOMB_FILTERS["ENABLED"] = false
+            TOMB_FILTERS["HAS_LAST_WORDS"] = false
+            TOMB_FILTERS["CLASS_ID"] = nil
+        elseif args == "last_words" then
+            TOMB_FILTERS["ENABLED"] = true
+            TOMB_FILTERS["HAS_LAST_WORDS"] = not TOMB_FILTERS["HAS_LAST_WORDS"]
+        else
+            local classID = classNameToID[string.lower(args)]
+            if (classID ~= nil) then
+                TOMB_FILTERS["ENABLED"] = true
+                TOMB_FILTERS["CLASS_ID"] = classNameToID[args]
+            else
+                print("Class ID not found.")
+            end
+        end
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | clear | info | debug]")
+        print("Usage: /tombstones or /ts [show | hide | clear | info | filter (info|off|last_words|CLASS) | debug]")
     end
 end
 
