@@ -38,10 +38,13 @@ local environment_damage = {
 -- Variables
 local deathRecordsDB
 local deathRecordCount = 0
+local deadlyNPCs = {}
 local iconSize = 12
 local showMarkers = true
 local debug = false
 local splashFrame
+local targetDangerFrame
+local targetDangerText
 local TOMB_FILTERS = {
   ["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
@@ -84,6 +87,7 @@ addon:RegisterEvent("PLAYER_DEAD")
 addon:RegisterEvent("PLAYER_LOGOUT")
 addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("CHAT_MSG_SAY")
+addon:RegisterEvent("PLAYER_TARGET_CHANGED")
 addon:RegisterEvent("CHAT_MSG_CHANNEL")
 addon:RegisterEvent("CHAT_MSG_ADDON") -- Changed from CHAT_MSG_SAY
 
@@ -100,6 +104,11 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level,
 
     local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
     table.insert(deathRecordsDB.deathRecords, marker)
+    if (deadlyNPCs[source_id] == nil) then 
+        deadlyNPCs[source_id] = 0
+    else
+        deadlyNPCs[source_id] = deadlyNPCs[source_id] + 1
+    end
     deathRecordCount = deathRecordCount + 1
 
     -- Place your custom code here to handle additional logic for the death marker
@@ -292,6 +301,17 @@ local function LoadDeathRecords()
         deathRecordsDB = {}
         deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
         deathRecordsDB.deathRecords = {}
+        deathRecordsDB.dangerFrameUnlocked = true
+        deathRecordsDB.showDanger = true
+    end
+    for _, marker in ipairs(deathRecordsDB.deathRecords) do
+        if marker.source_id then
+            if (deadlyNPCs[marker.source_id] == nil) then
+                deadlyNPCs[marker.source_id] = 1
+            else
+                deadlyNPCs[marker.source_id] = deadlyNPCs[marker.source_id] + 1
+            end
+        end
     end
 end
 
@@ -405,7 +425,6 @@ function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_
   }
 end
 
-
 -- Function to show the zone splash text
 function ShowZoneSplashText()
     if (splashFrame ~= nil) then
@@ -478,6 +497,75 @@ function CountDeathMarkersInZone(mapID)
     return count
 end
 
+local function CreateTargetDangerFrame()
+    targetDangerFrame = CreateFrame("Frame", "TargetDangerFrame", UIParent)
+    targetDangerFrame:SetSize(100, 20)
+    local position = deathRecordsDB.targetDangerFramePos
+    if (position ~= nil) then
+        targetDangerFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", position.x, position.y)
+    else
+        targetDangerFrame:SetPoint("CENTER", 0, 0)
+    end
+    targetDangerFrame:SetMovable(true)
+    targetDangerFrame:SetClampedToScreen(true)
+    targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked)
+    targetDangerFrame:RegisterForDrag("LeftButton")
+    targetDangerFrame:SetScript("OnDragStart", targetDangerFrame.StartMoving)
+    targetDangerFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Save the new position
+        local x, y = self:GetLeft(), self:GetTop()
+        deathRecordsDB.targetDangerFramePos = { x = x, y = y }
+    end)
+
+    targetDangerText = targetDangerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    targetDangerText:SetPoint("CENTER", 0, 0)
+    targetDangerText:SetText("")
+
+    -- Create the background texture
+    local bgTexture = targetDangerFrame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.5) -- Set the RGB values and alpha (0.5 for 50% transparency)
+
+    targetDangerFrame.text = targetDangerText -- Assign the text object to the frame to keep a reference
+end
+
+-- Event handler for UNIT_TARGET event
+local function UnitTargetChange()
+    local target = "target"
+    if (not UnitExists("target") and targetDangerFrame ~= nil) then
+        targetDangerFrame:Hide()
+    end
+    local targetName = UnitName(target)
+    local source_id = npc_to_id[targetName]
+    local friendly = UnitIsFriend("player", target)
+
+    -- Check if the target is an enemy NPC
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly) then
+        local sourceDeathCount = deadlyNPCs[source_id] or 0
+        local deathMarkersTotal = #deathRecordsDB.deathRecords
+        local dangerPercentage = 0.0
+        if (deathMarkersTotal > 0) then
+            dangerPercentage = (sourceDeathCount / deathMarkersTotal) * 100.0
+        end
+
+        if (targetDangerFrame == nil) then
+            CreateTargetDangerFrame()
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        else
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        end
+
+        targetDangerFrame:Show()
+        printDebug(string.format("Tombstones has detected enemy danger at: %.2f%%.", dangerPercentage))
+    else
+        if (targetDangerFrame ~= nil) then
+            targetDangerText:SetText("")
+            targetDangerFrame:Hide()
+        end
+    end
+end
+
 -- Define slash commands
 SLASH_TOMBSTONES1 = "/tombstones"
 SLASH_TOMBSTONES2 = "/ts"
@@ -503,6 +591,32 @@ local function SlashCommandHandler(msg)
     elseif command == "info" then
         print("Tombstones has " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
+    elseif command == "danger" then
+        local argsArray = {}
+        if args then
+           for word in string.gmatch(args, "%S+") do
+               table.insert(argsArray, word)
+           end
+        end
+        if argsArray[1] == "show" then
+            deathRecordsDB.showDanger = true
+            UnitTargetChange()
+        elseif argsArray[1] == "hide" then
+            deathRecordsDB.showDanger = false
+            if (targetDangerFrame ~= nil) then
+                targetDangerFrame:Hide()
+                targetDangerFrame = nil
+            end
+            if (targetDangerText ~= nil) then
+                targetDangerText = nil
+            end
+        elseif argsArray[1] == "lock" then
+            deathRecordsDB.dangerFrameUnlocked = false
+            if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+        elseif argsArray[1] == "unlock" then
+            deathRecordsDB.dangerFrameUnlocked = true
+            if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+        end
     elseif command == "filter" then
         local argsArray = {}
         if args then
@@ -556,6 +670,7 @@ local function SlashCommandHandler(msg)
         -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | clear | info | debug | icon_size {#SIZE}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
+        print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
     end
 end
 
@@ -596,6 +711,8 @@ addon:SetScript("OnEvent", function(self, event, ...)
     SaveDeathRecords()
   elseif event == "ZONE_CHANGED_NEW_AREA" then
     ShowZoneSplashText()
+  elseif event == "PLAYER_TARGET_CHANGED" then
+    UnitTargetChange()
   elseif event == "CHAT_MSG_SAY" then
         local message = ...
         if (debug and message == "dead") then
