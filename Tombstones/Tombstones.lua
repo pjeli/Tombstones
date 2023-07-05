@@ -375,7 +375,11 @@ function ShowZoneSplashText()
     local zoneName = GetRealZoneText()
     local currentMapID = C_Map.GetBestMapForUnit("player")
     local deathMarkersInZone = CountDeathMarkersInZone(currentMapID)
-    local deathPercentage = (deathMarkersInZone / #deathRecordsDB.deathRecords) * 100.0
+    local deathMarkersTotal = #deathRecordsDB.deathRecords
+    local deathPercentage = 0.0
+    if (deathMarkersTotal > 0) then
+        deathPercentage = (deathMarkersInZone / #deathRecordsDB.deathRecords) * 100.0
+    end
 
     -- Create and display the splash text frame
     splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
