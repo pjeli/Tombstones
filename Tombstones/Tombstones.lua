@@ -34,6 +34,8 @@ local TOMB_FILTERS = {
   ["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
+  ["LEVEL_THRESH"] = 0,
+  ["HOUR_THRESH"] = -1,
 }
 local classNameToID = {
     ["warrior"] = 1,
@@ -102,7 +104,8 @@ local function UpdateWorldMapMarkers()
         local filtering = TOMB_FILTERS["ENABLED"]
         local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
         local filter_class = TOMB_FILTERS["CLASS_ID"]
-
+        local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
+        local filter_hour = TOMB_FILTERS["HOUR_THRESH"] 
         -- Clear existing death markers
         ClearDeathMarkers()
 
@@ -174,12 +177,12 @@ local function UpdateWorldMapMarkers()
                        borderTexture:SetVertexColor(1, 1, 0, 0.7) -- Set the border color to yellow (RGB values)
                     end
 
-                    -- Check if the marker occurred within the last 24 hours
+                    -- Check if the marker occurred within the last 12 hours
                     local currentTime = time()
                     local timeDifference = currentTime - timestamp
-                    local secondsIn24Hours = 12 * 60 * 60 -- 24 hours in seconds
+                    local secondsIn24Hours = 12 * 60 * 60 -- 12 hours in seconds
                     if timeDifference >= secondsIn24Hours then
-                       markerMapButton.texture:SetVertexColor(.5, .5, .5, 0.5)
+                       markerMapButton.texture:SetVertexColor(.4, .4, .4, 0.5)
                     end
                     
                     -- Check if filters enabled
@@ -191,6 +194,12 @@ local function UpdateWorldMapMarkers()
                         end
                         if (filter_class ~= nil) then
                            if (marker.class_id ~= filter_class) then allow = false end
+                        end
+                        if (filter_level > 0) then
+                           if (marker.level < filter_level) then allow = false end
+                        end
+                        if (filter_hour >= 0) then
+                           if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
                         end
                         if (allow == true) then
                             hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
@@ -468,29 +477,46 @@ local function SlashCommandHandler(msg)
         print("Tombstones has " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
     elseif command == "filter" then
-        if args == "info" then
+        local argsArray = {}
+        if args then
+           for word in string.gmatch(args, "%S+") do
+               table.insert(argsArray, word)
+           end
+        end
+        if argsArray[1] == "info" then
             print("Tombstone filtering enabled: " .. tostring(TOMB_FILTERS["ENABLED"]))
-            print("Tombstone 'last words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
+            print("Tombstone 'Last Words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
             print("Tombstone 'ClassID' filtering on: " .. tostring(TOMB_FILTERS["CLASS_ID"]))
-        elseif args == "off" then
+            print("Tombstone 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
+            print("Tombstone 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
+        elseif argsArray[1] == "off" then
             TOMB_FILTERS["ENABLED"] = false
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
             TOMB_FILTERS["CLASS_ID"] = nil
-        elseif args == "last_words" then
+            TOMB_FILTERS["LEVEL_THRESH"] = 0
+            TOMB_FILTERS["HOUR_THRESH"] = -1
+        elseif argsArray[1] == "last_words" then
             TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HAS_LAST_WORDS"] = not TOMB_FILTERS["HAS_LAST_WORDS"]
-        else
-            local classID = classNameToID[string.lower(args)]
-            if (classID ~= nil) then
+        elseif argsArray[1] == "level" then
+            TOMB_FILTERS["ENABLED"] = true
+            TOMB_FILTERS["LEVEL_THRESH"] = tonumber(argsArray[2])
+        elseif argsArray[1] == "hours" then
+            TOMB_FILTERS["ENABLED"] = true
+            TOMB_FILTERS["HOUR_THRESH"] = tonumber(argsArray[2])
+        elseif argsArray[1] == "class" then
+            local className = argsArray[2]
+            if (className ~= nil) then
                 TOMB_FILTERS["ENABLED"] = true
-                TOMB_FILTERS["CLASS_ID"] = classNameToID[args]
+                TOMB_FILTERS["CLASS_ID"] = classNameToID[className]
             else
                 print("Class ID not found.")
             end
         end
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | clear | info | filter (info|off|last_words|CLASS) | debug]")
+        print("Usage: /tombstones or /ts [show | hide | clear | info | debug]")
+        print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {HOURS} | level {LEVEL} | class {CLASS})]")
     end
 end
 
