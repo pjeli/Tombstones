@@ -117,12 +117,12 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level,
     printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
 end
 
-local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
+local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words)
     if mapID == nil then
        return
     end
 
-    local marker = { realm = realm, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
+    local marker = { realm = realm, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words }
     table.insert(deathRecordsDB.deathRecords, marker)
     if (source_id ~= nil) then 
         if (deadlyNPCs[source_id] == nil) then 
@@ -684,7 +684,7 @@ local function CreateDataImportFrame()
         printDebug("Deserialization sucess: " .. tostring(success))
         printDebug("Imported records size is: " .. tostring(#importedDeathRecords))
         for _, marker in ipairs(importedDeathRecords) do
-            ImportDeathMarker(marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id)
+            ImportDeathMarker(marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
         end
         printDebug("Import finished!")
         frame:Hide()
