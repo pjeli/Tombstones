@@ -39,6 +39,7 @@ local environment_damage = {
 local deathRecordsDB
 local deathRecordCount = 0
 local deadlyNPCs = {}
+local deadlyZones = {}
 local iconSize = 12
 local showMarkers = true
 local debug = false
@@ -94,6 +95,24 @@ addon:RegisterEvent("PLAYER_TARGET_CHANGED")
 addon:RegisterEvent("CHAT_MSG_CHANNEL")
 addon:RegisterEvent("CHAT_MSG_ADDON") -- Changed from CHAT_MSG_SAY
 
+--Increment deadly caches
+local function IncrementDeadlyCounts(marker)
+    if marker.source_id then
+        if (deadlyNPCs[marker.source_id] == nil) then
+            deadlyNPCs[marker.source_id] = 1
+        else
+            deadlyNPCs[marker.source_id] = deadlyNPCs[marker.source_id] + 1
+        end
+    end
+    if marker.mapID then
+        if (deadlyZones[marker.mapID] == nil) then
+            deadlyZones[marker.mapID] = 1
+        else
+            deadlyZones[marker.mapID] = deadlyZones[marker.mapID] + 1  
+        end
+    end
+end
+
 -- Add death marker function
 local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
     if mapID == nil then
@@ -107,11 +126,7 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level,
 
     local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
     table.insert(deathRecordsDB.deathRecords, marker)
-    if (deadlyNPCs[source_id] == nil) then 
-        deadlyNPCs[source_id] = 0
-    else
-        deadlyNPCs[source_id] = deadlyNPCs[source_id] + 1
-    end
+    IncrementDeadlyCounts(marker)
     deathRecordCount = deathRecordCount + 1
 
     printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
@@ -124,14 +139,7 @@ local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, us
 
     local marker = { realm = realm, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words }
     table.insert(deathRecordsDB.deathRecords, marker)
-    if (source_id ~= nil) then 
-        if (deadlyNPCs[source_id] == nil) then 
-            deadlyNPCs[source_id] = 0
-        else
-            deadlyNPCs[source_id] = deadlyNPCs[source_id] + 1
-        end
-    end
-
+    IncrementDeadlyCounts(marker)
     deathRecordCount = deathRecordCount + 1
 end
 
@@ -324,13 +332,7 @@ local function LoadDeathRecords()
         deathRecordsDB.showDanger = true
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
-        if marker.source_id then
-            if (deadlyNPCs[marker.source_id] == nil) then
-                deadlyNPCs[marker.source_id] = 1
-            else
-                deadlyNPCs[marker.source_id] = deadlyNPCs[marker.source_id] + 1
-            end
-        end
+        IncrementDeadlyCounts(marker)        
     end
 end
 
@@ -559,10 +561,14 @@ local function UnitTargetChange()
     local source_id = npc_to_id[targetName]
     local friendly = UnitIsFriend("player", target)
 
+    local playerLevel = UnitLevel("player")
+    local targetLevel = UnitLevel("target")
+
     -- Check if the target is an enemy NPC
-    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly) then
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
         local sourceDeathCount = deadlyNPCs[source_id] or 0
-        local deathMarkersTotal = #deathRecordsDB.deathRecords
+        local currentMapID = C_Map.GetBestMapForUnit("player")
+        local deathMarkersTotal = deadlyZones[currentMapID] or 0
         local dangerPercentage = 0.0
         if (deathMarkersTotal > 0) then
             dangerPercentage = (sourceDeathCount / deathMarkersTotal) * 100.0
