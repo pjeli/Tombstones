@@ -159,10 +159,7 @@ end
 local function UpdateWorldMapMarkers()
     local worldMapFrame = WorldMapFrame
     if showMarkers and worldMapFrame and worldMapFrame:IsVisible() then
-        local mapCanvas = worldMapFrame.ScrollContainer.Child
-        local mapCanvasScale = mapCanvas:GetEffectiveScale()
-        local mapCanvasWidth, mapCanvasHeight = mapCanvas:GetSize()
-
+        -- Fetch filtering parameters
         local filtering = TOMB_FILTERS["ENABLED"]
         local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
         local filter_class = TOMB_FILTERS["CLASS_ID"]
@@ -173,31 +170,31 @@ local function UpdateWorldMapMarkers()
         -- Number of death markers to render in each batch
         local batchSize = 200
         local currentIndex = #deathRecordsDB.deathRecords
+        local currentTime = time()
 
         local function RenderBatch()
             local startIndex = math.max(currentIndex - batchSize + 1, 1)
             local endIndex = currentIndex
             for i = endIndex, startIndex, -1 do
                 local marker = deathRecordsDB.deathRecords[i]
-                local realm, mapID, contID, posX, posY, level, timestamp = marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.level, marker.timestamp
                 -- Stop rendering
                 if renderingScheduled == false then
                     return
                 end
 
                 -- Skip markers that are not in our realm
-                if ((realm == nil or REALM == realm) and deathMapIcons[i] == nil) then
+                if ((marker.realm == nil or REALM == marker.realm) and deathMapIcons[i] == nil) then
                     -- Create the marker on the current continent's map
                     local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
                     markerMapButton:SetSize(iconSize , iconSize) -- Adjust the size of the marker as needed
                     markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
                     markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
                     markerMapButton.texture:SetAllPoints(true)
-                    if (level == nil) then
+                    if (marker.level == nil) then
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
-                    elseif (level <= 30) then
+                    elseif (marker.level <= 30) then
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
-                    elseif (level <= 59) then
+                    elseif (marker.level <= 59) then
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
                     else
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
@@ -247,16 +244,15 @@ local function UpdateWorldMapMarkers()
                         GameTooltip:Hide()
                     end)
 
-                    -- Check if the marker occurred within the last 12 hours
-                    local currentTime = time()
-                    local timeDifference = currentTime - timestamp
-                    local secondsIn24Hours = 12 * 60 * 60 -- 12 hours in seconds
-                    if timeDifference >= secondsIn24Hours then
-                        markerMapButton.texture:SetVertexColor(.4, .4, .4, 0.5)
-                    end
-
                     -- Cache the Map Marker
                     deathMapIcons[i] = markerMapButton
+                end
+
+                -- Check if the marker timestamp within the last 12 hours
+                local timeDifference = currentTime - marker.timestamp
+                local secondsIn24Hours = 12 * 60 * 60 -- 12 hours in seconds
+                if (deathMapIcons[i] ~= nil and timeDifference >= secondsIn24Hours) then
+                    deathMapIcons[i].texture:SetVertexColor(.4, .4, .4, 0.5)
                 end
 
                 -- Check if filters enabled
@@ -279,10 +275,10 @@ local function UpdateWorldMapMarkers()
                         if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
                     end
                     if (allow == true) then
-                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
+                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
                     end
                 else
-                    if (deathMapIcons[i] ~= nil) then hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD) end
+                    if (deathMapIcons[i] ~= nil) then hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD) end
                 end
             end
 
@@ -842,6 +838,7 @@ local function SlashCommandHandler(msg)
             print("Tombstones 'RaceID' filtering on: " .. tostring(TOMB_FILTERS["RACE_ID"]))
             print("Tombstones 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
             print("Tombstones 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
+            return
         elseif argsArray[1] == "off" then
             TOMB_FILTERS["ENABLED"] = false
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
@@ -877,6 +874,8 @@ local function SlashCommandHandler(msg)
                 print("Tombstones WARN : Try 'human','dwarf','gnome','night elf | nelf','orc','troll','undead','tauren'.")
             end
         end
+        ClearDeathMarkers()
+        UpdateWorldMapMarkers()
     else
         -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | clear | info | debug | icon_size {#SIZE}]")
