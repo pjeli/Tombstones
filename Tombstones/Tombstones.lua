@@ -79,6 +79,9 @@ local raceNameToID = {
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
 local ac = LibStub("AceComm-3.0")
+local ls = LibStub("LibSerialize")
+local lc = LibStub("LibCompress")
+local l64 = LibStub("LibBase64-1.0")
 
 -- Register events
 local addon = CreateFrame("Frame")
@@ -111,9 +114,25 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level,
     end
     deathRecordCount = deathRecordCount + 1
 
-    -- Place your custom code here to handle additional logic for the death marker
-
     printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+end
+
+local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
+    if mapID == nil then
+       return
+    end
+
+    local marker = { realm = realm, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
+    table.insert(deathRecordsDB.deathRecords, marker)
+    if (source_id ~= nil) then 
+        if (deadlyNPCs[source_id] == nil) then 
+            deadlyNPCs[source_id] = 0
+        else
+            deadlyNPCs[source_id] = deadlyNPCs[source_id] + 1
+        end
+    end
+
+    deathRecordCount = deathRecordCount + 1
 end
 
 function printDebug(msg)
@@ -566,6 +585,115 @@ local function UnitTargetChange()
     end
 end
 
+-- Function to create a frame to display serialized data
+local function CreateDataDisplayFrame(data)
+    local frame = CreateFrame("Frame", "SerializedDisplayFrame", UIParent)
+    frame:SetSize(400, 300)
+    frame:SetPoint("CENTER", 0, 200)
+
+    -- Create the background texture
+    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.8) -- Set the RGB values and alpha
+
+    -- Create a scroll frame
+    local scrollFrame = CreateFrame("ScrollFrame", "SerializedDisplayFrameScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 8, -30)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 8)
+
+    -- Create a text area inside the scroll frame
+    local textArea = CreateFrame("EditBox", "SerializedDisplayFrameText", scrollFrame)
+    textArea:SetMultiLine(true)
+    textArea:SetMaxLetters(0)
+    textArea:SetAutoFocus(false)
+    textArea:SetFontObject("ChatFontNormal")
+    textArea:SetWidth(scrollFrame:GetWidth() - 20)
+    textArea:SetHeight(scrollFrame:GetHeight() - 20)
+    textArea:SetText(data)
+    textArea:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    -- Set the scroll frame's content
+    scrollFrame:SetScrollChild(textArea)
+    -- Highlight the text
+    textArea:HighlightText()
+
+    -- Add a close button
+    local closeButton = CreateFrame("Button", "SerializedDisplayFrameCloseButton", frame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    closeButton:SetScript("OnClick", function()
+        frame:Hide()
+        frame = nil
+    end)
+
+    frame:Show()
+end
+
+local function CreateDataImportFrame()
+    local frame = CreateFrame("Frame", "TombstonesImportFrame", UIParent)
+    frame:SetSize(400, 300)
+    frame:SetPoint("CENTER", 0, 200)
+
+    -- Create the background texture
+    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.8) -- Set the RGB values and alpha
+
+    -- Create a scroll frame
+    local scrollFrame = CreateFrame("ScrollFrame", "TombstonesImportScrollFrameEditBox", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 8, -30)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 40)
+
+    local editBox = CreateFrame("EditBox", "TombstonesImportFrameEditBox", scrollFrame)
+    editBox:SetWidth(scrollFrame:GetWidth() - 20)
+    editBox:SetHeight(scrollFrame:GetHeight() - 20)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:SetEnabled(true)
+    editBox:SetText("Paste import string here...")
+    editBox:SetFontObject("GameFontNormal")
+    editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    editBox:SetScript("OnEditFocusGained", function(self) self:SetText("") end) -- Clear the default text when the EditBox receives focus
+
+    -- Set the scroll frame's content
+    scrollFrame:SetScrollChild(editBox)
+
+    -- Add a close button
+    local closeButton = CreateFrame("Button", "SerializedDisplayFrameCloseButton", frame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    closeButton:SetScript("OnClick", function()
+        frame:Hide()
+        frame = nil
+    end)
+
+    local importButton = CreateFrame("Button", "TombstonesImportButton", frame, "UIPanelButtonTemplate")
+    importButton:SetSize(80, 22)
+    importButton:SetPoint("BOTTOM", 0, 10)
+    importButton:SetText("Import")
+    importButton:SetScript("OnClick", function()
+        local encodedData = editBox:GetText()
+        printDebug("Input data size is: " .. tostring(string.len(encodedData)))
+        -- Decode the encoded data from Base64
+        local decodedData = l64:decode(encodedData)
+        printDebug("Base64 decoded data size is: " .. tostring(string.len(decodedData)))
+        -- Decompress the decoded data
+        local decompressedData = lc:Decompress(decodedData)
+        printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
+        -- Deserialize the decompressed data
+        local success, importedDeathRecords = ls:Deserialize(decompressedData)
+        -- Example: Print the received data to the chat frame
+        printDebug("Deserialization sucess: " .. tostring(success))
+        printDebug("Imported records size is: " .. tostring(#importedDeathRecords))
+        for _, marker in ipairs(importedDeathRecords) do
+            ImportDeathMarker(marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id)
+        end
+        printDebug("Import finished!")
+        frame:Hide()
+        frame = nil
+    end)
+
+    frame:Show()
+end
+
 -- Define slash commands
 SLASH_TOMBSTONES1 = "/tombstones"
 SLASH_TOMBSTONES2 = "/ts"
@@ -591,6 +719,18 @@ local function SlashCommandHandler(msg)
     elseif command == "info" then
         print("Tombstones has " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
+    elseif command == "export" then
+        local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
+        printDebug("Serialized data size is: " .. tostring(string.len(serializedData)))
+        -- Compress the serialized data
+        local compressedData = lc:Compress(serializedData)
+        printDebug("Compressed data size is: " .. tostring(string.len(compressedData)))
+        -- Encode the compressed data using Base64
+        local encodedData = l64:encode(compressedData)
+        printDebug("Base64 data size is: " .. tostring(string.len(encodedData)))
+        CreateDataDisplayFrame(encodedData)
+    elseif command == "import" then
+        CreateDataImportFrame()
     elseif command == "danger" then
         local argsArray = {}
         if args then
@@ -668,7 +808,7 @@ local function SlashCommandHandler(msg)
         end
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | clear | info | debug | icon_size {#SIZE}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | clear | info | debug | icon_size {#SIZE}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
     end
