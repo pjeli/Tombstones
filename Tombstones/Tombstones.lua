@@ -37,10 +37,12 @@ local environment_damage = {
 
 -- Variables
 local deathRecordsDB
+local deathMapIcons = {}
 local deathRecordCount = 0
 local deadlyNPCs = {}
 local deadlyZones = {}
 local iconSize = 12
+local renderingScheduled = false
 local showMarkers = true
 local debug = false
 local splashFrame
@@ -166,120 +168,148 @@ local function UpdateWorldMapMarkers()
         local filter_class = TOMB_FILTERS["CLASS_ID"]
         local filter_race = TOMB_FILTERS["RACE_ID"]
         local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
-        local filter_hour = TOMB_FILTERS["HOUR_THRESH"] 
-        -- Clear existing death markers
-        ClearDeathMarkers()
+        local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
 
-        -- Display death markers on the world map
-        for _, marker in ipairs(deathRecordsDB.deathRecords) do
-            local realm, mapID, contID, posX, posY, level, timestamp = marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.level, marker.timestamp
-            -- Skip markers that are not in our realm
-            if (realm == nil or REALM == realm) then
-                -- Create the marker on the current continent's map
-                local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
-                markerMapButton:SetSize(iconSize , iconSize) -- Adjust the size of the marker as needed
-                markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
-                markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
-                markerMapButton.texture:SetAllPoints(true)
-                if (level == nil) then
-                    markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
-                elseif (level <= 30) then
-                    markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
-                elseif (level <= 59) then
-                    markerMapButton.texture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
-                else
-                    markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
+        -- Number of death markers to render in each batch
+        local batchSize = 200
+        local currentIndex = #deathRecordsDB.deathRecords
+
+        local function RenderBatch()
+            local startIndex = math.max(currentIndex - batchSize + 1, 1)
+            local endIndex = currentIndex
+            for i = endIndex, startIndex, -1 do
+                local marker = deathRecordsDB.deathRecords[i]
+                local realm, mapID, contID, posX, posY, level, timestamp = marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.level, marker.timestamp
+                -- Stop rendering
+                if renderingScheduled == false then
+                    return
                 end
 
-                -- Set the tooltip text to the name of the player who died
-                markerMapButton:SetScript("OnEnter", function(self)
-                    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                    local class_str, _, _ = GetClassInfo(marker.class_id)
-                    if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
-                        local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
-                        GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
-                    elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
-                        GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
-                    elseif (marker.level ~= nil and marker.class_id == nil) then
-                        GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
+                -- Skip markers that are not in our realm
+                if ((realm == nil or REALM == realm) and deathMapIcons[i] == nil) then
+                    -- Create the marker on the current continent's map
+                    local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
+                    markerMapButton:SetSize(iconSize , iconSize) -- Adjust the size of the marker as needed
+                    markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
+                    markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
+                    markerMapButton.texture:SetAllPoints(true)
+                    if (level == nil) then
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
+                    elseif (level <= 30) then
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
+                    elseif (level <= 59) then
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
                     else
-                        GameTooltip:SetText(marker.user .. " -  ? - ?")
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
                     end
-                    if (marker.timestamp > 0) then
-                        local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
-                        GameTooltip:AddLine(date_str, .8, .8, .8, true)
-                    end
-                    if (marker.source_id ~= nil) then
-                        local source_id = id_to_npc[marker.source_id]
-                        local env_dmg = environment_damage[marker.source_id]
-                        if (source_id ~= nil) then 
-		            GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
-		        elseif (env_dmg ~= nil) then
-		            GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
-		        end
-                    end
+
                     if (marker.last_words ~= nil) then
-                        GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
+                        local borderTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
+                        borderTexture:SetAllPoints(markerMapButton)
+                        borderTexture:SetTexture("Interface\\Cooldown\\ping4")
+                        borderTexture:SetBlendMode("ADD")
+                        borderTexture:SetVertexColor(1, 1, 0, 0.7)
                     end
-                       GameTooltip:Show()
-                end)
 
-                markerMapButton:SetScript("OnLeave", function(self)
-                    GameTooltip:Hide()
-                end)
+                    -- Set the tooltip text to the name of the player who died
+                    markerMapButton:SetScript("OnEnter", function(self)
+                        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                        local class_str, _, _ = GetClassInfo(marker.class_id)
+                        if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
+                            local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
+                            GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                        elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
+                            GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
+                        elseif (marker.level ~= nil and marker.class_id == nil) then
+                            GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
+                        else
+                            GameTooltip:SetText(marker.user .. " -  ? - ?")
+                        end
+                        if (marker.timestamp > 0) then
+                            local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
+                            GameTooltip:AddLine(date_str, .8, .8, .8, true)
+                        end
+                        if (marker.source_id ~= nil) then
+                            local source_id = id_to_npc[marker.source_id]
+                            local env_dmg = environment_damage[marker.source_id]
+                            if (source_id ~= nil) then 
+                                GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
+                            elseif (env_dmg ~= nil) then
+                                GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                            end
+                        end
+                        if (marker.last_words ~= nil) then
+                            GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
+                        end
+                           GameTooltip:Show()
+                    end)
+                    markerMapButton:SetScript("OnLeave", function(self)
+                        GameTooltip:Hide()
+                    end)
 
-                if (marker.last_words ~= nil) then
-                    local borderTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
-                    borderTexture:SetAllPoints(markerMapButton)
-                    borderTexture:SetTexture("Interface\\Cooldown\\ping4")
-                    borderTexture:SetBlendMode("ADD")
-                    borderTexture:SetVertexColor(1, 1, 0, 0.7) -- Set the border color to yellow (RGB values)
-                end
-
-                -- Check if the marker occurred within the last 12 hours
-                local currentTime = time()
-                local timeDifference = currentTime - timestamp
-                local secondsIn24Hours = 12 * 60 * 60 -- 12 hours in seconds
-                if timeDifference >= secondsIn24Hours then
-                    markerMapButton.texture:SetVertexColor(.4, .4, .4, 0.5)
-                end
-                    
-                -- Check if filters enabled
-                -- Add the marker to the current continent's map
-                if (filtering) then
-                    local allow = true
-                    if (filter_has_words == true) then
-                        if (marker.last_words == nil) then allow = false end
+                    -- Check if the marker occurred within the last 12 hours
+                    local currentTime = time()
+                    local timeDifference = currentTime - timestamp
+                    local secondsIn24Hours = 12 * 60 * 60 -- 12 hours in seconds
+                    if timeDifference >= secondsIn24Hours then
+                        markerMapButton.texture:SetVertexColor(.4, .4, .4, 0.5)
                     end
-                    if (filter_class ~= nil) then
-                        if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
-                    end
-                    if (filter_race ~= nil) then
-                        if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
-                    end
-                    if (filter_level > 0) then
-                        if (marker.level < filter_level) then allow = false end
-                    end
-                    if (filter_hour >= 0) then
-                        if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
-                    end
-                    if (allow == true) then
+                        
+                    -- Check if filters enabled
+                    -- Add the marker to the current continent's map
+                    if (filtering) then
+                        local allow = true
+                        if (filter_has_words == true) then
+                            if (marker.last_words == nil) then allow = false end
+                        end
+                        if (filter_class ~= nil) then
+                            if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
+                        end
+                        if (filter_race ~= nil) then
+                            if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
+                        end
+                        if (filter_level > 0) then
+                            if (marker.level < filter_level) then allow = false end
+                        end
+                        if (filter_hour >= 0) then
+                            if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
+                        end
+                        if (allow == true) then
+                            hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
+                        end
+                    else
                         hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
                     end
+
+                    -- Cache the Map Marker
+                    deathMapIcons[i] = markerMapButton
                 else
-                    hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
+                    -- Skip generating Map Marker and just plot it
+                    if (deathMapIcons[i] ~= nil) then hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD) end
                 end
             end
+
+            currentIndex = startIndex - 1
+
+            if currentIndex >= 1 then
+                C_Timer.After(0.05, RenderBatch) -- Delay between batches
+            end
         end
+
+        -- Will call itself til completion.
+        RenderBatch()
+
     end
 end
 
 -- Hook into WorldMapFrame_OnShow and WorldMapFrame_OnHide functions to update markers
 WorldMapFrame:HookScript("OnShow", function()
+    renderingScheduled = true
     UpdateWorldMapMarkers()
 end)
 
 WorldMapFrame:HookScript("OnHide", function()
+    renderingScheduled = false
     ClearDeathMarkers()
 end)
 
@@ -291,16 +321,17 @@ local function MakeWorldMapButton()
     mapButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square") -- Set the highlight texture for the button
     mapButton:SetScript("OnClick", function()
         showMarkers = not showMarkers
-    
         if showMarkers then
             mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set the new icon texture
             GameTooltip:SetText("Hide Tombstones")
             showMarkers = true
+            renderingScheduled = true
             UpdateWorldMapMarkers()
         else
             mapButton:SetNormalTexture("Interface\\Icons\\INV_Misc_Map_01") -- Set the default icon texture
             GameTooltip:SetText("Show Tombstones")
             showMarkers = false
+            renderingScheduled = false
             ClearDeathMarkers()
         end
     end)
