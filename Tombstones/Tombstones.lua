@@ -338,7 +338,7 @@ local function ClearDeathRecords()
     deathRecordsDB = {}
     deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
     deathRecordsDB.deathRecords = {}
-    deathRecordsCount = 0
+    deathRecordCount = 0
     _G["deathRecordsDB"] = deathRecordsDB
 end
 
@@ -628,6 +628,39 @@ local function CreateDataDisplayFrame(data)
     frame:Show()
 end
 
+local function DedupeDeathRecords(importedRecords)
+    -- Create a table to store the deduplicated records
+    local dedupedDeathRecords = {}
+
+    -- Iterate over the imported records
+    for _, importedRecord in ipairs(importedRecords) do
+        local isDuplicate = false
+
+        -- Check if the imported record is "close enough" to existing record
+        for _, existingRecord in ipairs(deathRecordsDB.deathRecords) do
+            if existingRecord.mapID == importedRecord.mapID and
+                existingRecord.posX == importedRecord.posX and
+                existingRecord.posY == importedRecord.posY and
+                math.floor(existingRecord.timestamp / 3600) == math.floor(importedRecord.timestamp / 3600) and
+                existingRecord.user == importedRecord.user and
+                existingRecord.level == importedRecord.level and
+                existingRecord.last_words == importedRecord.last_words then
+                -- The record is a duplicate, so we skip it
+                isDuplicate = true
+                break
+            end
+        end
+
+        -- If the record is not a duplicate, add it to the deduplicated records
+        if not isDuplicate then
+            table.insert(dedupedDeathRecords, importedRecord)
+        end
+    end
+
+    -- Return the deduplicated records
+    return dedupedDeathRecords
+end
+
 local function CreateDataImportFrame()
     local frame = CreateFrame("Frame", "TombstonesImportFrame", UIParent)
     frame:SetSize(400, 300)
@@ -682,11 +715,15 @@ local function CreateDataImportFrame()
         local success, importedDeathRecords = ls:Deserialize(decompressedData)
         -- Example: Print the received data to the chat frame
         printDebug("Deserialization sucess: " .. tostring(success))
-        printDebug("Imported records size is: " .. tostring(#importedDeathRecords))
-        for _, marker in ipairs(importedDeathRecords) do
+        local numImportRecords = #importedDeathRecords
+        printDebug("Imported records size is: " .. tostring(numImportRecords))
+        cleanImportRecords = DedupeDeathRecords(importedDeathRecords)
+        local numNewRecords = #cleanImportRecords
+        printDebug("Deduped records size is: " .. tostring(numNewRecords))
+        for _, marker in ipairs(cleanImportRecords) do
             ImportDeathMarker(marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
         end
-        printDebug("Import finished!")
+        print("Tombstones imported in " .. tostring(numNewRecords) .. " new de-dupe'd records out of " .. tostring(numImportRecords) .. ".")
         frame:Hide()
         frame = nil
     end)
