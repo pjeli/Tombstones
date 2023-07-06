@@ -243,6 +243,14 @@ local function UpdateWorldMapMarkers()
                     markerMapButton:SetScript("OnLeave", function(self)
                         GameTooltip:Hide()
                     end)
+                    markerMapButton:SetScript("OnMouseDown", function(self, button)
+                        local worldMapFrame = WorldMapFrame:GetCanvasContainer()
+                        worldMapFrame:OnMouseDown(button)
+                    end)
+                    markerMapButton:SetScript("OnMouseUp", function(self, button)
+                        local worldMapFrame = WorldMapFrame:GetCanvasContainer()
+                        worldMapFrame:OnMouseUp(button)
+                    end)
 
                     -- Cache the Map Marker
                     deathMapIcons[i] = markerMapButton
