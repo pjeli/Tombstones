@@ -254,37 +254,34 @@ local function UpdateWorldMapMarkers()
                     if timeDifference >= secondsIn24Hours then
                         markerMapButton.texture:SetVertexColor(.4, .4, .4, 0.5)
                     end
-                        
-                    -- Check if filters enabled
-                    -- Add the marker to the current continent's map
-                    if (filtering) then
-                        local allow = true
-                        if (filter_has_words == true) then
-                            if (marker.last_words == nil) then allow = false end
-                        end
-                        if (filter_class ~= nil) then
-                            if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
-                        end
-                        if (filter_race ~= nil) then
-                            if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
-                        end
-                        if (filter_level > 0) then
-                            if (marker.level < filter_level) then allow = false end
-                        end
-                        if (filter_hour >= 0) then
-                            if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
-                        end
-                        if (allow == true) then
-                            hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
-                        end
-                    else
-                        hbdp:AddWorldMapIconMap("Tombstones", markerMapButton, mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
-                    end
 
                     -- Cache the Map Marker
                     deathMapIcons[i] = markerMapButton
+                end
+
+                -- Check if filters enabled
+                -- Add the marker to the current continent's map if passes filter
+                if (filtering and deathMapIcons[i] ~= nil) then
+                    local allow = true
+                    if (filter_has_words == true) then
+                        if (marker.last_words == nil) then allow = false end
+                    end
+                    if (filter_class ~= nil) then
+                        if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
+                    end
+                    if (filter_race ~= nil) then
+                        if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
+                    end
+                    if (filter_level > 0) then
+                        if (marker.level < filter_level) then allow = false end
+                    end
+                    if (filter_hour >= 0) then
+                        if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
+                    end
+                    if (allow == true) then
+                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
+                    end
                 else
-                    -- Skip generating Map Marker and just plot it
                     if (deathMapIcons[i] ~= nil) then hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], mapID, posX, posY, HBD_PINS_WORLDMAP_SHOW_WORLD) end
                 end
             end
