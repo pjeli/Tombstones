@@ -51,6 +51,7 @@ local targetDangerText
 local TOMB_FILTERS = {
   ["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
+  ["HAS_LAST_WORDS_SMART"] = false,
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
   ["LEVEL_THRESH"] = 0,
@@ -145,6 +146,31 @@ local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, us
     deathRecordCount = deathRecordCount + 1
 end
 
+local function fetchQuotedPart(str)
+    local pattern = "\"(.-)\""
+    local quotedPart = string.match(str, pattern)
+    if quotedPart then
+        return quotedPart
+    end
+    return nil  -- Quoted part not found
+end
+
+function endsWithLevel(str)
+    return string.match(str, "has reached level %d?%d?!$") ~= nil
+end
+
+function startsWith(str, prefix)
+    return string.sub(str, 1, string.len(prefix)) == prefix
+end
+
+function stringContains(text, pattern)
+    return string.find(text, pattern) ~= nil
+end
+
+function fDetection(str)
+    return str:match("^%s*[Ff]%s*$") ~= nil
+end
+
 function printDebug(msg)
     if debug then
         print(msg)
@@ -162,6 +188,7 @@ local function UpdateWorldMapMarkers()
         -- Fetch filtering parameters
         local filtering = TOMB_FILTERS["ENABLED"]
         local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
+        local filter_has_words_smart = TOMB_FILTERS["HAS_LAST_WORDS_SMART"]
         local filter_class = TOMB_FILTERS["CLASS_ID"]
         local filter_race = TOMB_FILTERS["RACE_ID"]
         local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
@@ -236,9 +263,9 @@ local function UpdateWorldMapMarkers()
                             end
                         end
                         if (marker.last_words ~= nil) then
-                            GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
+                           GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
                         end
-                           GameTooltip:Show()
+                        GameTooltip:Show()
                     end)
                     markerMapButton:SetScript("OnLeave", function(self)
                         GameTooltip:Hide()
@@ -269,24 +296,111 @@ local function UpdateWorldMapMarkers()
                     local allow = true
                     if (filter_has_words == true) then
                         if (marker.last_words == nil) then allow = false end
+                        if (allow == true and filter_has_words_smart) then
+                            if (allow == true and fDetection(marker.last_words)) then allow = false end
+                            if (allow == true and startsWith(marker.last_words, "{rt")) then allow = false end
+                            if (allow == true and endsWithLevel(marker.last_words)) then allow = false end
+                            if (allow == true and startsWith(marker.last_words, "Our brave ") 
+                                and stringContains(marker.last_words, "has died at level") 
+                                and not stringContains(marker.last_words, "last words were")) then
+                                    allow = false
+                            end
+                            -- Filter the quoted part of the 'Our brave' last_words
+                            if (allow == true and startsWith(marker.last_words, "Our brave ") 
+                                and stringContains(marker.last_words, "has died at level")
+                                and stringContains(marker.last_words, "last words were")) then
+                                    local quotedPart = fetchQuotedPart(marker.last_words)
+                                    if (allow == true and fDetection(quotedPart)) then allow = false end
+                                    if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
+                                    if (allow == true and endsWithLevel(quotedPart)) then allow = false end
+                                    if (allow == true) then
+                                        -- Set the tooltip text to allowed quotation
+                                        deathMapIcons[i]:SetScript("OnEnter", function(self)
+                                            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                                            local class_str, _, _ = GetClassInfo(marker.class_id)
+                                            if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
+                                                local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
+                                                GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                                            elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
+                                                GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
+                                            elseif (marker.level ~= nil and marker.class_id == nil) then
+                                                GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
+                                            else
+                                                GameTooltip:SetText(marker.user .. " -  ? - ?")
+                                            end
+                                            if (marker.timestamp > 0) then
+                                                local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
+                                                GameTooltip:AddLine(date_str, .8, .8, .8, true)
+                                            end
+                                            if (marker.source_id ~= nil) then
+                                                local source_id = id_to_npc[marker.source_id]
+                                                local env_dmg = environment_damage[marker.source_id]
+                                                if (source_id ~= nil) then 
+                                                    GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
+                                                elseif (env_dmg ~= nil) then
+                                                    GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                                                end
+                                            end
+                                            if (marker.last_words ~= nil) then
+                                                GameTooltip:AddLine("\""..quotedPart.."\"", 1, 1, 1)
+                                            end
+                                            GameTooltip:Show()
+                                        end)  
+                                    end
+                            end
+                        end
                     end
-                    if (filter_class ~= nil) then
+                    if (allow == true and filter_class ~= nil) then
                         if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
                     end
-                    if (filter_race ~= nil) then
+                    if (allow == true and filter_race ~= nil) then
                         if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
                     end
-                    if (filter_level > 0) then
+                    if (allow == true and filter_level > 0) then
                         if (marker.level < filter_level) then allow = false end
                     end
-                    if (filter_hour >= 0) then
+                    if (allow == true and filter_hour >= 0) then
                         if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
                     end
                     if (allow == true) then
                         hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
                     end
                 else
-                    if (deathMapIcons[i] ~= nil) then hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD) end
+                    if (deathMapIcons[i] ~= nil) then
+                        -- Set the tooltip text to the name of the player who died
+                        deathMapIcons[i]:SetScript("OnEnter", function(self)
+                            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                            local class_str, _, _ = GetClassInfo(marker.class_id)
+                            if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
+                                local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
+                                GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                            elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
+                                GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
+                            elseif (marker.level ~= nil and marker.class_id == nil) then
+                                GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
+                            else
+                                GameTooltip:SetText(marker.user .. " -  ? - ?")
+                            end
+                            if (marker.timestamp > 0) then
+                                local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
+                                GameTooltip:AddLine(date_str, .8, .8, .8, true)
+                            end
+                            if (marker.source_id ~= nil) then
+                                local source_id = id_to_npc[marker.source_id]
+                                local env_dmg = environment_damage[marker.source_id]
+                                if (source_id ~= nil) then 
+                                    GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
+                                elseif (env_dmg ~= nil) then
+                                    GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                                end
+                            end
+                            if (marker.last_words ~= nil) then
+                               GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
+                            end
+                            GameTooltip:Show()
+                        end)
+                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD) 
+                    end
                 end
             end
 
@@ -841,7 +955,7 @@ local function SlashCommandHandler(msg)
         end
         if argsArray[1] == "info" then
             print("Tombstones filtering enabled: " .. tostring(TOMB_FILTERS["ENABLED"]))
-            print("Tombstones 'Last Words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
+            print("Tombstones 'Last Words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]) .. " (smart mode: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS_SMART"]) .. ")")
             print("Tombstones 'ClassID' filtering on: " .. tostring(TOMB_FILTERS["CLASS_ID"]))
             print("Tombstones 'RaceID' filtering on: " .. tostring(TOMB_FILTERS["RACE_ID"]))
             print("Tombstones 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
@@ -850,13 +964,19 @@ local function SlashCommandHandler(msg)
         elseif argsArray[1] == "off" then
             TOMB_FILTERS["ENABLED"] = false
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
+            TOMB_FILTERS["HAS_LAST_WORDS_SMART"] = false
             TOMB_FILTERS["CLASS_ID"] = nil
             TOMB_FILTERS["RACE_ID"] = nil
             TOMB_FILTERS["LEVEL_THRESH"] = 0
             TOMB_FILTERS["HOUR_THRESH"] = -1
         elseif argsArray[1] == "last_words" then
             TOMB_FILTERS["ENABLED"] = true
-            TOMB_FILTERS["HAS_LAST_WORDS"] = not TOMB_FILTERS["HAS_LAST_WORDS"]
+            TOMB_FILTERS["HAS_LAST_WORDS_SMART"] = false
+            TOMB_FILTERS["HAS_LAST_WORDS"] = true
+        elseif argsArray[1] == "last_words_smart" then
+            TOMB_FILTERS["ENABLED"] = true
+            TOMB_FILTERS["HAS_LAST_WORDS"] = true
+            TOMB_FILTERS["HAS_LAST_WORDS_SMART"] = true
         elseif argsArray[1] == "level" then
             TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["LEVEL_THRESH"] = tonumber(argsArray[2])
