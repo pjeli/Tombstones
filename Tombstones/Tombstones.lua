@@ -1088,7 +1088,7 @@ local function SlashCommandHandler(msg)
     else
         -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | clear | info | debug | icon_size {#SIZE}]")
-        print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
+        print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
     end
