@@ -851,9 +851,8 @@ local function CreateDataDisplayFrame(data)
     frame:Show()
 end
 
-local function IsDeathRecordDuplicate(importedRecord)
+local function IsImportRecordDuplicate(importedRecord)
     local isDuplicate = false
-    local shouldReplaceIndex = -1
 
     -- Check if the imported record is "close enough" to existing record
     for index, existingRecord in ipairs(deathRecordsDB.deathRecords) do
@@ -862,39 +861,30 @@ local function IsDeathRecordDuplicate(importedRecord)
             existingRecord.posY == importedRecord.posY and
             math.floor(existingRecord.timestamp / 3600) == math.floor(importedRecord.timestamp / 3600) and
             existingRecord.user == importedRecord.user and
-            existingRecord.level == importedRecord.level then
-            
-            -- The record is a duplicate
+            existingRecord.level == importedRecord.level and
+            existingRecord.last_words == importedRecord.last_words then
+            -- It is possible for this to CREATE duplicates with different last_words
+            -- Those can be fixed with "/ts dedupe" for now
+            -- The record is a duplicate, break search 
             isDuplicate = true
-
-            if(existingRecord.last_words == nil and importedRecord.last_words ~= nil) then
-                -- New record has more information, should replace
-                shouldReplaceIndex = index
-            end
-            -- We are assuming there are no further duplicates - run separate dedupe deathRecords has
             break
         end
     end
 
-    return isDuplicate, shouldReplaceIndex
+    return isDuplicate
 end
 
-local function DedupeDeathRecords(importedRecords)
+local function DedupeImportDeathRecords(importedRecords)
     -- Create a table to store the deduplicated records
     local dedupedDeathRecords = {}
-
     -- Iterate over the imported records
     for _, importedRecord in ipairs(importedRecords) do
-        local isDuplicate, shouldReplaceIndex = IsDeathRecordDuplicate(importedRecord)
-
+        local isDuplicate = IsImportRecordDuplicate(importedRecord)
         -- If the record is not a duplicate, add it to the deduplicated records
         if not isDuplicate then
             table.insert(dedupedDeathRecords, importedRecord)
-        elseif (isDuplicate and shouldReplaceIndex > 0) then
-            deathRecordsDB.deathRecords[shouldReplaceIndex] = importedRecord
         end
     end
-
     -- Return the deduplicated records
     return dedupedDeathRecords
 end
@@ -1012,7 +1002,7 @@ local function CreateDataImportFrame()
         printDebug("Deserialization sucess: " .. tostring(success))
         local numImportRecords = #importedDeathRecords
         printDebug("Imported records size is: " .. tostring(numImportRecords))
-        cleanImportRecords = DedupeDeathRecords(importedDeathRecords)
+        cleanImportRecords = DedupeImportDeathRecords(importedDeathRecords)
         local numNewRecords = #cleanImportRecords
         printDebug("Deduped records size is: " .. tostring(numNewRecords))
         for _, marker in ipairs(cleanImportRecords) do
