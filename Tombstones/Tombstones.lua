@@ -14,6 +14,57 @@ local COLORS = {
     White = "\27[37m",
     Grey = "\27[90m",
 }
+local MAP_TABLE = {
+-- Eastern Kingdoms
+--[[Alterac Mountains]]     [1416] = {minLevel = 30,    maxLevel = 40,},
+--[[Arathi Highlands]]      [1417] = {minLevel = 30,    maxLevel = 40,},
+--[[Badlands]]              [1418] = {minLevel = 35,    maxLevel = 45,},
+--[[Blasted Lands]]         [1419] = {minLevel = 45,    maxLevel = 55,},
+--[[Burning Steppes]]       [1428] = {minLevel = 50,    maxLevel = 58,},
+--[[Deadwind Pass]]         [1430] = {minLevel = 55,    maxLevel = 60,},
+--[[Dun Morogh]]            [1426] = {minLevel = 1,     maxLevel = 10,},
+--[[Duskwood]]              [1431] = {minLevel = 18,    maxLevel = 30,},
+--[[Eastern Plaguelands]]   [1423] = {minLevel = 53,    maxLevel = 60,},
+--[[Elwynn Forest]]         [1429] = {minLevel = 1,     maxLevel = 10,},
+--[[Hillsbrad Foothills]]   [1424] = {minLevel = 20,    maxLevel = 30,},
+--[[Ironforge]]             [1455] = {},
+--[[Loch Modan]]            [1432] = {minLevel = 10,    maxLevel = 20,},
+--[[Redridge Mountains]]    [1433] = {minLevel = 15,    maxLevel = 25,},
+--[[Searing Gorge]]         [1427] = {minLevel = 43,    maxLevel = 50,},
+--[[Silverpine Forest]]     [1421] = {minLevel = 10,    maxLevel = 20,},
+--[[Stormwind City]]        [1453] = {},
+--[[Stranglethorn Vale]]    [1434] = {minLevel = 30,    maxLevel = 45,},
+--[[Swamp of Sorrows]]      [1435] = {minLevel = 35,    maxLevel = 45,},
+--[[The Hinterlands]]       [1425] = {minLevel = 40,    maxLevel = 50,},
+--[[Tirisfal Glades]]       [1420] = {minLevel = 1,     maxLevel = 10,},
+--[[Undercity]]             [1458] = {},
+--[[Westfall]]              [1436] = {minLevel = 10,    maxLevel = 20,},
+--[[Western Plaguelands]]   [1422] = {minLevel = 51,    maxLevel = 58,},
+--[[Wetlands]]              [1437] = {minLevel = 20,    maxLevel = 30,},
+
+-- Kalimdor
+--[[Ashenvale]]             [1440] = {minLevel = 18,    maxLevel = 30,},
+--[[Azshara]]               [1447] = {minLevel = 45,    maxLevel = 55,},
+--[[Darkshore]]             [1439] = {minLevel = 10,    maxLevel = 20,},
+--[[Darnassus]]             [1457] = {},
+--[[Desolace]]              [1443] = {minLevel = 30,    maxLevel = 40,},
+--[[Durotar]]               [1411] = {minLevel = 1,     maxLevel = 10,},
+--[[Dustwallow Marsh]]      [1445] = {minLevel = 35,    maxLevel = 45,},
+--[[Felwood]]               [1448] = {minLevel = 48,    maxLevel = 55,},
+--[[Feralas]]               [1444] = {minLevel = 40,    maxLevel = 50,},
+--[[Moonglade]]             [1450] = {},
+--[[Mulgore]]               [1412] = {minLevel = 1,     maxLevel = 10,},
+--[[Orgrimmar]]             [1454] = {},
+--[[Silithus]]              [1451] = {minLevel = 55,    maxLevel = 60,},
+--[[Stonetalon Mountains]]  [1442] = {minLevel = 15,    maxLevel = 27,},
+--[[Tanaris]]               [1446] = {minLevel = 40,    maxLevel = 50,},
+--[[Teldrassil]]            [1438] = {minLevel = 1,     maxLevel = 10,},
+--[[The Barrens]]           [1413] = {minLevel = 10,    maxLevel = 25,},
+--[[Thousand Needles]]      [1441] = {minLevel = 25,    maxLevel = 35,},
+--[[Thunder Bluff]]         [1456] = {},
+--[[Un'Goro Crater]]        [1449] = {minLevel = 48,    maxLevel = 55,},
+--[[Winterspring]]          [1452] = {minLevel = 55,    maxLevel = 60,},
+}
 
 -- DeathLog Constants
 local death_alerts_channel = "hcdeathalertschannel"
@@ -317,7 +368,7 @@ local function UpdateWorldMapMarkers()
                                         -- Set the tooltip text to allowed quotation
                                         deathMapIcons[i]:SetScript("OnEnter", function(self)
                                             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                                            local class_str, _, _ = GetClassInfo(marker.class_id)
+                                            local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
                                             if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                                                 local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
                                                 GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
@@ -370,7 +421,7 @@ local function UpdateWorldMapMarkers()
                         -- Set the tooltip text to the name of the player who died
                         deathMapIcons[i]:SetScript("OnEnter", function(self)
                             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                            local class_str, _, _ = GetClassInfo(marker.class_id)
+                            local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
                             if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                                 local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
                                 GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
@@ -606,6 +657,15 @@ function ShowZoneSplashText()
 
     local zoneName = GetRealZoneText()
     local currentMapID = C_Map.GetBestMapForUnit("player")
+    
+    local levelRange = MAP_TABLE[currentMapID]
+    local minLevel
+    local maxLevel
+    if levelRange then
+        minLevel = levelRange.minLevel
+        maxLevel = levelRange.maxLevel
+    end
+
     local deathMarkersInZone = deadlyZones[currentMapID] or 0
     local deathMarkersTotal = #deathRecordsDB.deathRecords
     local deathPercentage = 0.0
@@ -616,18 +676,39 @@ function ShowZoneSplashText()
     -- Create and display the splash text frame
     splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
     splashFrame:SetSize(400, 200)
-    splashFrame:SetPoint("CENTER", 0, 340)
+    splashFrame:SetPoint("CENTER", 0, 330)
 
     -- Add a texture
     splashFrame.texture = splashFrame:CreateTexture(nil, "BACKGROUND")
     splashFrame.texture:SetAllPoints(true)
-    --splashFrame.texture:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+
+    -- Determine what flavor text we should use
+    splashFrame.flavorText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    splashFrame.flavorText:SetPoint("CENTER", 0, 20)
+    local playerLevel = UnitLevel("player")
+    -- Default flavor text
+    local splashFlavorText = ""
+    splashFrame.flavorText:SetTextColor(1, 1, 1)
+    if (minLevel == nil or maxLevel == nil) then
+        splashFlavorText = "This place seems safe..."
+        splashFrame.flavorText:SetTextColor(0, 1, 0)
+    elseif (playerLevel <= minLevel) then
+        splashFlavorText = "This place is very dangerous!"
+        splashFrame.flavorText:SetTextColor(1, 0, 0)
+    elseif (playerLevel > minLevel and playerLevel <= maxLevel) then
+        splashFlavorText = "This place is teeming with adventure."
+        splashFrame.flavorText:SetTextColor(1, 1, 0)
+    elseif (playerLevel > maxLevel) then
+        splashFlavorText = "This place is beneath you."
+        splashFrame.flavorText:SetTextColor(0.75, 0.75, 0.75)
+    end
+    splashFrame.flavorText:SetText(splashFlavorText)
 
     -- Add a font string
     splashFrame.text = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     splashFrame.text:SetPoint("CENTER", 0, 0)
     splashFrame.text:SetText(string.format("There are %d tombstones here.\n%.2f%% chance of death.", deathMarkersInZone, deathPercentage))
-    splashFrame.text:SetTextColor(1, 1, 1) -- Set text color as needed
+    splashFrame.text:SetTextColor(1, 1, 1)
 
     -- Apply fade-out animation to the splash frame
     splashFrame.fadeOut = splashFrame:CreateAnimationGroup()
