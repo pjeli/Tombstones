@@ -851,37 +851,109 @@ local function CreateDataDisplayFrame(data)
     frame:Show()
 end
 
+local function IsDeathRecordDuplicate(importedRecord)
+    local isDuplicate = false
+    local shouldReplaceIndex = -1
+
+    -- Check if the imported record is "close enough" to existing record
+    for index, existingRecord in ipairs(deathRecordsDB.deathRecords) do
+        if existingRecord.mapID == importedRecord.mapID and
+            existingRecord.posX == importedRecord.posX and
+            existingRecord.posY == importedRecord.posY and
+            math.floor(existingRecord.timestamp / 3600) == math.floor(importedRecord.timestamp / 3600) and
+            existingRecord.user == importedRecord.user and
+            existingRecord.level == importedRecord.level then
+            
+            -- The record is a duplicate
+            isDuplicate = true
+
+            if(existingRecord.last_words == nil and importedRecord.last_words ~= nil) then
+                -- New record has more information, should replace
+                shouldReplaceIndex = index
+            end
+            -- We are assuming there are no further duplicates - run separate dedupe deathRecords has
+            break
+        end
+    end
+
+    return isDuplicate, shouldReplaceIndex
+end
+
 local function DedupeDeathRecords(importedRecords)
     -- Create a table to store the deduplicated records
     local dedupedDeathRecords = {}
 
     -- Iterate over the imported records
     for _, importedRecord in ipairs(importedRecords) do
-        local isDuplicate = false
-
-        -- Check if the imported record is "close enough" to existing record
-        for _, existingRecord in ipairs(deathRecordsDB.deathRecords) do
-            if existingRecord.mapID == importedRecord.mapID and
-                existingRecord.posX == importedRecord.posX and
-                existingRecord.posY == importedRecord.posY and
-                math.floor(existingRecord.timestamp / 3600) == math.floor(importedRecord.timestamp / 3600) and
-                existingRecord.user == importedRecord.user and
-                existingRecord.level == importedRecord.level and
-                existingRecord.last_words == importedRecord.last_words then
-                -- The record is a duplicate, so we skip it
-                isDuplicate = true
-                break
-            end
-        end
+        local isDuplicate, shouldReplaceIndex = IsDeathRecordDuplicate(importedRecord)
 
         -- If the record is not a duplicate, add it to the deduplicated records
         if not isDuplicate then
             table.insert(dedupedDeathRecords, importedRecord)
+        elseif (isDuplicate and shouldReplaceIndex > 0) then
+            deathRecordsDB.deathRecords[shouldReplaceIndex] = importedRecord
         end
     end
 
     -- Return the deduplicated records
     return dedupedDeathRecords
+end
+
+local function DeduplicateDeathRecords()
+    local deduplicatedRecords = {}
+    local duplicatesFound = 0
+    local replacementsMade = 0
+    local totalRecords = #deathRecordsDB.deathRecords
+
+    for i = 1, totalRecords do
+        local currentRecord = deathRecordsDB.deathRecords[i]
+        local isDuplicate = false
+
+        for j = i + 1, totalRecords do
+            local compareRecord = deathRecordsDB.deathRecords[j]
+
+            if currentRecord.mapID == compareRecord.mapID and
+                currentRecord.posX == compareRecord.posX and
+                currentRecord.posY == compareRecord.posY and
+                math.floor(currentRecord.timestamp / 3600) == math.floor(compareRecord.timestamp / 3600) and
+                currentRecord.user == compareRecord.user and
+                currentRecord.level == compareRecord.level 
+                then
+                
+                isDuplicate = true
+                duplicatesFound = duplicatesFound + 1
+
+                -- We prefer the duplicate with more info
+                if (currentRecord.last_words ~= nil and compareRecord.last_words == nil) then
+                    table.insert(deduplicatedRecords, currentRecord)
+                    compareRecord.skip = true
+                    replacementsMade = replacementsMade + 1
+                    printDebug("Replacing entry for "..currentRecord.user..".")
+                elseif (currentRecord.last_words == nil and compareRecord.last_words ~= nil) then
+                    table.insert(deduplicatedRecords, compareRecord)
+                    replacementsMade = replacementsMade + 1
+                    printDebug("Replacing entry for "..compareRecord.user..".")
+                end
+                -- Break loop on duplicate found
+                break
+            end
+        end
+
+        -- If the record is purely unique and NOT one that was compared previously for replacement
+        if (not isDuplicate) then
+            if (currentRecord.skip == nil or currentRecord.skip == false) then
+                table.insert(deduplicatedRecords, currentRecord)
+            end
+        else
+            printDebug("Removing duplicate entry for "..currentRecord.user..".")
+        end
+    end
+
+    deathRecordsDB.deathRecords = deduplicatedRecords
+
+    print("Original Tombstones size was " .. tostring(totalRecords) .. ", now is: " .. tostring(#deduplicatedRecords) .. ".")
+    print("Tombstones found " .. tostring(duplicatesFound) .. " duplicate entries.")
+    print("Tombstones replaced " .. tostring(replacementsMade) .. " duplicate entries with their more updated ones.")
 end
 
 local function CreateDataImportFrame()
@@ -971,13 +1043,16 @@ local function SlashCommandHandler(msg)
     elseif command == "clear" then
         -- Clear all death records
         ClearDeathRecords()
+    elseif command == "dedupe" then
+        -- Dedupe existing death records
+        DeduplicateDeathRecords()
     elseif command == "debug" then
         debug = not debug
         print("Tombstones debug mode is: ".. tostring(debug))
     elseif command == "icon_size" then
         iconSize = tonumber(args)
     elseif command == "info" then
-        print("Tombstones has " .. deathRecordCount .. " records this session.")
+        print("Tombstones saw " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
     elseif command == "export" then
         local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
@@ -1087,7 +1162,7 @@ local function SlashCommandHandler(msg)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | clear | info | debug | icon_size {#SIZE}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | clear | dedupe | info | debug | icon_size {#SIZE}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
