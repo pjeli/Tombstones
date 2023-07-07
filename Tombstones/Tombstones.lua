@@ -682,33 +682,38 @@ function ShowZoneSplashText()
     splashFrame.texture = splashFrame:CreateTexture(nil, "BACKGROUND")
     splashFrame.texture:SetAllPoints(true)
 
-    -- Determine what flavor text we should use
+    -- Set-up flavor text and regular info
     splashFrame.flavorText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     splashFrame.flavorText:SetPoint("CENTER", 0, 20)
+    splashFrame.infoText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+
     local playerLevel = UnitLevel("player")
     -- Default flavor text
     local splashFlavorText = ""
-    splashFrame.flavorText:SetTextColor(1, 1, 1)
+    local splashInfoText = ""
+    splashFrame.flavorText:SetTextColor(1, 1, 1) -- Default white
+    splashFrame.infoText:SetTextColor(1, 1, 1) -- White
     if (minLevel == nil or maxLevel == nil) then
         splashFlavorText = "This place seems safe..."
-        splashFrame.flavorText:SetTextColor(0, 1, 0)
-    elseif (playerLevel <= minLevel) then
-        splashFlavorText = "This place is very dangerous!"
-        splashFrame.flavorText:SetTextColor(1, 0, 0)
-    elseif (playerLevel > minLevel and playerLevel <= maxLevel) then
+        splashFrame.flavorText:SetTextColor(0, 1, 0) -- Green
+        splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
+        splashFrame.infoText:SetPoint("CENTER", 0, 7)
+    elseif (playerLevel < minLevel) then
+        splashFlavorText = "This place is dangerous!"
+        splashFrame.flavorText:SetTextColor(1, 0, 0) -- Red
+        splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
+        splashFrame.infoText:SetPoint("CENTER", 0, 7)
+    elseif (playerLevel >= minLevel and playerLevel <= maxLevel) then
         splashFlavorText = "This place is teeming with adventure."
-        splashFrame.flavorText:SetTextColor(1, 1, 0)
+        splashFrame.flavorText:SetTextColor(1, 1, 0) -- Yellow
+        splashInfoText = string.format("There are %d tombstones here.\n%.2f%% chance of death.", deathMarkersInZone, deathPercentage)
+        splashFrame.infoText:SetPoint("CENTER", 0, 0)
     elseif (playerLevel > maxLevel) then
-        splashFlavorText = "This place is beneath you."
-        splashFrame.flavorText:SetTextColor(0.75, 0.75, 0.75)
+        splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
+        splashFrame.infoText:SetPoint("CENTER", 0, 7)
     end
+    splashFrame.infoText:SetText(splashInfoText)
     splashFrame.flavorText:SetText(splashFlavorText)
-
-    -- Add a font string
-    splashFrame.text = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    splashFrame.text:SetPoint("CENTER", 0, 0)
-    splashFrame.text:SetText(string.format("There are %d tombstones here.\n%.2f%% chance of death.", deathMarkersInZone, deathPercentage))
-    splashFrame.text:SetTextColor(1, 1, 1)
 
     -- Apply fade-out animation to the splash frame
     splashFrame.fadeOut = splashFrame:CreateAnimationGroup()
@@ -938,8 +943,16 @@ local function DeduplicateDeathRecords()
             printDebug("Removing duplicate entry for "..currentRecord.user..".")
         end
     end
-
+    -- Save the records back into SV
     deathRecordsDB.deathRecords = deduplicatedRecords
+    -- Re-initialize deadly count caches
+    if(duplicatesFound > 0 or replacementsMade > 0) then
+        deadlyZones = {}
+        deadlyNPCs = {}
+        for _, marker in ipairs(deathRecordsDB.deathRecords) do
+            IncrementDeadlyCounts(marker)        
+        end
+    end
 
     print("Original Tombstones size was " .. tostring(totalRecords) .. ", now is: " .. tostring(#deduplicatedRecords) .. ".")
     print("Tombstones found " .. tostring(duplicatesFound) .. " duplicate entries.")
@@ -1036,6 +1049,8 @@ local function SlashCommandHandler(msg)
     elseif command == "dedupe" then
         -- Dedupe existing death records
         DeduplicateDeathRecords()
+        ClearDeathMarkers()
+        UpdateWorldMapMarkers()
     elseif command == "debug" then
         debug = not debug
         print("Tombstones debug mode is: ".. tostring(debug))
