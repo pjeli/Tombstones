@@ -606,7 +606,7 @@ function ShowZoneSplashText()
 
     local zoneName = GetRealZoneText()
     local currentMapID = C_Map.GetBestMapForUnit("player")
-    local deathMarkersInZone = CountDeathMarkersInZone(currentMapID)
+    local deathMarkersInZone = deadlyZones[currentMapID] or 0
     local deathMarkersTotal = #deathRecordsDB.deathRecords
     local deathPercentage = 0.0
     if (deathMarkersTotal > 0) then
@@ -652,21 +652,6 @@ function ShowZoneSplashText()
 
     splashFrame:Show()
     splashFrame.fadeOut:Play()
-end
-
--- Function to count death markers in a zone based on mapID
-function CountDeathMarkersInZone(mapID)
-    local count = 0
-
-    -- Iterate over the deathRecordsDB table to count markers in the specified zone
-    for _, marker in pairs(deathRecordsDB.deathRecords) do
-        local markerMapID = marker.mapID
-        if markerMapID == mapID then
-            count = count + 1
-        end
-    end
-
-    return count
 end
 
 local function CreateTargetDangerFrame()
