@@ -476,6 +476,7 @@ local function LoadDeathRecords()
         deathRecordsDB.deathRecords = {}
         deathRecordsDB.dangerFrameUnlocked = true
         deathRecordsDB.showDanger = true
+        deathRecordsDB.showZoneSplash = true
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)        
@@ -594,6 +595,10 @@ end
 
 -- Function to show the zone splash text
 function ShowZoneSplashText()
+    if (deathRecordsDB.showZoneSplash == false) then
+        return
+    end
+
     if (splashFrame ~= nil) then
       splashFrame:Hide()
       splashFrame = nil
@@ -920,6 +925,16 @@ local function SlashCommandHandler(msg)
         CreateDataDisplayFrame(encodedData)
     elseif command == "import" then
         CreateDataImportFrame()
+    elseif command == "zone" then
+        if args == "show" then
+            deathRecordsDB.showZoneSplash = true
+        elseif args == "hide" then
+            deathRecordsDB.showZoneSplash = false
+            if (splashFrame ~= nil) then
+              splashFrame:Hide()
+              splashFrame = nil
+            end
+        end
     elseif command == "danger" then
         local argsArray = {}
         if args then
@@ -1009,6 +1024,7 @@ local function SlashCommandHandler(msg)
         print("Usage: /tombstones or /ts [show | hide | export | import | clear | info | debug | icon_size {#SIZE}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
+        print("Usage: /tombstones or /ts [zone (show | hide )]")
     end
 end
 
