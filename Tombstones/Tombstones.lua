@@ -684,7 +684,7 @@ function ShowZoneSplashText()
 
     -- Set-up flavor text and regular info
     splashFrame.flavorText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    splashFrame.flavorText:SetPoint("CENTER", 0, 20)
+    splashFrame.flavorText:SetPoint("CENTER", 0, 105)
     splashFrame.infoText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 
     local playerLevel = UnitLevel("player")
@@ -697,20 +697,20 @@ function ShowZoneSplashText()
         splashFlavorText = "This place seems safe..."
         splashFrame.flavorText:SetTextColor(0, 1, 0) -- Green
         splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
-        splashFrame.infoText:SetPoint("CENTER", 0, 7)
+        splashFrame.infoText:SetPoint("CENTER", 0, 120)
     elseif (playerLevel < minLevel) then
         splashFlavorText = "This place is dangerous!"
         splashFrame.flavorText:SetTextColor(1, 0, 0) -- Red
         splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
-        splashFrame.infoText:SetPoint("CENTER", 0, 7)
+        splashFrame.infoText:SetPoint("CENTER", 0, 120)
     elseif (playerLevel >= minLevel and playerLevel <= maxLevel) then
         splashFlavorText = "This place is teeming with adventure."
         splashFrame.flavorText:SetTextColor(1, 1, 0) -- Yellow
         splashInfoText = string.format("There are %d tombstones here.\n%.2f%% chance of death.", deathMarkersInZone, deathPercentage)
-        splashFrame.infoText:SetPoint("CENTER", 0, 0)
+        splashFrame.infoText:SetPoint("CENTER", 0, 126)
     elseif (playerLevel > maxLevel) then
         splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
-        splashFrame.infoText:SetPoint("CENTER", 0, 7)
+        splashFrame.infoText:SetPoint("CENTER", 0, 120)
     end
     splashFrame.infoText:SetText(splashInfoText)
     splashFrame.flavorText:SetText(splashFlavorText)
