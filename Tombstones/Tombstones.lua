@@ -747,8 +747,11 @@ function ShowZoneSplashText()
     fadeOut:SetFromAlpha(1)
     fadeOut:SetToAlpha(0)
     fadeOut:SetOrder(3)
-    splashFrame.fadeOut:SetScript("OnFinished", function()
-        splashFrame:Hide()
+    splashFrame.fadeOut:SetScript("OnFinished", function(self)
+        if (splashFrame ~= nil) then
+            splashFrame:Hide()
+            splashFrame = nil
+        end
     end)
 
     splashFrame:Show()
