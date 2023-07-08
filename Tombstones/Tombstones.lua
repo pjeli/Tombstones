@@ -703,27 +703,29 @@ function ShowZoneSplashText()
     local playerLevel = UnitLevel("player")
     -- Default flavor text
     local splashFlavorText = ""
-    local splashInfoText = ""
+    local splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
+    splashFrame.infoText:SetPoint("CENTER", 0, 120)
     splashFrame.flavorText:SetTextColor(1, 1, 1) -- Default white
     splashFrame.infoText:SetTextColor(1, 1, 1) -- White
     if (minLevel == nil or maxLevel == nil) then
         splashFlavorText = "This place seems safe..."
         splashFrame.flavorText:SetTextColor(0, 1, 0) -- Green
-        splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
-        splashFrame.infoText:SetPoint("CENTER", 0, 120)
     elseif (playerLevel < minLevel) then
         splashFlavorText = "This place is dangerous!"
         splashFrame.flavorText:SetTextColor(1, 0, 0) -- Red
-        splashInfoText = string.format("There are %d tombstones here.\nThe average death is at level %d.", deathMarkersInZone, deathZoneLvlAvg)
-        splashFrame.infoText:SetPoint("CENTER", 0, 126)
+        if(deathZoneLvlAvg > 0) then
+            splashInfoText = string.format("There are %d tombstones here.\nThe average death is at level %d.", deathMarkersInZone, deathZoneLvlAvg)
+            splashFrame.infoText:SetPoint("CENTER", 0, 126)
+        end
     elseif (playerLevel >= minLevel and playerLevel <= maxLevel) then
         splashFlavorText = "This place is teeming with adventure."
         splashFrame.flavorText:SetTextColor(1, 1, 0) -- Yellow
-        splashInfoText = string.format("There are %d tombstones here.\n%.2f%% chance of death.\nThe average death is at level %d.", deathMarkersInZone, deathPercentage, deathZoneLvlAvg)
-        splashFrame.infoText:SetPoint("CENTER", 0, 132)
+        if(deathZoneLvlAvg > 0) then
+            splashInfoText = string.format("There are %d tombstones here.\n%.2f%% chance of death.\nThe average death is at level %d.", deathMarkersInZone, deathPercentage, deathZoneLvlAvg)
+            splashFrame.infoText:SetPoint("CENTER", 0, 132)
+        end
     elseif (playerLevel > maxLevel) then
-        splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
-        splashFrame.infoText:SetPoint("CENTER", 0, 120)
+        -- Do nothing
     end
     splashFrame.infoText:SetText(splashInfoText)
     splashFrame.flavorText:SetText(splashFlavorText)
