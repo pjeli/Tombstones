@@ -654,7 +654,7 @@ end
 
 -- Function to show the zone splash text
 function ShowZoneSplashText()
-    if (deathRecordsDB.showZoneSplash == false) then
+    if (deathRecordsDB.showZoneSplash == false or IsInInstance()) then
         return
     end
 
