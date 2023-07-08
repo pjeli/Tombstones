@@ -964,6 +964,7 @@ local function DeduplicateDeathRecords()
     if(duplicatesFound > 0 or replacementsMade > 0) then
         deadlyZones = {}
         deadlyNPCs = {}
+        deadlyZoneLvlSums = {}
         for _, marker in ipairs(deathRecordsDB.deathRecords) do
             IncrementDeadlyCounts(marker)        
         end
