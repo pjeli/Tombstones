@@ -151,6 +151,10 @@ addon:RegisterEvent("PLAYER_TARGET_CHANGED")
 addon:RegisterEvent("CHAT_MSG_CHANNEL")
 addon:RegisterEvent("CHAT_MSG_ADDON") -- Changed from CHAT_MSG_SAY
 
+local function SaveDeathRecords()
+    _G["deathRecordsDB"] = deathRecordsDB
+end
+
 --Increment deadly caches
 local function IncrementDeadlyCounts(marker)
     if marker.source_id then
@@ -175,6 +179,49 @@ local function IncrementDeadlyCounts(marker)
         end
     end
 end
+
+local function LoadDeathRecords()
+    deathRecordsDB = _G["deathRecordsDB"]
+    if not deathRecordsDB then
+        deathRecordsDB = {}
+        deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
+        deathRecordsDB.deathRecords = {}
+        deathRecordsDB.dangerFrameUnlocked = true
+        deathRecordsDB.showDanger = true
+        deathRecordsDB.showZoneSplash = true
+    end
+    for _, marker in ipairs(deathRecordsDB.deathRecords) do
+        IncrementDeadlyCounts(marker)        
+    end
+end
+
+local function ClearDeathRecords()
+    deathRecordsDB = {}
+    deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
+    deathRecordsDB.deathRecords = {}
+    deathRecordCount = 0
+    _G["deathRecordsDB"] = deathRecordsDB
+end
+
+local function ClearDeathMarkers()
+    hbdp:RemoveAllWorldMapIcons("Tombstones")
+end
+
+-- Define the confirmation dialog
+StaticPopupDialogs["TOMBSTONES_CLEAR_CONFIRMATION"] = {
+    text = "Are you sure you want to delete all your tombstones?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function()
+        ClearDeathRecords()
+        ClearDeathMarkers()
+        print("Tombstones have been cleared.")
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
 
 -- Add death marker function
 local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
@@ -236,11 +283,6 @@ function printDebug(msg)
         print(msg)
     end
 end
-
-local function ClearDeathMarkers()
-    hbdp:RemoveAllWorldMapIcons("Tombstones")
-end
-
 
 local function UpdateWorldMapMarkers()
     local worldMapFrame = WorldMapFrame
@@ -346,9 +388,9 @@ local function UpdateWorldMapMarkers()
 
                 -- Check if the marker timestamp within the last 12 hours
                 local timeDifference = currentTime - marker.timestamp
-                local secondsIn24Hours = 12 * 60 * 60 -- 12 hours in seconds
+                local secondsIn24Hours = 24 * 60 * 60 -- 12 hours in seconds
                 if (deathMapIcons[i] ~= nil and timeDifference >= secondsIn24Hours) then
-                    deathMapIcons[i].texture:SetVertexColor(.4, .4, .4, 0.5)
+                    deathMapIcons[i].texture:SetVertexColor(.6, .6, .6, 0.5)
                 end
 
                 -- Check if the marker timestamp within the last 12 hours
@@ -571,33 +613,6 @@ local function MakeWorldMapButton()
     mapButton:SetScript("OnLeave", function(self)
        GameTooltip:Hide()
     end)
-end
-
-local function SaveDeathRecords()
-    _G["deathRecordsDB"] = deathRecordsDB
-end
-
-local function LoadDeathRecords()
-    deathRecordsDB = _G["deathRecordsDB"]
-    if not deathRecordsDB then
-        deathRecordsDB = {}
-        deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
-        deathRecordsDB.deathRecords = {}
-        deathRecordsDB.dangerFrameUnlocked = true
-        deathRecordsDB.showDanger = true
-        deathRecordsDB.showZoneSplash = true
-    end
-    for _, marker in ipairs(deathRecordsDB.deathRecords) do
-        IncrementDeadlyCounts(marker)        
-    end
-end
-
-local function ClearDeathRecords()
-    deathRecordsDB = {}
-    deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
-    deathRecordsDB.deathRecords = {}
-    deathRecordCount = 0
-    _G["deathRecordsDB"] = deathRecordsDB
 end
 
 function addon:SendMessage(message, distribution, target)
@@ -1114,7 +1129,7 @@ local function SlashCommandHandler(msg)
         ClearDeathMarkers()
     elseif command == "clear" then
         -- Clear all death records
-        ClearDeathRecords()
+        StaticPopup_Show("TOMBSTONES_CLEAR_CONFIRMATION")
     elseif command == "dedupe" then
         -- Dedupe existing death records
         DeduplicateDeathRecords()
