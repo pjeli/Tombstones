@@ -97,6 +97,7 @@ local iconSize = 12
 local renderingScheduled = false
 local showMarkers = true
 local debug = false
+local mapButton
 local splashFrame
 local targetDangerFrame
 local targetDangerText
@@ -580,10 +581,18 @@ WorldMapFrame:HookScript("OnHide", function()
 end)
 
 local function MakeWorldMapButton()
-    local mapButton = CreateFrame("Button", nil, WorldMapFrame, "UIPanelButtonTemplate")
+    if (mapButton ~= nil) then
+        mapButton:Hide()
+        mapButton = nil
+    end
+    mapButton = CreateFrame("Button", nil, WorldMapFrame, "UIPanelButtonTemplate")
     mapButton:SetSize(20, 20) -- Adjust the size of the button as needed
     mapButton:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 30, -35)
-    mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set a custom texture for the button
+    if (showMarkers == true) then
+        mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set a custom texture for the button
+    else
+        mapButton:SetNormalTexture("Interface\\Icons\\INV_Misc_Map_01")
+    end
     mapButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square") -- Set the highlight texture for the button
     mapButton:SetScript("OnClick", function()
         showMarkers = not showMarkers
@@ -1124,9 +1133,12 @@ local function SlashCommandHandler(msg)
     if command == "show" then
         -- Show death markers
         showMarkers = true
+        UpdateWorldMapMarkers()
+        MakeWorldMapButton()
     elseif command == "hide" then
         showMarkers = false
         ClearDeathMarkers()
+        MakeWorldMapButton()
     elseif command == "clear" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_CLEAR_CONFIRMATION")
