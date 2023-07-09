@@ -302,13 +302,13 @@ local function UpdateWorldMapMarkers()
                         local class_str, _, _ = GetClassInfo(marker.class_id)
                         if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                             local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
-                            GameTooltip:SetText(user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                            GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
                         elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
-                            GameTooltip:SetText(user .. " - " .. class_str .." - " .. marker.level)
+                            GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
                         elseif (marker.level ~= nil and marker.class_id == nil) then
-                            GameTooltip:SetText(user .. " - ? - " .. marker.level)
+                            GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
                         else
-                            GameTooltip:SetText(user .. " -  ? - ?")
+                            GameTooltip:SetText(marker.user .. " - ? - ?")
                         end
                         if (marker.timestamp > 0) then
                             local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
@@ -353,8 +353,14 @@ local function UpdateWorldMapMarkers()
 
                 -- Check if the marker timestamp within the last 12 hours
                 local markerUsername = marker.user
-                if (filtering and not filter_realms) then
-                    deathMapIcons[i].texture:SetVertexColor(.1, .1, .1, 0.6)
+                if (filtering and not filter_realms and marker.realm ~= REALM) then
+                    deathMapIcons[i].texture:SetVertexColor(1, 1, 1, 0.5)
+                    local borderTexture = deathMapIcons[i]:CreateTexture(nil, "OVERLAY")
+                    borderTexture:SetPoint("TOPLEFT", deathMapIcons[i], "TOPLEFT", -6, 6)
+                    borderTexture:SetPoint("BOTTOMRIGHT", deathMapIcons[i], "BOTTOMRIGHT", 6, -6)
+                    borderTexture:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+                    borderTexture:SetBlendMode("ADD")
+                    borderTexture:SetVertexColor(0, 1, 0, 0.5)
                     markerUsername = marker.user .. "@" .. marker.realm
                     -- Set the tooltip text to allowed quotation
                     deathMapIcons[i]:SetScript("OnEnter", function(self)
@@ -369,7 +375,7 @@ local function UpdateWorldMapMarkers()
                         elseif (marker.level ~= nil and marker.class_id == nil) then
                             GameTooltip:SetText(markerUsername .. " - ? - " .. marker.level)
                         else
-                            GameTooltip:SetText(markerUsername .. " -  ? - ?")
+                            GameTooltip:SetText(markerUsername .. " - ? - ?")
                         end
                         if (marker.timestamp > 0) then
                             local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
@@ -427,7 +433,7 @@ local function UpdateWorldMapMarkers()
                                             elseif (marker.level ~= nil and marker.class_id == nil) then
                                                 GameTooltip:SetText(markerUsername .. " - ? - " .. marker.level)
                                             else
-                                                GameTooltip:SetText(markerUsername .. " -  ? - ?")
+                                                GameTooltip:SetText(markerUsername .. " - ? - ?")
                                             end
                                             if (marker.timestamp > 0) then
                                                 local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
@@ -480,7 +486,7 @@ local function UpdateWorldMapMarkers()
                             elseif (marker.level ~= nil and marker.class_id == nil) then
                                 GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
                             else
-                                GameTooltip:SetText(marker.user .. " -  ? - ?")
+                                GameTooltip:SetText(marker.user .. " - ? - ?")
                             end
                             if (marker.timestamp > 0) then
                                 local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
