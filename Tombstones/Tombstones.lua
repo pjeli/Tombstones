@@ -108,6 +108,7 @@ local TOMB_FILTERS = {
   ["RACE_ID"] = nil,
   ["LEVEL_THRESH"] = 0,
   ["HOUR_THRESH"] = -1,
+  ["REALMS"] = true,
 }
 local classNameToID = {
     ["warrior"] = 1,
@@ -252,6 +253,7 @@ local function UpdateWorldMapMarkers()
         local filter_race = TOMB_FILTERS["RACE_ID"]
         local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
         local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
+        local filter_realms = TOMB_FILTERS["REALMS"]
 
         -- Number of death markers to render in each batch
         local batchSize = 200
@@ -269,7 +271,7 @@ local function UpdateWorldMapMarkers()
                 end
 
                 -- Skip markers that are not in our realm
-                if ((marker.realm == nil or REALM == marker.realm) and deathMapIcons[i] == nil) then
+                if ((not filter_realms or (marker.realm == nil or REALM == marker.realm)) and deathMapIcons[i] == nil) then
                     -- Create the marker on the current continent's map
                     local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
                     markerMapButton:SetSize(iconSize , iconSize) -- Adjust the size of the marker as needed
@@ -300,13 +302,13 @@ local function UpdateWorldMapMarkers()
                         local class_str, _, _ = GetClassInfo(marker.class_id)
                         if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                             local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
-                            GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                            GameTooltip:SetText(user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
                         elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
-                            GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
+                            GameTooltip:SetText(user .. " - " .. class_str .." - " .. marker.level)
                         elseif (marker.level ~= nil and marker.class_id == nil) then
-                            GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
+                            GameTooltip:SetText(user .. " - ? - " .. marker.level)
                         else
-                            GameTooltip:SetText(marker.user .. " -  ? - ?")
+                            GameTooltip:SetText(user .. " -  ? - ?")
                         end
                         if (marker.timestamp > 0) then
                             local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
@@ -349,6 +351,46 @@ local function UpdateWorldMapMarkers()
                     deathMapIcons[i].texture:SetVertexColor(.4, .4, .4, 0.5)
                 end
 
+                -- Check if the marker timestamp within the last 12 hours
+                local markerUsername = marker.user
+                if (filtering and not filter_realms) then
+                    deathMapIcons[i].texture:SetVertexColor(.1, .1, .1, 0.6)
+                    markerUsername = marker.user .. "@" .. marker.realm
+                    -- Set the tooltip text to allowed quotation
+                    deathMapIcons[i]:SetScript("OnEnter", function(self)
+                        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                        if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
+                            local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
+                            local class_str, _, _ = GetClassInfo(marker.class_id)
+                            GameTooltip:SetText(markerUsername .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                        elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
+                            local class_str, _, _ = GetClassInfo(marker.class_id)
+                            GameTooltip:SetText(markerUsername .. " - " .. class_str .." - " .. marker.level)
+                        elseif (marker.level ~= nil and marker.class_id == nil) then
+                            GameTooltip:SetText(markerUsername .. " - ? - " .. marker.level)
+                        else
+                            GameTooltip:SetText(markerUsername .. " -  ? - ?")
+                        end
+                        if (marker.timestamp > 0) then
+                            local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
+                            GameTooltip:AddLine(date_str, .8, .8, .8, true)
+                        end
+                        if (marker.source_id ~= nil) then
+                            local source_id = id_to_npc[marker.source_id]
+                            local env_dmg = environment_damage[marker.source_id]
+                            if (source_id ~= nil) then 
+                                GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
+                            elseif (env_dmg ~= nil) then
+                                GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                            end
+                        end
+                        if (marker.last_words ~= nil) then
+                            GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
+                        end
+                        GameTooltip:Show()
+                    end)
+                end
+
                 -- Check if filters enabled
                 -- Add the marker to the current continent's map if passes filter
                 if (filtering and deathMapIcons[i] ~= nil) then
@@ -376,16 +418,16 @@ local function UpdateWorldMapMarkers()
                                         -- Set the tooltip text to allowed quotation
                                         deathMapIcons[i]:SetScript("OnEnter", function(self)
                                             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                                            local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
+                                            local class_str, _, _ = GetClassInfo(marker.class_id)
                                             if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                                                 local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
-                                                GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                                                GameTooltip:SetText(markerUsername .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
                                             elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
-                                                GameTooltip:SetText(marker.user .. " - " .. class_str .." - " .. marker.level)
+                                                GameTooltip:SetText(markerUsername .. " - " .. class_str .." - " .. marker.level)
                                             elseif (marker.level ~= nil and marker.class_id == nil) then
-                                                GameTooltip:SetText(marker.user .. " - ? - " .. marker.level)
+                                                GameTooltip:SetText(markerUsername .. " - ? - " .. marker.level)
                                             else
-                                                GameTooltip:SetText(marker.user .. " -  ? - ?")
+                                                GameTooltip:SetText(markerUsername .. " -  ? - ?")
                                             end
                                             if (marker.timestamp > 0) then
                                                 local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
@@ -589,7 +631,7 @@ function TdeathlogReceiveLastWords(sender, data)
 
   -- Iterate over the death records
   for index, record in ipairs(deathRecordsDB.deathRecords) do
-    if record.user == sender then
+    if record.user == sender and record.realm == REALM then
         record.last_words = msg
         break
     end
@@ -1140,6 +1182,7 @@ local function SlashCommandHandler(msg)
             print("Tombstones 'RaceID' filtering on: " .. tostring(TOMB_FILTERS["RACE_ID"]))
             print("Tombstones 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
             print("Tombstones 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
+            print("Tombstones 'Realms' filtering on: " .. tostring(TOMB_FILTERS["REALMS"]))
             return
         elseif argsArray[1] == "off" then
             TOMB_FILTERS["ENABLED"] = false
@@ -1149,6 +1192,7 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["RACE_ID"] = nil
             TOMB_FILTERS["LEVEL_THRESH"] = 0
             TOMB_FILTERS["HOUR_THRESH"] = -1
+            TOMB_FILTERS["REALMS"] = true
         elseif argsArray[1] == "last_words" then
             TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HAS_LAST_WORDS_SMART"] = false
@@ -1157,6 +1201,9 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HAS_LAST_WORDS"] = true
             TOMB_FILTERS["HAS_LAST_WORDS_SMART"] = true
+        elseif argsArray[1] == "realms" then
+            TOMB_FILTERS["ENABLED"] = true
+            TOMB_FILTERS["REALMS"] = false
         elseif argsArray[1] == "level" then
             TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["LEVEL_THRESH"] = tonumber(argsArray[2])
