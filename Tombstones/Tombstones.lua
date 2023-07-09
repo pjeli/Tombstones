@@ -506,7 +506,9 @@ local function UpdateWorldMapMarkers()
                             end
                             GameTooltip:Show()
                         end)
-                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD) 
+                        if (filter_realms and marker.realm == REALM) then
+                            hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD) 
+                        end
                     end
                 end
             end
