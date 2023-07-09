@@ -299,7 +299,7 @@ local function UpdateWorldMapMarkers()
                     -- Set the tooltip text to the name of the player who died
                     markerMapButton:SetScript("OnEnter", function(self)
                         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                        local class_str, _, _ = GetClassInfo(marker.class_id)
+                        local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
                         if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                             local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
                             GameTooltip:SetText(marker.user .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
@@ -365,12 +365,11 @@ local function UpdateWorldMapMarkers()
                     -- Set the tooltip text to allowed quotation
                     deathMapIcons[i]:SetScript("OnEnter", function(self)
                         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                        local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
                         if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                             local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
-                            local class_str, _, _ = GetClassInfo(marker.class_id)
                             GameTooltip:SetText(markerUsername .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
                         elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
-                            local class_str, _, _ = GetClassInfo(marker.class_id)
                             GameTooltip:SetText(markerUsername .. " - " .. class_str .." - " .. marker.level)
                         elseif (marker.level ~= nil and marker.class_id == nil) then
                             GameTooltip:SetText(markerUsername .. " - ? - " .. marker.level)
@@ -424,7 +423,7 @@ local function UpdateWorldMapMarkers()
                                         -- Set the tooltip text to allowed quotation
                                         deathMapIcons[i]:SetScript("OnEnter", function(self)
                                             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                                            local class_str, _, _ = GetClassInfo(marker.class_id)
+                                            local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
                                             if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                                                 local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
                                                 GameTooltip:SetText(markerUsername .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
@@ -506,6 +505,7 @@ local function UpdateWorldMapMarkers()
                             end
                             GameTooltip:Show()
                         end)
+                        -- Filtering is disabled; but default is to filter realms.
                         if (filter_realms and marker.realm == REALM) then
                             hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD) 
                         end
