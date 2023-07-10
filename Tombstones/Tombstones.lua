@@ -711,37 +711,6 @@ local function MakeWorldMapButton()
     end)
 end
 
-function addon:SendMessage(message, distribution, target)
-    local prefix = "Tombstones" -- Replace with your add-on's unique prefix
-    local messageType = "MESSAGE_TYPE" -- Replace with your desired message type
-    local distribution = "PARTY" -- Replace with your desired target (e.g., "PARTY", "RAID", "GUILD")
-    self:SendCommMessage(prefix, message, distribution, nil)
-    printDebug("Sent message: "..message)
-end
-
-function addon:OnCommReceived(prefix, message, distribution, sender)
-    local addonPrefix = "Tombstones" -- Replace with your add-on's unique prefix
-
-    -- Check if the received message matches the prefix and message type
-    if prefix == addonPrefix and distribution == "PARTY" and sender ~= UnitName("player") then
-        -- Process the add-on message
-        -- Implement your logic here
-        printDebug("Received add-on message: " .. message .. " from " .. sender)
-        local command, mapID, contID, posX, posY, timestamp = strsplit("|", message)
-            if command == "DEATH" and mapID and posX and posY and timestamp then
-                mapID = tonumber(mapID)
-                contID = tonumber(contID)
-                posX = tonumber(posX)
-                posY = tonumber(posY)
-                timestamp = tonumber(timestamp)
-                if mapID and posX and posY and timestamp then
-                    -- Add received death marker
-                    AddDeathMarker(mapID, contID, posX, posY, timestamp, sender)
-                end
-            end
-    end
-end
-
 function TdeathlogReceiveLastWords(sender, data)
   if data == nil then return end
   local values = {}
@@ -1380,22 +1349,7 @@ addon:SetScript("OnEvent", function(self, event, ...)
       LoadDeathRecords()
  
       ac:Embed(self)
-      self:RegisterComm("Tombstones")
       print("Tombstones loaded successfully!")
-    end
-  elseif event == "PLAYER_DEAD" then
-    print("Death detected!")
-    -- Handle player death event
-    local mapID = C_Map.GetBestMapForUnit("player")
-    local contID = C_Map.GetMapInfo(mapID).parentMapID
-    local playerPosition = C_Map.GetPlayerMapPosition(mapID, "player")
-    local posX, posY = playerPosition:GetXY()
-    local timestamp = time()
-
-    if mapID and contID and posX and posY and timestamp then
-      printDebug("Death detected. Making mark...")
-      AddDeathMarker(mapID, contID, posX, posY, timestamp, UnitName("player"))
-      self:SendMessage("DEATH|"..mapID.."|"..contID.."|"..posX.."|"..posY.."|"..timestamp)
     end
   elseif event == "PLAYER_LOGOUT" then
     -- Handle player logout event
@@ -1404,19 +1358,6 @@ addon:SetScript("OnEvent", function(self, event, ...)
     ShowZoneSplashText()
   elseif event == "PLAYER_TARGET_CHANGED" then
     UnitTargetChange()
-  elseif event == "CHAT_MSG_SAY" then
-        local message = ...
-        if (debug and message == "dead") then
-            local mapID = C_Map.GetBestMapForUnit("player")
-            local contID = C_Map.GetMapInfo(mapID).parentMapID
-            local playerPosition = C_Map.GetPlayerMapPosition(mapID, "player")
-            local posX, posY = playerPosition:GetXY()
-            local truncatedX = tonumber(string.format("%.5f", posX))
-            local truncatedY = tonumber(string.format("%.5f", posY))
-            local timestamp = time()
-            AddDeathMarker(mapID, contID, truncatedX, truncatedY, timestamp, UnitName("player"))
-            self:SendMessage("DEATH|"..mapID.."|"..contID.."|"..truncatedX.."|"..truncatedY.."|"..timestamp)
-        end
   elseif event == "CHAT_MSG_CHANNEL" then
     local _, channel_name = string.split(" ", arg[4])
     if channel_name ~= death_alerts_channel then return end
