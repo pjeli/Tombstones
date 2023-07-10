@@ -1306,7 +1306,7 @@ local function ShowLastWordsDialogueBox(marker)
     -- Create the dialogue box frame
     local dialogueBox = CreateFrame("Frame", "MyDialogueBox", UIParent)
     dialogueBox:SetSize(300, 100)
-    dialogueBox:SetPoint("CENTER", 0, 0)
+    dialogueBox:SetPoint("CENTER", 0, 350)
     dialogueBox:Hide()
 
     -- Add a background texture
@@ -1317,12 +1317,12 @@ local function ShowLastWordsDialogueBox(marker)
     -- Add a model frame for Thrall
     dialogueBox.model = CreateFrame("PlayerModel", nil, dialogueBox)
     dialogueBox.model:SetPoint("BOTTOMLEFT", 10, 10)
-    dialogueBox.model:SetSize(100, 100)
-    dialogueBox.model:SetDisplayInfo(3110)
+    dialogueBox.model:SetSize(80, 80)
+    dialogueBox.model:SetDisplayInfo(146)
     --dialogueBox.model:SetUnit("player") -- Set the model to the player's character
     dialogueBox.model:SetAnimation(60)
-    dialogueBox.model:SetCamDistanceScale(0.5) -- Adjust the camera distance as needed
-    dialogueBox.model:SetPosition(0, 0, -0.15)
+    dialogueBox.model:SetCamDistanceScale(0.7) -- Adjust the camera distance as needed
+    dialogueBox.model:SetPosition(0, 0, -0.7)
 
     -- Add a text area for the dialogue text
     local editBox = CreateFrame("EditBox", nil, dialogueBox)
@@ -1341,48 +1341,32 @@ local function ShowLastWordsDialogueBox(marker)
     end)
     editBox:SetText(marker.user..":\n\n\"" .. lastWords .."\"")
 
-    ---- Add an animation for Thrall talking
-    --local talkingAnimation = dialogueBox.model:CreateAnimationGroup()
-    --local animation = talkingAnimation:CreateAnimation("Translation")
-    --animation:SetDuration(0.5)
-    --animation:SetOffset(0, 10)
-    --animation:SetOrder(1)
-    --animation:SetSmoothing("OUT")
-    --local animation2 = talkingAnimation:CreateAnimation("Translation")
-    --animation2:SetDuration(0.5)
-    --animation2:SetOffset(0, -10)
-    --animation2:SetOrder(2)
-    --animation2:SetSmoothing("IN")
-    --talkingAnimation:SetLooping("BOUNCE")
+    -- Apply fade-out animation to the splash frame
+    dialogueBox.fade = dialogueBox:CreateAnimationGroup()
+    local fadeIn = dialogueBox.fade:CreateAnimation("Alpha")
+    fadeIn:SetDuration(2) -- Adjust the delay duration as desired
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetOrder(1)
+    local delay = dialogueBox.fade:CreateAnimation("Alpha")
+    delay:SetDuration(8) -- Adjust the delay duration as desired
+    delay:SetFromAlpha(1)
+    delay:SetToAlpha(1)
+    delay:SetOrder(2)
+    local fadeOut = dialogueBox.fade:CreateAnimation("Alpha")
+    fadeOut:SetDuration(2) -- Adjust the fade duration as desired
+    fadeOut:SetFromAlpha(1)
+    fadeOut:SetToAlpha(0)
+    fadeOut:SetOrder(3)
+    dialogueBox.fade:SetScript("OnFinished", function(self)
+        if (dialogueBox ~= nil) then
+            dialogueBox:Hide()
+            dialogueBox = nil
+        end
+    end)
 
-    -- Function to show the dialogue box with text and animation
-    local function ShowDialogueBox(text)
-        --dialogueBox.text:SetText(marker.user..": \"" .. text .."\"") -- Update the dialogue text
-        --talkingAnimation:Play() -- Play the talking animation
-        dialogueBox:Show() -- Show the dialogue box
-    end
-
-    -- Function to hide the dialogue box
-    local function HideDialogueBox()
-        dialogueBox:Hide() -- Hide the dialogue box
-    end
-
-    local function HideDialogueBoxWithDelay(delay)
-        C_Timer.After(delay, function()
-            HideDialogueBox()
-        end)
-    end
-
-    -- Function to hide the dialogue box
-    local function HideDialogueBox()
-        dialogueBox:Hide() -- Hide the dialogue box
-        talkingAnimation:Stop() -- Stop the talking animation
-    end
-
-    -- Example usage
-    ShowDialogueBox(lastWords)
-    -- Wait for a while...
-    HideDialogueBoxWithDelay(6)
+    dialogueBox:Show()
+    dialogueBox.fade:Play()
 end
 
 -- Function to show the zone splash text
@@ -1428,11 +1412,7 @@ local function ShowNeartestTombstoneSplashText(marker)
     -- PLAY THE HERO TEXT
     tombstoneFrame.infoText = tombstoneFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     tombstoneFrame.infoText:SetPoint("CENTER", 0, 120)
-    if (lastWords ~= nil) then
-        tombstoneFrame.infoText:SetText(heroText.."\n"..fallenText.."\n\""..lastWords.."\" circa "..timeOfDeathLong)
-    else
-        tombstoneFrame.infoText:SetText(heroText.."\n"..fallenText.."\n"..timeText)
-    end
+    tombstoneFrame.infoText:SetText(heroText.."\n"..fallenText.."\n"..timeText)
 
     -- Apply fade-out animation to the splash frame
     tombstoneFrame.heroFade = tombstoneFrame:CreateAnimationGroup()
@@ -1462,6 +1442,8 @@ local function ShowNeartestTombstoneSplashText(marker)
     tombstoneFrame.heroFade:Play()
 
     ShowLastWordsDialogueBox(marker)
+
+    PlaySound(3416)
 end
 
 local function ActOnNearestTombstone()
@@ -1686,8 +1668,8 @@ addon:SetScript("OnEvent", function(self, event, ...)
   elseif event == "PLAYER_TARGET_CHANGED" then
     UnitTargetChange()
   elseif event == "PLAYER_STARTED_MOVING" then
-    -- The player has performed the kneel emote
-    ActOnNearestTombstone()
+    -- Need to start monitoring player movement
+    --ActOnNearestTombstone()
   elseif event == "PLAYER_STOPPED_MOVING" then
     -- The player has performed the kneel emote
     ActOnNearestTombstone()
