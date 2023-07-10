@@ -99,6 +99,7 @@ local showMarkers = true
 local debug = false
 local mapButton
 local splashFrame
+local tombstoneFrame
 local targetDangerFrame
 local targetDangerText
 local TOMB_FILTERS = {
@@ -144,13 +145,12 @@ local l64 = LibStub("LibBase64-1.0")
 -- Register events
 local addon = CreateFrame("Frame")
 addon:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-addon:RegisterEvent("PLAYER_DEAD")
 addon:RegisterEvent("PLAYER_LOGOUT")
 addon:RegisterEvent("ADDON_LOADED")
-addon:RegisterEvent("CHAT_MSG_SAY")
+addon:RegisterEvent("PLAYER_STARTED_MOVING")
+addon:RegisterEvent("PLAYER_STOPPED_MOVING")
 addon:RegisterEvent("PLAYER_TARGET_CHANGED")
 addon:RegisterEvent("CHAT_MSG_CHANNEL")
-addon:RegisterEvent("CHAT_MSG_ADDON") -- Changed from CHAT_MSG_SAY
 
 local function SaveDeathRecords()
     _G["deathRecordsDB"] = deathRecordsDB
@@ -202,6 +202,14 @@ local function ClearDeathRecords()
     deathRecordsDB.deathRecords = {}
     deathRecordCount = 0
     _G["deathRecordsDB"] = deathRecordsDB
+end
+
+local function UnvisitAllMarkers()
+    local totalRecords = #deathRecordsDB.deathRecords
+
+    for i = 1, totalRecords do
+        deathRecordsDB.deathRecords[i].visited = nil
+    end
 end
 
 local function PruneDeathRecords()
@@ -416,6 +424,14 @@ local function UpdateWorldMapMarkers()
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
                     else
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
+                    end
+
+                    if (marker.visited) then
+                        -- Create the checkmark texture
+                        local checkmarkTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
+                        checkmarkTexture:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+                        checkmarkTexture:SetSize(16, 16)
+                        checkmarkTexture:SetPoint("CENTER", markerMapButton, "CENTER", 0, 0)
                     end
 
                     if (marker.last_words ~= nil) then
@@ -1178,6 +1194,196 @@ local function CreateDataImportFrame()
     frame:Show()
 end
 
+local function GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
+    if playerInstance ~= markerInstance then
+        return math.huge  -- Players are in different instances, distance is infinite
+    end
+
+    local deltaX = markerX - playerX
+    local deltaY = markerY - playerY
+    local distance = math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+    return distance
+end
+
+local function ConvertTimestampToLongForm(timestamp)
+    local dateTable = date("*t", timestamp)
+    local daySuffix = ""
+    local day = dateTable.day
+    if day == 1 or day == 21 or day == 31 then
+        daySuffix = "st"
+    elseif day == 2 or day == 22 then
+        daySuffix = "nd"
+    elseif day == 3 or day == 23 then
+        daySuffix = "rd"
+    else
+        daySuffix = "th"
+    end
+
+    local hour = dateTable.hour
+    local period = "am"
+    if hour >= 12 then
+        period = "pm"
+        if hour > 12 then
+            hour = hour - 12
+        end
+    end
+
+    local minute = string.format("%02d", dateTable.min)
+    --local second = string.format("%02d", dateTable.sec)
+
+    return string.format("%s%s%s, %d, at %d:%s%s",
+        date("%B ", timestamp),
+        day, daySuffix,
+        dateTable.year,
+        hour, minute,
+        period
+    )
+end
+
+-- Has no 'F' detector. Prefer to have visit show F.
+local function LastWordsSmartParser(marker)
+    if(marker.last_words == nil) then
+        return nil
+    end
+
+    local allow = true
+
+    if (startsWith(marker.last_words, "{rt")) then allow = false end
+    if (allow == true and endsWithLevel(marker.last_words)) then allow = false end
+    if (allow == true and startsWith(marker.last_words, "Our brave ") 
+        and stringContains(marker.last_words, "has died at level") 
+        and not stringContains(marker.last_words, "last words were")) then
+            allow = false
+    end
+    -- Filter the quoted part of the 'Our brave' last_words
+    if (allow == true and startsWith(marker.last_words, "Our brave ") 
+        and stringContains(marker.last_words, "has died at level")
+        and stringContains(marker.last_words, "last words were")) then
+            local quotedPart = fetchQuotedPart(marker.last_words)
+            if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
+            if (allow == true and endsWithLevel(quotedPart)) then allow = false end
+            if (allow == true) then return quotedPart end
+    end
+    if (allow == true) then
+        return marker.last_words
+    else
+        return nil
+    end
+end
+
+-- Function to show the zone splash text
+local function ShowNeartestTombstoneSplashText(marker)
+    if (deathRecordsDB.showZoneSplash == false or IsInInstance()) then
+        return
+    end
+
+    if (tombstoneFrame ~= nil) then
+        tombstoneFrame:Hide()
+        tombstoneFrame = nil
+    end
+
+    -- Create and display the splash text frame
+    tombstoneFrame = CreateFrame("Frame", "SplashFrame", UIParent)
+    tombstoneFrame:SetSize(400, 200)
+    tombstoneFrame:SetPoint("CENTER", 0, 330)
+
+    -- Add a texture
+    tombstoneFrame.texture = tombstoneFrame:CreateTexture(nil, "BACKGROUND")
+    tombstoneFrame.texture:SetAllPoints(true)
+
+    local class_str = marker.class_id and GetClassInfo(marker.class_id) or "Wanderer"
+    local race_info = marker.race_id and C_CreatureInfo.GetRaceInfo(marker.race_id).raceName or "Unknown"
+    local level = marker.level and tostring(marker.level) or "unknown"
+    local timeOfDeathLong = ConvertTimestampToLongForm(marker.timestamp)
+    local lastWords = LastWordsSmartParser(marker)
+
+    local heroText = marker.user .. ", a " .. class_str .. " of " .. race_info .. " origins from " .. marker.realm .. ", perished here at level " .. level .. "."
+    local timeText = "They fell on " .. timeOfDeathLong .. "."
+    local fallenText = "They fell by unknown means."
+    if (marker.source_id ~= nil) then
+        local source_npc = id_to_npc[marker.source_id]
+        local env_dmg = environment_damage[marker.source_id]
+        if (source_npc ~= nil) then 
+            fallenText = "They were killed by " .. source_npc .. "."
+        elseif (env_dmg ~= nil) then
+            fallenText = "They died from " .. env_dmg .. "."
+        end
+    end
+
+
+    -- PLAY THE HERO TEXT
+    tombstoneFrame.infoText = tombstoneFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    tombstoneFrame.infoText:SetPoint("CENTER", 0, 120)
+    if (lastWords ~= nil) then
+        tombstoneFrame.infoText:SetText(heroText.."\n"..fallenText.."\n\""..lastWords.."\" circa "..timeOfDeathLong)
+    else
+        tombstoneFrame.infoText:SetText(heroText.."\n"..fallenText.."\n"..timeText)
+    end
+
+    -- Apply fade-out animation to the splash frame
+    tombstoneFrame.heroFade = tombstoneFrame:CreateAnimationGroup()
+    local fadeIn = tombstoneFrame.heroFade:CreateAnimation("Alpha")
+    fadeIn:SetDuration(1) -- Adjust the delay duration as desired
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetOrder(1)
+    local delay = tombstoneFrame.heroFade:CreateAnimation("Alpha")
+    delay:SetDuration(10) -- Adjust the delay duration as desired
+    delay:SetFromAlpha(1)
+    delay:SetToAlpha(1)
+    delay:SetOrder(2)
+    local fadeOut = tombstoneFrame.heroFade:CreateAnimation("Alpha")
+    fadeOut:SetDuration(1) -- Adjust the fade duration as desired
+    fadeOut:SetFromAlpha(1)
+    fadeOut:SetToAlpha(0)
+    fadeOut:SetOrder(3)
+    tombstoneFrame.heroFade:SetScript("OnFinished", function(self)
+        if (tombstoneFrame ~= nil) then
+            tombstoneFrame:Hide()
+            tombstoneFrame = nil
+        end
+    end)
+
+    tombstoneFrame:Show()
+    tombstoneFrame.heroFade:Play()
+end
+
+local function ActOnNearestTombstone()
+    -- Handle player death event
+    local playerInstance = C_Map.GetBestMapForUnit("player")
+    local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
+    local playerX, playerY = playerPosition:GetXY()
+
+    local closestMarker
+    local closestDistance = math.huge
+
+    -- Iterate through your death markers and calculate the distance from each marker to the player's position
+    for index, marker in ipairs(deathRecordsDB.deathRecords) do
+        local markerX = marker.posX
+        local markerY = marker.posY
+        local markerInstance = marker.mapID
+
+        -- Calculate the distance between the player and the marker
+        local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
+
+        -- Check if this marker is closer than the previous closest marker
+        if distance < closestDistance then
+            closestMarker = marker
+            closestDistance = distance
+        end
+    end
+
+    -- Now you have the closest death marker to the player
+    if closestMarker and closestDistance <= 0.001 and not closestMarker.visited then
+        -- Perform any desired logic with the closest death marker
+        printDebug("Closest death marker: ", tostring(closestMarker.user))
+        printDebug("Closest death marker: ", tostring(closestDistance))
+        ShowNeartestTombstoneSplashText(closestMarker)
+        closestMarker.visited = true
+    end
+end
+
 -- Define slash commands
 SLASH_TOMBSTONES1 = "/tombstones"
 SLASH_TOMBSTONES2 = "/ts"
@@ -1195,6 +1401,10 @@ local function SlashCommandHandler(msg)
         showMarkers = false
         ClearDeathMarkers()
         MakeWorldMapButton()
+    elseif command == "unvisit" then
+        UnvisitAllMarkers()
+        ClearDeathMarkers()
+        UpdateWorldMapMarkers()
     elseif command == "clear" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_CLEAR_CONFIRMATION")
@@ -1327,7 +1537,7 @@ local function SlashCommandHandler(msg)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | dedupe | info | debug | icon_size {#SIZE}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | unvisit | prune | clear | dedupe | info | debug | icon_size {#SIZE}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
@@ -1358,6 +1568,12 @@ addon:SetScript("OnEvent", function(self, event, ...)
     ShowZoneSplashText()
   elseif event == "PLAYER_TARGET_CHANGED" then
     UnitTargetChange()
+  elseif event == "PLAYER_STARTED_MOVING" then
+    -- The player has performed the kneel emote
+    ActOnNearestTombstone()
+  elseif event == "PLAYER_STOPPED_MOVING" then
+    -- The player has performed the kneel emote
+    ActOnNearestTombstone()
   elseif event == "CHAT_MSG_CHANNEL" then
     local _, channel_name = string.split(" ", arg[4])
     if channel_name ~= death_alerts_channel then return end
