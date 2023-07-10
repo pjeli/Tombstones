@@ -437,7 +437,7 @@ local function UpdateWorldMapMarkers()
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
                     end
 
-                    if (marker.visited == true) then
+                    if (marker.visited == true and markerMapButton.checkmarkTexture == nil) then
                         -- Create the checkmark texture
                         local checkmarkTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
                         markerMapButton.checkmarkTexture = checkmarkTexture
@@ -446,8 +446,9 @@ local function UpdateWorldMapMarkers()
                         checkmarkTexture:SetPoint("CENTER", markerMapButton, "CENTER", 0, 0)
                     end
 
-                    if (marker.last_words ~= nil) then
+                    if (marker.last_words ~= nil and markerMapButton.borderTexture == nil) then
                         local borderTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
+                        markerMapButton.borderTexture = borderTexture
                         borderTexture:SetAllPoints(markerMapButton)
                         borderTexture:SetTexture("Interface\\Cooldown\\ping4")
                         borderTexture:SetBlendMode("ADD")
@@ -509,7 +510,7 @@ local function UpdateWorldMapMarkers()
                     deathMapIcons[i].texture:SetVertexColor(.6, .6, .6, 0.5)
                 end
 
-                if (marker.visited == true and deathMapIcons[i].checkmarkTexture == nil) then
+                if (marker.visited == true and deathMapIcons[i] ~= nil and deathMapIcons[i].checkmarkTexture == nil) then
                     -- Create the checkmark texture
                     local checkmarkTexture = deathMapIcons[i]:CreateTexture(nil, "OVERLAY")
                     deathMapIcons[i].checkmarkTexture = checkmarkTexture
@@ -518,16 +519,19 @@ local function UpdateWorldMapMarkers()
                     checkmarkTexture:SetPoint("CENTER", deathMapIcons[i], "CENTER", 0, 0)
                 end
 
-                -- Check if the marker timestamp within the last 12 hours
+                -- Render markers outside of our REALM
                 local markerUsername = marker.user
                 if (filtering and not filter_realms and marker.realm ~= REALM) then
                     deathMapIcons[i].texture:SetVertexColor(1, 1, 1, 0.5)
-                    local borderTexture = deathMapIcons[i]:CreateTexture(nil, "OVERLAY")
-                    borderTexture:SetPoint("TOPLEFT", deathMapIcons[i], "TOPLEFT", -6, 6)
-                    borderTexture:SetPoint("BOTTOMRIGHT", deathMapIcons[i], "BOTTOMRIGHT", 6, -6)
-                    borderTexture:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-                    borderTexture:SetBlendMode("ADD")
-                    borderTexture:SetVertexColor(0, 1, 0, 0.5)
+                    if (deathMapIcons[i].realmTexture == nil) then
+                        local realmTexture = deathMapIcons[i]:CreateTexture(nil, "OVERLAY")
+                        deathMapIcons[i].realmTexture = realmTexture
+                        realmTexture:SetPoint("TOPLEFT", deathMapIcons[i], "TOPLEFT", -6, 6)
+                        realmTexture:SetPoint("BOTTOMRIGHT", deathMapIcons[i], "BOTTOMRIGHT", 6, -6)
+                        realmTexture:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+                        realmTexture:SetBlendMode("ADD")
+                        realmTexture:SetVertexColor(0, 1, 0, 0.5)
+                    end
                     markerUsername = marker.user .. "@" .. marker.realm
                     -- Set the tooltip text to allowed quotation
                     deathMapIcons[i]:SetScript("OnEnter", function(self)
@@ -1293,6 +1297,94 @@ local function LastWordsSmartParser(marker)
     end
 end
 
+local function ShowLastWordsDialogueBox(marker)
+    -- Safety break
+    local lastWords = LastWordsSmartParser(marker)
+    if (lastWords == nil or lastWords == "") then
+        return
+    end
+    -- Create the dialogue box frame
+    local dialogueBox = CreateFrame("Frame", "MyDialogueBox", UIParent)
+    dialogueBox:SetSize(300, 100)
+    dialogueBox:SetPoint("CENTER", 0, 0)
+    dialogueBox:Hide()
+
+    -- Add a background texture
+    dialogueBox.texture = dialogueBox:CreateTexture(nil, "BACKGROUND")
+    dialogueBox.texture:SetAllPoints()
+    dialogueBox.texture:SetColorTexture(0, 0, 0, 0.7) -- Set the background color
+
+    -- Add a model frame for Thrall
+    dialogueBox.model = CreateFrame("PlayerModel", nil, dialogueBox)
+    dialogueBox.model:SetPoint("BOTTOMLEFT", 10, 10)
+    dialogueBox.model:SetSize(100, 100)
+    dialogueBox.model:SetDisplayInfo(3110)
+    --dialogueBox.model:SetUnit("player") -- Set the model to the player's character
+    dialogueBox.model:SetAnimation(60)
+    dialogueBox.model:SetCamDistanceScale(0.5) -- Adjust the camera distance as needed
+    dialogueBox.model:SetPosition(0, 0, -0.15)
+
+    -- Add a text area for the dialogue text
+    local editBox = CreateFrame("EditBox", nil, dialogueBox)
+    dialogueBox.editBox = editBox
+    editBox:SetMultiLine(true)
+    editBox:SetMaxLetters(0)
+    editBox:SetAutoFocus(false)
+    editBox:SetFontObject("GameFontNormal")
+    editBox:SetWidth(160) -- Adjust width as needed
+    editBox:SetHeight(100) -- Adjust height as needed
+    editBox:SetPoint("TOP", dialogueBox, "TOP", 70, -20)
+    editBox:SetJustifyH("LEFT")
+    editBox:SetJustifyV("TOP")
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+    editBox:SetText(marker.user..":\n\n\"" .. lastWords .."\"")
+
+    ---- Add an animation for Thrall talking
+    --local talkingAnimation = dialogueBox.model:CreateAnimationGroup()
+    --local animation = talkingAnimation:CreateAnimation("Translation")
+    --animation:SetDuration(0.5)
+    --animation:SetOffset(0, 10)
+    --animation:SetOrder(1)
+    --animation:SetSmoothing("OUT")
+    --local animation2 = talkingAnimation:CreateAnimation("Translation")
+    --animation2:SetDuration(0.5)
+    --animation2:SetOffset(0, -10)
+    --animation2:SetOrder(2)
+    --animation2:SetSmoothing("IN")
+    --talkingAnimation:SetLooping("BOUNCE")
+
+    -- Function to show the dialogue box with text and animation
+    local function ShowDialogueBox(text)
+        --dialogueBox.text:SetText(marker.user..": \"" .. text .."\"") -- Update the dialogue text
+        --talkingAnimation:Play() -- Play the talking animation
+        dialogueBox:Show() -- Show the dialogue box
+    end
+
+    -- Function to hide the dialogue box
+    local function HideDialogueBox()
+        dialogueBox:Hide() -- Hide the dialogue box
+    end
+
+    local function HideDialogueBoxWithDelay(delay)
+        C_Timer.After(delay, function()
+            HideDialogueBox()
+        end)
+    end
+
+    -- Function to hide the dialogue box
+    local function HideDialogueBox()
+        dialogueBox:Hide() -- Hide the dialogue box
+        talkingAnimation:Stop() -- Stop the talking animation
+    end
+
+    -- Example usage
+    ShowDialogueBox(lastWords)
+    -- Wait for a while...
+    HideDialogueBoxWithDelay(6)
+end
+
 -- Function to show the zone splash text
 local function ShowNeartestTombstoneSplashText(marker)
     if (deathRecordsDB.showZoneSplash == false or IsInInstance()) then
@@ -1368,6 +1460,8 @@ local function ShowNeartestTombstoneSplashText(marker)
 
     tombstoneFrame:Show()
     tombstoneFrame.heroFade:Play()
+
+    ShowLastWordsDialogueBox(marker)
 end
 
 local function ActOnNearestTombstone()
