@@ -204,6 +204,77 @@ local function ClearDeathRecords()
     _G["deathRecordsDB"] = deathRecordsDB
 end
 
+local function PruneDeathRecords()
+    local prunedRecords = {}
+    local recordsToPrune = 0
+    local totalRecords = #deathRecordsDB.deathRecords
+
+    -- Fetch filtering parameters
+    local filtering = TOMB_FILTERS["ENABLED"]
+    local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
+    local filter_has_words_smart = TOMB_FILTERS["HAS_LAST_WORDS_SMART"]
+    local filter_class = TOMB_FILTERS["CLASS_ID"]
+    local filter_race = TOMB_FILTERS["RACE_ID"]
+    local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
+    local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
+    local filter_realms = TOMB_FILTERS["REALMS"]
+
+    if (not filtering) then
+        return recordsToPrune
+    end
+
+    for i = 1, totalRecords do
+        local marker = deathRecordsDB.deathRecords[i]
+        local allow = true        
+        if (filter_has_words == true) then
+            if (marker.last_words == nil) then allow = false end
+            if (allow == true and filter_has_words_smart) then
+                if (allow == true and fDetection(marker.last_words)) then allow = false end
+                if (allow == true and startsWith(marker.last_words, "{rt")) then allow = false end
+                if (allow == true and endsWithLevel(marker.last_words)) then allow = false end
+                if (allow == true and startsWith(marker.last_words, "Our brave ") 
+                    and stringContains(marker.last_words, "has died at level") 
+                    and not stringContains(marker.last_words, "last words were")) then
+                        allow = false
+                end
+                -- Filter the quoted part of the 'Our brave' last_words
+                if (allow == true and startsWith(marker.last_words, "Our brave ") 
+                    and stringContains(marker.last_words, "has died at level")
+                    and stringContains(marker.last_words, "last words were")) then
+                        local quotedPart = fetchQuotedPart(marker.last_words)
+                        if (allow == true and fDetection(quotedPart)) then allow = false end
+                        if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
+                        if (allow == true and endsWithLevel(quotedPart)) then allow = false end
+                end
+            end
+        end
+        if (allow == true and filter_class ~= nil) then
+            if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
+        end
+        if (allow == true and filter_race ~= nil) then
+            if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
+        end
+        if (allow == true and filter_level > 0) then
+            if (marker.level < filter_level) then allow = false end
+        end
+        if (allow == true and filter_hour >= 0) then
+            if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
+        end
+        if (allow == true and filter_realms) then
+            if (marker.realm ~= nil and marker.realm ~= REALM) then allow = false end
+        end
+
+        if (allow == true) then
+            table.insert(prunedRecords, marker)
+        else
+            recordsToPrune = recordsToPrune + 1
+        end
+    end
+
+    deathRecordsDB.deathRecords = prunedRecords
+    return recordsToPrune
+end
+
 local function ClearDeathMarkers()
     hbdp:RemoveAllWorldMapIcons("Tombstones")
 end
@@ -217,6 +288,22 @@ StaticPopupDialogs["TOMBSTONES_CLEAR_CONFIRMATION"] = {
         ClearDeathRecords()
         ClearDeathMarkers()
         print("Tombstones have been cleared.")
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- Define the confirmation dialog
+StaticPopupDialogs["TOMBSTONES_PRUNE_CONFIRMATION"] = {
+    text = "Are you sure you want to prune your tombstones based on current filters?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function()
+        prunedRecordCount = PruneDeathRecords()
+        print(tostring(prunedRecordCount) .. " tombstones have been pruned.")
+        print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
     end,
     timeout = 0,
     whileDead = true,
@@ -254,7 +341,7 @@ local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, us
     deathRecordCount = deathRecordCount + 1
 end
 
-local function fetchQuotedPart(str)
+function fetchQuotedPart(str)
     local pattern = "\"(.-)\""
     local quotedPart = string.match(str, pattern)
     if quotedPart then
@@ -925,7 +1012,7 @@ local function CreateDataDisplayFrame(data)
     local textArea = CreateFrame("EditBox", "SerializedDisplayFrameText", scrollFrame)
     textArea:SetMultiLine(true)
     textArea:SetMaxLetters(0)
-    textArea:SetAutoFocus(false)
+    textArea:SetAutoFocus(true)
     textArea:SetFontObject("ChatFontNormal")
     textArea:SetWidth(scrollFrame:GetWidth() - 20)
     textArea:SetHeight(scrollFrame:GetHeight() - 20)
@@ -1142,6 +1229,9 @@ local function SlashCommandHandler(msg)
     elseif command == "clear" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_CLEAR_CONFIRMATION")
+    elseif command == "prune" then
+        -- Clear all death records
+        StaticPopup_Show("TOMBSTONES_PRUNE_CONFIRMATION")
     elseif command == "dedupe" then
         -- Dedupe existing death records
         DeduplicateDeathRecords()
@@ -1268,7 +1358,7 @@ local function SlashCommandHandler(msg)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | clear | dedupe | info | debug | icon_size {#SIZE}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | dedupe | info | debug | icon_size {#SIZE}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
