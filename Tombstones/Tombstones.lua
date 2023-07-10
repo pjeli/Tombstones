@@ -90,6 +90,7 @@ local environment_damage = {
 local deathRecordsDB
 local deathMapIcons = {}
 local deathRecordCount = 0
+local deathVisitCount = 0
 local deadlyNPCs = {}
 local deadlyZones = {}
 local deadlyZoneLvlSums = {}
@@ -179,6 +180,9 @@ local function IncrementDeadlyCounts(marker)
             deadlyZoneLvlSums[marker.mapID] = deadlyZoneLvlSums[marker.mapID] + marker.level
         end
     end
+    if marker.visited and marker.visited == true then
+        deathVisitCount = deathVisitCount + 1
+    end
 end
 
 local function LoadDeathRecords()
@@ -206,10 +210,17 @@ end
 
 local function UnvisitAllMarkers()
     local totalRecords = #deathRecordsDB.deathRecords
-
+    local totalIcons = #deathMapIcons
     for i = 1, totalRecords do
         deathRecordsDB.deathRecords[i].visited = nil
     end
+    for i = 1, totalIcons do
+        if (deathMapIcons[i] ~= nil and deathMapIcons[i].checkmarkTexture ~= nil) then
+            deathMapIcons[i].checkmarkTexture:Hide()
+            deathMapIcons[i].checkmarkTexture = nil
+        end
+    end
+    deathVisitCount = 0
 end
 
 local function PruneDeathRecords()
@@ -426,11 +437,12 @@ local function UpdateWorldMapMarkers()
                         markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
                     end
 
-                    if (marker.visited) then
+                    if (marker.visited == true) then
                         -- Create the checkmark texture
                         local checkmarkTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
+                        markerMapButton.checkmarkTexture = checkmarkTexture
                         checkmarkTexture:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-                        checkmarkTexture:SetSize(16, 16)
+                        checkmarkTexture:SetSize(10, 10)
                         checkmarkTexture:SetPoint("CENTER", markerMapButton, "CENTER", 0, 0)
                     end
 
@@ -495,6 +507,15 @@ local function UpdateWorldMapMarkers()
                 local secondsIn24Hours = 24 * 60 * 60 -- 12 hours in seconds
                 if (deathMapIcons[i] ~= nil and timeDifference >= secondsIn24Hours) then
                     deathMapIcons[i].texture:SetVertexColor(.6, .6, .6, 0.5)
+                end
+
+                if (marker.visited == true and deathMapIcons[i].checkmarkTexture == nil) then
+                    -- Create the checkmark texture
+                    local checkmarkTexture = deathMapIcons[i]:CreateTexture(nil, "OVERLAY")
+                    deathMapIcons[i].checkmarkTexture = checkmarkTexture
+                    checkmarkTexture:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+                    checkmarkTexture:SetSize(10, 10)
+                    checkmarkTexture:SetPoint("CENTER", deathMapIcons[i], "CENTER", 0, 0)
                 end
 
                 -- Check if the marker timestamp within the last 12 hours
@@ -1381,6 +1402,7 @@ local function ActOnNearestTombstone()
         printDebug("Closest death marker: ", tostring(closestDistance))
         ShowNeartestTombstoneSplashText(closestMarker)
         closestMarker.visited = true
+        deathVisitCount = deathVisitCount + 1
     end
 end
 
@@ -1424,6 +1446,7 @@ local function SlashCommandHandler(msg)
     elseif command == "info" then
         print("Tombstones saw " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
+        print("You have visited " .. deathVisitCount .. " tombstones.")
     elseif command == "export" then
         local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
         printDebug("Serialized data size is: " .. tostring(string.len(serializedData)))
