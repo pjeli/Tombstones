@@ -335,6 +335,27 @@ StaticPopupDialogs["TOMBSTONES_PRUNE_CONFIRMATION"] = {
     preferredIndex = 3,
 }
 
+local function IsNewRecordDuplicate(newRecord)
+    local isDuplicate = false
+
+    -- Check if the imported record is "close enough" to existing record
+    for index, existingRecord in ipairs(deathRecordsDB.deathRecords) do
+        if existingRecord.mapID == newRecord.mapID and
+            existingRecord.posX == newRecord.posX and
+            existingRecord.posY == newRecord.posY and
+            math.floor(existingRecord.timestamp / 3600) == math.floor(newRecord.timestamp / 3600) and
+            existingRecord.user == newRecord.user and
+            existingRecord.level == newRecord.level then
+            -- Ignore last words. 
+            -- If last words arrive they will update our existing record instead of making a new record.
+            isDuplicate = true
+            break
+        end
+    end
+
+    return isDuplicate
+end
+
 -- Add death marker function
 local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
     if mapID == nil then
@@ -347,11 +368,16 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level,
     end
 
     local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
-    table.insert(deathRecordsDB.deathRecords, marker)
-    IncrementDeadlyCounts(marker)
-    deathRecordCount = deathRecordCount + 1
-
-    printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+    
+    local isDuplicate = IsNewRecordDuplicate(marker)
+    if (not isDuplicate) then 
+        table.insert(deathRecordsDB.deathRecords, marker)
+        IncrementDeadlyCounts(marker)
+        deathRecordCount = deathRecordCount + 1
+        printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+    else
+        printDebug("Received a duplicate record. Ignoring.")
+    end
 end
 
 local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words)
