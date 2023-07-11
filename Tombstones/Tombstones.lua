@@ -98,11 +98,16 @@ local iconSize = 12
 local renderingScheduled = false
 local showMarkers = true
 local debug = false
+local isPlayerMoving = false
+local movementUpdateInterval = 0.5 -- Update interval in seconds
+local movementTimer = 0
 local mapButton
 local splashFrame
 local tombstoneFrame
+local dialogueBox
 local targetDangerFrame
 local targetDangerText
+local glowFrame
 local TOMB_FILTERS = {
   ["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
@@ -1303,18 +1308,21 @@ local function ShowLastWordsDialogueBox(marker)
     if (lastWords == nil or lastWords == "") then
         return
     end
+    if(dialogueBox ~= nil) then
+        dialogueBox:Hide()
+        dialogueBox = nil
+    end
     -- Create the dialogue box frame
-    local dialogueBox = CreateFrame("Frame", "MyDialogueBox", UIParent)
+    dialogueBox = CreateFrame("Frame", "MyDialogueBox", UIParent)
     dialogueBox:SetSize(300, 100)
     dialogueBox:SetPoint("CENTER", 0, 350)
-    dialogueBox:Hide()
 
     -- Add a background texture
     dialogueBox.texture = dialogueBox:CreateTexture(nil, "BACKGROUND")
     dialogueBox.texture:SetAllPoints()
     dialogueBox.texture:SetColorTexture(0, 0, 0, 0.7) -- Set the background color
 
-    -- Add a model frame for Thrall
+    -- Add a model frame for a spooky ghost
     dialogueBox.model = CreateFrame("PlayerModel", nil, dialogueBox)
     dialogueBox.model:SetPoint("BOTTOMLEFT", 10, 10)
     dialogueBox.model:SetSize(80, 80)
@@ -1390,7 +1398,7 @@ local function ShowNeartestTombstoneSplashText(marker)
     tombstoneFrame.texture:SetAllPoints(true)
 
     local class_str = marker.class_id and GetClassInfo(marker.class_id) or "Wanderer"
-    local race_info = marker.race_id and C_CreatureInfo.GetRaceInfo(marker.race_id).raceName or "Unknown"
+    local race_info = marker.race_id and C_CreatureInfo.GetRaceInfo(marker.race_id).raceName or "unknown"
     local level = marker.level and tostring(marker.level) or "unknown"
     local timeOfDeathLong = ConvertTimestampToLongForm(marker.timestamp)
     local lastWords = LastWordsSmartParser(marker)
@@ -1447,6 +1455,10 @@ local function ShowNeartestTombstoneSplashText(marker)
 end
 
 local function ActOnNearestTombstone()
+    if(glowFrame ~= nil) then
+        glowFrame:Hide()
+        glowFrame = nil
+    end
     -- Handle player death event
     local playerInstance = C_Map.GetBestMapForUnit("player")
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
@@ -1474,11 +1486,60 @@ local function ActOnNearestTombstone()
     -- Now you have the closest death marker to the player
     if closestMarker and closestDistance <= 0.001 and not closestMarker.visited then
         -- Perform any desired logic with the closest death marker
-        printDebug("Closest death marker: ", tostring(closestMarker.user))
-        printDebug("Closest death marker: ", tostring(closestDistance))
+        printDebug("Closest death marker: " .. tostring(closestMarker.user))
+        printDebug("Closest death marker: " .. tostring(closestDistance))
         ShowNeartestTombstoneSplashText(closestMarker)
         closestMarker.visited = true
         deathVisitCount = deathVisitCount + 1
+    end
+end
+
+local function FlashWhenNearTombstone()
+    -- Handle player death event
+    local playerInstance = C_Map.GetBestMapForUnit("player")
+    local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
+    local playerX, playerY = playerPosition:GetXY()
+
+    local closestMarker
+    local closestDistance = math.huge
+
+    -- Iterate through your death markers and calculate the distance from each marker to the player's position
+    for index, marker in ipairs(deathRecordsDB.deathRecords) do
+        local markerX = marker.posX
+        local markerY = marker.posY
+        local markerInstance = marker.mapID
+
+        -- Calculate the distance between the player and the marker
+        local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
+
+        -- Check if this marker is closer than the previous closest marker
+        if distance < closestDistance then
+            closestMarker = marker
+            closestDistance = distance
+        end
+    end
+
+    printDebug("On move death marker: " .. tostring(closestDistance))
+
+    -- Now you have the closest death marker to the player
+    if closestMarker and closestDistance <= 0.001 and not closestMarker.visited then
+        if (glowFrame == nil) then
+            -- Create a frame for the screen glow effect
+            glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
+            glowFrame:SetAllPoints(UIParent)
+            glowFrame:SetFrameStrata("BACKGROUND")
+
+            -- Create a texture for the glow effect
+            local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
+            glowTexture:SetAllPoints()
+            glowTexture:SetTexture("Interface\\FullScreenTextures\\OutOfControl")
+            glowTexture:SetBlendMode("ADD")
+            glowTexture:SetVertexColor(1, 1, 1, 0.5) -- Set the texture color to red (RGB values)
+            glowFrame:Show()
+        end
+    elseif(glowFrame ~= nil) then
+        glowFrame:Hide()
+        glowFrame = nil
     end
 end
 
@@ -1668,10 +1729,10 @@ addon:SetScript("OnEvent", function(self, event, ...)
   elseif event == "PLAYER_TARGET_CHANGED" then
     UnitTargetChange()
   elseif event == "PLAYER_STARTED_MOVING" then
-    -- Need to start monitoring player movement
-    --ActOnNearestTombstone()
+    isPlayerMoving = true
+    movementTimer = 0
   elseif event == "PLAYER_STOPPED_MOVING" then
-    -- The player has performed the kneel emote
+    isPlayerMoving = false
     ActOnNearestTombstone()
   elseif event == "CHAT_MSG_CHANNEL" then
     local _, channel_name = string.split(" ", arg[4])
@@ -1691,3 +1752,17 @@ addon:SetScript("OnEvent", function(self, event, ...)
     end
   end
 end)
+
+-- Movement monitoring
+addon:SetScript("OnUpdate", function(self, elapsed)
+    if isPlayerMoving then
+        movementTimer = movementTimer + elapsed
+        if (movementTimer >= movementUpdateInterval) then
+            printDebug("Movement tick.")
+            FlashWhenNearTombstone()
+            timer = 0
+        end
+    end
+end)
+
+addon:SetScript("OnUpdate", addon:GetScript("OnUpdate"))
