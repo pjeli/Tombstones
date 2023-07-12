@@ -1,7 +1,6 @@
 -- Constants
 local ADDON_NAME = "Tombstones"
 local ADDON_CHANNEL = "Tombstones"
-local DEATH_RECORD_WINDOW_SIZE = 5000
 local REALM = GetRealmName()
 local COLORS = {
     Reset = "\27[0m",
@@ -99,7 +98,7 @@ local renderingScheduled = false
 local showMarkers = true
 local debug = false
 local isPlayerMoving = false
-local movementUpdateInterval = 0.5 -- Update interval in seconds
+local movementUpdateInterval = 0.2 -- Update interval in seconds
 local movementTimer = 0
 local lastProximityWarning = 0
 local mapButton
@@ -313,8 +312,18 @@ local function PruneDeathRecords()
     return recordsToPrune
 end
 
-local function ClearDeathMarkers()
+-- "force" should be used if the underlying DeathRecords have been altered
+local function ClearDeathMarkers(force)
     hbdp:RemoveAllWorldMapIcons("Tombstones")
+    if (force ~= nil and force == true) then
+        local totalIcons = #deathMapIcons
+        for i = 1, totalIcons do
+            if (deathMapIcons[i] ~= nil) then
+                deathMapIcons[i]:Hide()
+                deathMapIcons[i] = nil
+            end
+        end
+    end
 end
 
 -- Define the confirmation dialog
@@ -324,7 +333,7 @@ StaticPopupDialogs["TOMBSTONES_CLEAR_CONFIRMATION"] = {
     button2 = "No",
     OnAccept = function()
         ClearDeathRecords()
-        ClearDeathMarkers()
+        ClearDeathMarkers(true)
         print("Tombstones have been cleared.")
     end,
     timeout = 0,
@@ -355,6 +364,7 @@ local function IsNewRecordDuplicate(newRecord)
     -- Check if the imported record is "close enough" to existing record
     for index, existingRecord in ipairs(deathRecordsDB.deathRecords) do
         if existingRecord.mapID == newRecord.mapID and
+            existingRecord.instID == newRecord.instID and
             existingRecord.posX == newRecord.posX and
             existingRecord.posY == newRecord.posY and
             math.floor(existingRecord.timestamp / 3600) == math.floor(newRecord.timestamp / 3600) and
@@ -371,17 +381,17 @@ local function IsNewRecordDuplicate(newRecord)
 end
 
 -- Add death marker function
-local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
-    if mapID == nil then
-       return
+local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
+    if (mapID == nil and instID == nil) then
+        -- No location info. Useless.
+        return
     end
 
-    if deathRecordCount >= DEATH_RECORD_WINDOW_SIZE then
-        table.remove(deathRecordsDB.deathRecords, 1)
-        deathRecordCount = deathRecordCount - 1
+    if (instID ~= nil) then
+        printDebug("Instance death recorded for " .. user .. ".")
     end
 
-    local marker = { realm = REALM, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
+    local marker = { realm = REALM, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
     
     local isDuplicate = IsNewRecordDuplicate(marker)
     if (not isDuplicate) then 
@@ -394,12 +404,13 @@ local function AddDeathMarker(mapID, contID, posX, posY, timestamp, user, level,
     end
 end
 
-local function ImportDeathMarker(realm, mapID, contID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words)
-    if mapID == nil then
+local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words)
+    if (mapID == nil and instID == nil) then
+        -- No location info. Useless.
        return
     end
 
-    local marker = { realm = realm, mapID = mapID, contID = contID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words }
+    local marker = { realm = realm, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words }
     table.insert(deathRecordsDB.deathRecords, marker)
     IncrementDeadlyCounts(marker)
     deathRecordCount = deathRecordCount + 1
@@ -879,7 +890,8 @@ function TdeathlogReceiveChannelMessage(sender, data)
   printDebug("Tombstones decoded a DeathLog death for " .. sender .. "!")
   if sender ~= decoded_player_data["name"] then return end
   local x, y = strsplit(",", decoded_player_data["map_pos"],2)
-  AddDeathMarker(tonumber(decoded_player_data["map_id"]), tonumber(decoded_player_data["cont_id"]), tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]))
+
+  AddDeathMarker(tonumber(decoded_player_data["map_id"]), decoded_player_data["instance_id"], tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]))
 end
 
 function TdecodeMessage(msg)
@@ -907,12 +919,11 @@ function TdecodeMessage(msg)
 	return malformed_player_data
   end
   local mapInfo = C_Map.GetMapInfo(map_id)
-  local cont_id = mapInfo.continentID
-  local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, cont_id, map_pos, date, last_words)
+  local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
   return player_data
 end
 
-function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, cont_id, map_pos, date, last_words)
+function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
   return {
     ["name"] = name,
     ["guild"] = guild,
@@ -922,7 +933,6 @@ function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_
     ["level"] = level,
     ["instance_id"] = instance_id,
     ["map_id"] = map_id,
-    ["cont_id"] = cont_id,
     ["map_pos"] = map_pos,
     ["date"] = date,
     ["last_words"] = last_words,
@@ -1113,17 +1123,29 @@ local function IsImportRecordDuplicate(importedRecord)
 
     -- Check if the imported record is "close enough" to existing record
     for index, existingRecord in ipairs(deathRecordsDB.deathRecords) do
+
+        -- Causes slowness.. but usable. Bitwise won't work on floating points.
+        local existingTruncatedX = math.floor(existingRecord.posX * 1000) / 1000
+        local existingTruncatedY = math.floor(existingRecord.posY * 1000) / 1000
+        local importedTruncatedX = math.floor(importedRecord.posX * 1000) / 1000
+        local importedTruncatedY = math.floor(importedRecord.posY * 1000) / 1000
+
         if existingRecord.mapID == importedRecord.mapID and
-            existingRecord.posX == importedRecord.posX and
-            existingRecord.posY == importedRecord.posY and
+            existingRecord.instID == importedRecord.instID and
+            existingTruncatedX == importedTruncatedX and
+            existingTruncatedY == importedTruncatedY and
             math.floor(existingRecord.timestamp / 3600) == math.floor(importedRecord.timestamp / 3600) and
             existingRecord.user == importedRecord.user and
-            existingRecord.level == importedRecord.level and
-            existingRecord.last_words == importedRecord.last_words then
-            -- It is possible for this to CREATE duplicates with different last_words
-            -- Those can be fixed with "/ts dedupe" for now
-            -- The record is a duplicate, break search 
-            isDuplicate = true
+            existingRecord.level == importedRecord.level then
+            -- The record is a duplicate match; check last_words...
+            if (existingRecord.last_words == nil and importedRecord.last_words == nil) or
+                (existingRecord.last_words ~= nil and importedRecord.last_words == nil) or
+                (existingRecord.last_words ~= nil and importedRecord.last_words ~= nil) then
+                isDuplicate = true
+            elseif (existingRecord.last_words == nil and importedRecord.last_words ~= nil) then
+                -- This may CREATE duplicates where import has last_words and existing does not
+                -- Those can be fixed with "/ts dedupe" for now
+            end
             break
         end
     end
@@ -1159,9 +1181,16 @@ local function DeduplicateDeathRecords()
         for j = i + 1, totalRecords do
             local compareRecord = deathRecordsDB.deathRecords[j]
 
+            -- Causes slowness.. but usable. Bitwise won't work on floating points.
+            local currentTruncatedX = math.floor(currentRecord.posX * 1000) / 1000
+            local currentTruncatedY = math.floor(currentRecord.posY * 1000) / 1000
+            local compareTruncatedX = math.floor(compareRecord.posX * 1000) / 1000
+            local compareTruncatedY = math.floor(compareRecord.posY * 1000) / 1000
+
             if currentRecord.mapID == compareRecord.mapID and
-                currentRecord.posX == compareRecord.posX and
-                currentRecord.posY == compareRecord.posY and
+                currentRecord.instID == compareRecord.instID and
+                currentTruncatedX == compareTruncatedX and
+                currentTruncatedY == compareTruncatedY and
                 math.floor(currentRecord.timestamp / 3600) == math.floor(compareRecord.timestamp / 3600) and
                 currentRecord.user == compareRecord.user and
                 currentRecord.level == compareRecord.level 
@@ -1276,8 +1305,9 @@ local function CreateDataImportFrame()
         local numNewRecords = #cleanImportRecords
         printDebug("Deduped records size is: " .. tostring(numNewRecords))
         for _, marker in ipairs(cleanImportRecords) do
-            ImportDeathMarker(marker.realm, marker.mapID, marker.contID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
+            ImportDeathMarker(marker.realm, marker.mapID, marker.instID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
         end
+        UpdateWorldMapMarkers()
         print("Tombstones imported in " .. tostring(numNewRecords) .. " new de-dupe'd records out of " .. tostring(numImportRecords) .. ".")
         frame:Hide()
         frame = nil
@@ -1365,14 +1395,15 @@ local function LastWordsSmartParser(marker)
 end
 
 local function ShowLastWordsDialogueBox(marker)
+    -- Regardless of words, stop any current boxes
+    if (dialogueBox ~= nil) then
+        dialogueBox:Hide()
+        dialogueBox = nil
+    end
     -- Safety break
     local lastWords = LastWordsSmartParser(marker)
     if (lastWords == nil or lastWords == "") then
         return
-    end
-    if(dialogueBox ~= nil) then
-        dialogueBox:Hide()
-        dialogueBox = nil
     end
     -- Create the dialogue box frame
     dialogueBox = CreateFrame("Frame", "MyDialogueBox", UIParent)
@@ -1655,7 +1686,7 @@ local function SlashCommandHandler(msg)
     elseif command == "dedupe" then
         -- Dedupe existing death records
         DeduplicateDeathRecords()
-        ClearDeathMarkers()
+        ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
     elseif command == "debug" then
         debug = not debug
@@ -1849,7 +1880,7 @@ addon:SetScript("OnUpdate", function(self, elapsed)
         if (movementTimer >= movementUpdateInterval) then
             printDebug("Movement tick.")
             FlashWhenNearTombstone()
-            timer = 0
+            movementTimer = 0
         end
     end
 end)
