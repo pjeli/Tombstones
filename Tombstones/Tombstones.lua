@@ -1222,19 +1222,23 @@ local function CreateDataImportFrame()
     bgTexture:SetAllPoints()
     bgTexture:SetColorTexture(0, 0, 0, 0.8) -- Set the RGB values and alpha
 
+    local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleText:SetPoint("TOP", frame, "TOP", 0, -10)
+    titleText:SetText("Tombstones Data Import")
+
     -- Create a scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", "TombstonesImportScrollFrameEditBox", frame, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 8, -30)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 40)
 
     local editBox = CreateFrame("EditBox", "TombstonesImportFrameEditBox", scrollFrame)
-    editBox:SetWidth(scrollFrame:GetWidth() - 20)
-    editBox:SetHeight(scrollFrame:GetHeight() - 20)
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
     editBox:SetEnabled(true)
+    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetWidth(scrollFrame:GetWidth() - 20)
+    editBox:SetHeight(scrollFrame:GetHeight() - 20)
     editBox:SetText("Paste import string here...")
-    editBox:SetFontObject("GameFontNormal")
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     editBox:SetScript("OnEditFocusGained", function(self) self:SetText("") end) -- Clear the default text when the EditBox receives focus
 
