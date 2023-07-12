@@ -101,6 +101,7 @@ local debug = false
 local isPlayerMoving = false
 local movementUpdateInterval = 0.5 -- Update interval in seconds
 local movementTimer = 0
+local lastProximityWarning = 0
 local mapButton
 local splashFrame
 local tombstoneFrame
@@ -1532,6 +1533,7 @@ local function ActOnNearestTombstone()
 
     local closestMarker
     local closestDistance = math.huge
+    local proximityUnvisitedCount = 0
 
     -- Iterate through your death markers and calculate the distance from each marker to the player's position
     for index, marker in ipairs(deathRecordsDB.deathRecords) do
@@ -1543,10 +1545,20 @@ local function ActOnNearestTombstone()
         local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
 
         -- Check if this marker is closer than the previous closest marker
-        if distance < closestDistance then
-            closestMarker = marker
-            closestDistance = distance
+        if distance < 0.01 then
+            if (marker.visited == nil or marker.visited == false) then
+                proximityUnvisitedCount = proximityUnvisitedCount + 1
+            end
+            if distance < closestDistance then
+                closestMarker = marker
+                closestDistance = distance
+            end
         end
+    end
+
+    if (proximityUnvisitedCount >= 10 and (lastProximityWarning < (time() - 900))) then
+        lastProximityWarning = time()
+        DEFAULT_CHAT_FRAME:AddMessage("The air around reeks of " .. tostring(proximityUnvisitedCount) .. " fresh deaths...", 1, 1, 0)
     end
 
     -- Now you have the closest death marker to the player
