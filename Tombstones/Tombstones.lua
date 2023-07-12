@@ -199,6 +199,19 @@ local function LoadDeathRecords()
         deathRecordsDB.dangerFrameUnlocked = true
         deathRecordsDB.showDanger = true
         deathRecordsDB.showZoneSplash = true
+        deathRecordsDB.visiting = true
+    end
+    if (deathRecordsDB.visiting == nil) then
+       deathRecordsDB.visiting = true 
+    end
+    if (deathRecordsDB.showZoneSplash == nil) then
+       deathRecordsDB.showZoneSplash = true 
+    end
+    if (deathRecordsDB.showDanger == nil) then
+       deathRecordsDB.showDanger = true 
+    end
+    if (deathRecordsDB.dangerFrameUnlocked == nil) then
+       deathRecordsDB.dangerFrameUnlocked = true 
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)        
@@ -1506,6 +1519,11 @@ local function ActOnNearestTombstone()
         glowFrame:Hide()
         glowFrame = nil
     end
+
+    if (deathRecordsDB.visiting == false) then
+        return
+    end
+    
     -- Handle player death event
     local playerInstance = C_Map.GetBestMapForUnit("player")
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
@@ -1542,6 +1560,10 @@ local function ActOnNearestTombstone()
 end
 
 local function FlashWhenNearTombstone()
+    if (deathRecordsDB.visiting == false) then
+        return
+    end
+
     -- Handle player death event
     local playerInstance = C_Map.GetBestMapForUnit("player")
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
@@ -1653,6 +1675,12 @@ local function SlashCommandHandler(msg)
               splashFrame = nil
             end
         end
+    elseif command == "visiting" then
+        if args == "on" then
+            deathRecordsDB.visiting = true
+        elseif args == "off" then
+            deathRecordsDB.visiting = false
+        end
     elseif command == "danger" then
         local argsArray = {}
         if args then
@@ -1747,6 +1775,7 @@ local function SlashCommandHandler(msg)
         print("Usage: /tombstones or /ts [show | hide | export | import | unvisit | prune | clear | dedupe | info | debug | icon_size {#SIZE}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
+        print("Usage: /tombstones or /ts [visiting (on | off )]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
     end
 end
