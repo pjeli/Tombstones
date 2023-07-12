@@ -219,7 +219,6 @@ local function LoadDeathRecords()
 end
 
 local function ClearDeathRecords()
-    deathRecordsDB = {}
     deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
     deathRecordsDB.deathRecords = {}
     deathRecordCount = 0
