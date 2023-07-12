@@ -422,6 +422,59 @@ function printDebug(msg)
     end
 end
 
+-- Function to create a frame to display serialized data
+local function CreateDataDisplayFrame(data)
+    local frame = CreateFrame("Frame", "SerializedDisplayFrame", UIParent)
+    frame:SetSize(400, 300)
+    frame:SetPoint("CENTER", 0, 200)
+
+    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.8)
+
+    local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleText:SetPoint("TOP", frame, "TOP", 0, -10)
+    titleText:SetText("Tombstones Data Export")
+
+    local scrollFrame = CreateFrame("ScrollFrame", "SerializedDisplayFrameScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 8, -30)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 8)
+
+    local textArea = CreateFrame("EditBox", "SerializedDisplayFrameText", scrollFrame)
+    textArea:SetMultiLine(true)
+    textArea:SetMaxLetters(0)
+    textArea:SetAutoFocus(false)
+    textArea:SetFontObject("ChatFontNormal")
+    textArea:SetWidth(scrollFrame:GetWidth() - 20)
+    textArea:SetHeight(scrollFrame:GetHeight() - 20)
+    textArea:SetText(data)
+    textArea:HighlightText()
+    textArea:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    local function OnCursorChanged(self)
+        self:SetCursorPosition(0)
+        self:HighlightText()
+    end
+    textArea:SetScript("OnCursorChanged", OnCursorChanged)
+
+    local function OnTextChanged(self)
+        self:SetCursorPosition(0)
+        self:SetText(data)
+        self:HighlightText()
+    end
+    textArea:SetScript("OnTextChanged", OnTextChanged)
+
+    local closeButton = CreateFrame("Button", "SerializedDisplayFrameCloseButton", frame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    closeButton:SetScript("OnClick", function()
+        frame:Hide()
+        frame = nil
+    end)
+
+    scrollFrame:SetScrollChild(textArea)
+    frame:Show()
+end
+
 local function UpdateWorldMapMarkers()
     local worldMapFrame = WorldMapFrame
     if showMarkers and worldMapFrame and worldMapFrame:IsVisible() then
@@ -522,8 +575,22 @@ local function UpdateWorldMapMarkers()
                         GameTooltip:Hide()
                     end)
                     markerMapButton:SetScript("OnMouseDown", function(self, button)
-                        local worldMapFrame = WorldMapFrame:GetCanvasContainer()
-                        worldMapFrame:OnMouseDown(button)
+                        if (button == "LeftButton" and IsShiftKeyDown()) then
+                            print("p")
+                            local singleRecordTable = {}
+                            table.insert(singleRecordTable, marker)
+                            print(tostring(#singleRecordTable))
+                            local serializedData = ls:Serialize(singleRecordTable)
+                            print("q")
+                            local compressedData = lc:Compress(serializedData)
+                            print("r")
+                            local encodedData = l64:encode(compressedData)
+                            print(tostring(#encodedData))
+                            CreateDataDisplayFrame(encodedData)
+                        else
+                            local worldMapFrame = WorldMapFrame:GetCanvasContainer()
+                            worldMapFrame:OnMouseDown(button)
+                        end
                     end)
                     markerMapButton:SetScript("OnMouseUp", function(self, button)
                         local worldMapFrame = WorldMapFrame:GetCanvasContainer()
@@ -1031,49 +1098,6 @@ local function UnitTargetChange()
             targetDangerFrame:Hide()
         end
     end
-end
-
--- Function to create a frame to display serialized data
-local function CreateDataDisplayFrame(data)
-    local frame = CreateFrame("Frame", "SerializedDisplayFrame", UIParent)
-    frame:SetSize(400, 300)
-    frame:SetPoint("CENTER", 0, 200)
-
-    -- Create the background texture
-    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
-    bgTexture:SetAllPoints()
-    bgTexture:SetColorTexture(0, 0, 0, 0.8) -- Set the RGB values and alpha
-
-    -- Create a scroll frame
-    local scrollFrame = CreateFrame("ScrollFrame", "SerializedDisplayFrameScrollFrame", frame, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 8, -30)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 8)
-
-    -- Create a text area inside the scroll frame
-    local textArea = CreateFrame("EditBox", "SerializedDisplayFrameText", scrollFrame)
-    textArea:SetMultiLine(true)
-    textArea:SetMaxLetters(0)
-    textArea:SetAutoFocus(true)
-    textArea:SetFontObject("ChatFontNormal")
-    textArea:SetWidth(scrollFrame:GetWidth() - 20)
-    textArea:SetHeight(scrollFrame:GetHeight() - 20)
-    textArea:SetText(data)
-    textArea:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-
-    -- Set the scroll frame's content
-    scrollFrame:SetScrollChild(textArea)
-    -- Highlight the text
-    textArea:HighlightText()
-
-    -- Add a close button
-    local closeButton = CreateFrame("Button", "SerializedDisplayFrameCloseButton", frame, "UIPanelCloseButton")
-    closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    closeButton:SetScript("OnClick", function()
-        frame:Hide()
-        frame = nil
-    end)
-
-    frame:Show()
 end
 
 local function IsImportRecordDuplicate(importedRecord)
