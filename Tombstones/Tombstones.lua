@@ -591,11 +591,9 @@ local function UpdateWorldMapMarkers()
                         if (button == "LeftButton" and IsShiftKeyDown()) then
                             local singleRecordTable = {}
                             table.insert(singleRecordTable, marker)
-                            print(tostring(#singleRecordTable))
                             local serializedData = ls:Serialize(singleRecordTable)
                             local compressedData = lc:Compress(serializedData)
                             local encodedData = l64:encode(compressedData)
-                            print(tostring(#encodedData))
                             CreateDataDisplayFrame(encodedData)
                         else
                             local worldMapFrame = WorldMapFrame:GetCanvasContainer()
