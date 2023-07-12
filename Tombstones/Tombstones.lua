@@ -361,12 +361,19 @@ StaticPopupDialogs["TOMBSTONES_PRUNE_CONFIRMATION"] = {
 local function IsNewRecordDuplicate(newRecord)
     local isDuplicate = false
 
+    local newTruncatedX = math.floor(newRecord.posX * 1000) / 1000
+    local newTruncatedY = math.floor(newRecord.posY * 1000) / 1000  
+
     -- Check if the imported record is "close enough" to existing record
     for index, existingRecord in ipairs(deathRecordsDB.deathRecords) do
+
+        local existingTruncatedX = math.floor(existingRecord.posX * 1000) / 1000
+        local existingTruncatedY = math.floor(existingRecord.posY * 1000) / 1000
+
         if existingRecord.mapID == newRecord.mapID and
             existingRecord.instID == newRecord.instID and
-            existingRecord.posX == newRecord.posX and
-            existingRecord.posY == newRecord.posY and
+            existingTruncatedX == newTruncatedX and
+            existingTruncatedY == newTruncatedY and
             math.floor(existingRecord.timestamp / 3600) == math.floor(newRecord.timestamp / 3600) and
             existingRecord.user == newRecord.user and
             existingRecord.level == newRecord.level then
@@ -399,6 +406,7 @@ local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level,
         IncrementDeadlyCounts(marker)
         deathRecordCount = deathRecordCount + 1
         printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+        UpdateWorldMapMarkers()
     else
         printDebug("Received a duplicate record. Ignoring.")
     end
@@ -1121,14 +1129,15 @@ end
 local function IsImportRecordDuplicate(importedRecord)
     local isDuplicate = false
 
+    local importedTruncatedX = math.floor(importedRecord.posX * 1000) / 1000
+    local importedTruncatedY = math.floor(importedRecord.posY * 1000) / 1000
+
     -- Check if the imported record is "close enough" to existing record
     for index, existingRecord in ipairs(deathRecordsDB.deathRecords) do
 
         -- Causes slowness.. but usable. Bitwise won't work on floating points.
         local existingTruncatedX = math.floor(existingRecord.posX * 1000) / 1000
         local existingTruncatedY = math.floor(existingRecord.posY * 1000) / 1000
-        local importedTruncatedX = math.floor(importedRecord.posX * 1000) / 1000
-        local importedTruncatedY = math.floor(importedRecord.posY * 1000) / 1000
 
         if existingRecord.mapID == importedRecord.mapID and
             existingRecord.instID == importedRecord.instID and
@@ -1178,12 +1187,12 @@ local function DeduplicateDeathRecords()
         local currentRecord = deathRecordsDB.deathRecords[i]
         local isDuplicate = false
 
+        local currentTruncatedX = math.floor(currentRecord.posX * 1000) / 1000
+        local currentTruncatedY = math.floor(currentRecord.posY * 1000) / 1000
+
         for j = i + 1, totalRecords do
             local compareRecord = deathRecordsDB.deathRecords[j]
 
-            -- Causes slowness.. but usable. Bitwise won't work on floating points.
-            local currentTruncatedX = math.floor(currentRecord.posX * 1000) / 1000
-            local currentTruncatedY = math.floor(currentRecord.posY * 1000) / 1000
             local compareTruncatedX = math.floor(compareRecord.posX * 1000) / 1000
             local compareTruncatedY = math.floor(compareRecord.posY * 1000) / 1000
 
