@@ -93,6 +93,7 @@ local deathVisitCount = 0
 local deadlyNPCs = {}
 local deadlyZones = {}
 local deadlyZoneLvlSums = {}
+local iconPinSetting = HBD_PINS_WORLDMAP_SHOW_WORLD
 local iconSize = 12
 local renderingScheduled = false
 local showMarkers = true
@@ -757,7 +758,7 @@ local function UpdateWorldMapMarkers()
                         if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
                     end
                     if (allow == true) then
-                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD)
+                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, iconPinSetting)
                     end
                 else
                     if (deathMapIcons[i] ~= nil) then
@@ -795,7 +796,7 @@ local function UpdateWorldMapMarkers()
                         end)
                         -- Filtering is disabled; but default is to filter realms.
                         if (filter_realms and marker.realm == REALM) then
-                            hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, HBD_PINS_WORLDMAP_SHOW_WORLD) 
+                            hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, iconPinSetting) 
                         end
                     end
                 end
@@ -1692,6 +1693,16 @@ local function SlashCommandHandler(msg)
         print("Tombstones debug mode is: ".. tostring(debug))
     elseif command == "icon_size" then
         iconSize = tonumber(args)
+    elseif command == "icon_pins" then
+        local tmpIconPinSetting = tonumber(args)
+        if (tmpIconPinSetting < 0 or tmpIconPinSetting > 3) then
+            print("Tombstones ERROR : Class not found.")
+            print("Tombstones WARN : Try 'paladin','priest','warrior','rogue','mage','warlock','druid','shaman','hunter'.")
+        else
+            iconPinSetting = tonumber(args)
+            ClearDeathMarkers(true)
+            UpdateWorldMapMarkers()
+        end
     elseif command == "info" then
         print("Tombstones saw " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
@@ -1815,7 +1826,7 @@ local function SlashCommandHandler(msg)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | unvisit | prune | clear | dedupe | info | debug | icon_size {#SIZE}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | unvisit | prune | clear | dedupe | info | debug | icon_size {#SIZE} | icon_pins {0,1,2,3}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (on | off )]")
