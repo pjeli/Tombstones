@@ -1552,7 +1552,7 @@ local function ActOnNearestTombstone()
         glowFrame = nil
     end
 
-    if (deathRecordsDB.visiting == false) then
+    if (deathRecordsDB.visiting == false or IsInInstance()) then
         return
     end
     
@@ -1603,7 +1603,7 @@ local function ActOnNearestTombstone()
 end
 
 local function FlashWhenNearTombstone()
-    if (deathRecordsDB.visiting == false) then
+    if (deathRecordsDB.visiting == false or IsInInstance()) then
         return
     end
 
