@@ -406,7 +406,6 @@ local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level,
         IncrementDeadlyCounts(marker)
         deathRecordCount = deathRecordCount + 1
         printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
-        UpdateWorldMapMarkers()
     else
         printDebug("Received a duplicate record. Ignoring.")
     end
@@ -505,6 +504,14 @@ local function CreateDataDisplayFrame(data)
     end)
 
     scrollFrame:SetScrollChild(textArea)
+
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
     frame:Show()
 end
 
@@ -1321,6 +1328,13 @@ local function CreateDataImportFrame()
         frame:Hide()
         frame = nil
     end)
+
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
     frame:Show()
 end
