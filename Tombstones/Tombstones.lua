@@ -93,6 +93,7 @@ local deathVisitCount = 0
 local deadlyNPCs = {}
 local deadlyZones = {}
 local deadlyZoneLvlSums = {}
+local visitingZoneCache = {}
 local iconPinSetting = HBD_PINS_WORLDMAP_SHOW_WORLD
 local iconSize = 12
 local renderingScheduled = false
@@ -173,6 +174,11 @@ local function IncrementDeadlyCounts(marker)
         end
     end
     if marker.mapID then
+        if(visitingZoneCache[marker.mapID] == nil) then
+            visitingZoneCache[marker.mapID] = { marker }
+        else
+            table.insert(visitingZoneCache[marker.mapID], marker)
+        end
         if (deadlyZones[marker.mapID] == nil) then
             deadlyZones[marker.mapID] = 1
         else
@@ -188,6 +194,16 @@ local function IncrementDeadlyCounts(marker)
     end
     if marker.visited and marker.visited == true then
         deathVisitCount = deathVisitCount + 1
+    end
+end
+
+local function InitializeDeadlyCounts()
+    deadlyZones = {}
+    deadlyNPCs = {}
+    deadlyZoneLvlSums = {}
+    visitingZoneCache = {}
+    for _, marker in ipairs(deathRecordsDB.deathRecords) do
+        IncrementDeadlyCounts(marker)        
     end
 end
 
@@ -335,22 +351,6 @@ StaticPopupDialogs["TOMBSTONES_CLEAR_CONFIRMATION"] = {
         ClearDeathRecords()
         ClearDeathMarkers(true)
         print("Tombstones have been cleared.")
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
--- Define the confirmation dialog
-StaticPopupDialogs["TOMBSTONES_PRUNE_CONFIRMATION"] = {
-    text = "Are you sure you want to prune your tombstones based on current filters?",
-    button1 = "Yes",
-    button2 = "No",
-    OnAccept = function()
-        prunedRecordCount = PruneDeathRecords()
-        print(tostring(prunedRecordCount) .. " tombstones have been pruned.")
-        print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
     end,
     timeout = 0,
     whileDead = true,
@@ -840,6 +840,25 @@ WorldMapFrame:HookScript("OnHide", function()
     renderingScheduled = false
 end)
 
+-- Define the confirmation dialog
+StaticPopupDialogs["TOMBSTONES_PRUNE_CONFIRMATION"] = {
+    text = "Are you sure you want to prune your tombstones based on current filters?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function()
+        prunedRecordCount = PruneDeathRecords()
+        InitializeDeadlyCounts()
+        ClearDeathMarkers(true)
+        UpdateWorldMapMarkers()
+        print(tostring(prunedRecordCount) .. " tombstones have been pruned.")
+        print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 local function MakeWorldMapButton()
     if (mapButton ~= nil) then
         mapButton:Hide()
@@ -1244,17 +1263,14 @@ local function DeduplicateDeathRecords()
     deathRecordsDB.deathRecords = deduplicatedRecords
     -- Re-initialize deadly count caches
     if(duplicatesFound > 0 or replacementsMade > 0) then
-        deadlyZones = {}
-        deadlyNPCs = {}
-        deadlyZoneLvlSums = {}
-        for _, marker in ipairs(deathRecordsDB.deathRecords) do
-            IncrementDeadlyCounts(marker)        
-        end
+        InitializeDeadlyCounts()
     end
 
     print("Original Tombstones size was " .. tostring(totalRecords) .. ", now is: " .. tostring(#deduplicatedRecords) .. ".")
     print("Tombstones found " .. tostring(duplicatesFound) .. " duplicate entries.")
     print("Tombstones replaced " .. tostring(replacementsMade) .. " duplicate entries with their more updated ones.")
+
+    return duplicatesFound
 end
 
 local function CreateDataImportFrame()
@@ -1340,14 +1356,9 @@ local function CreateDataImportFrame()
 end
 
 local function GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
-    if playerInstance ~= markerInstance then
-        return math.huge  -- Players are in different instances, distance is infinite
-    end
-
     local deltaX = markerX - playerX
     local deltaY = markerY - playerY
     local distance = math.sqrt(deltaX * deltaX + deltaY * deltaY)
-
     return distance
 end
 
@@ -1589,8 +1600,13 @@ local function ActOnNearestTombstone()
     local closestDistance = math.huge
     local proximityUnvisitedCount = 0
 
-    -- Iterate through your death markers and calculate the distance from each marker to the player's position
-    for index, marker in ipairs(deathRecordsDB.deathRecords) do
+    local zoneMarkers = visitingZoneCache[playerInstance]
+    if (zoneMarkers == nil or #zoneMarkers == 0) then
+        return
+    end
+
+    -- Iterate through the zone death markers and calculate the distance from each marker to the player's position
+    for index, marker in ipairs(zoneMarkers) do
         local markerX = marker.posX
         local markerY = marker.posY
         local markerInstance = marker.mapID
@@ -1708,9 +1724,11 @@ local function SlashCommandHandler(msg)
         StaticPopup_Show("TOMBSTONES_PRUNE_CONFIRMATION")
     elseif command == "dedupe" then
         -- Dedupe existing death records
-        DeduplicateDeathRecords()
-        ClearDeathMarkers(true)
-        UpdateWorldMapMarkers()
+        local duplicates = DeduplicateDeathRecords()
+        if (duplicates > 0) then
+            ClearDeathMarkers(true)
+            UpdateWorldMapMarkers()
+        end
     elseif command == "debug" then
         debug = not debug
         print("Tombstones debug mode is: ".. tostring(debug))
