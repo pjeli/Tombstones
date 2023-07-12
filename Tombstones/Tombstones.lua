@@ -811,7 +811,6 @@ end)
 
 WorldMapFrame:HookScript("OnHide", function()
     renderingScheduled = false
-    ClearDeathMarkers()
 end)
 
 local function MakeWorldMapButton()
