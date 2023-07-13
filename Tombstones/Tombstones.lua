@@ -1734,6 +1734,30 @@ local function FlashWhenNearTombstone()
     end
 end
 
+local function PrintVisitingInfo()
+    local mapID = C_Map.GetBestMapForUnit("player")
+    local zoneMarkers = visitingZoneCache[mapID] or {}
+    local zoneMarkersCount = #zoneMarkers
+
+    print("Tombstones visiting enabled: " .. tostring(deathRecordsDB.visiting) .. ".")
+    print("This zone has " .. tostring(zoneMarkersCount) .. " tombstones.")
+
+    local zoneVisitedCount = 0
+    -- Iterate through the zone death markers and calculate the distance from each marker to the player's position
+    for index, marker in ipairs(zoneMarkers) do
+        if (marker ~= nil and marker.visited) then
+            zoneVisitedCount = zoneVisitedCount + 1
+        end
+    end
+
+    local zoneVisitedPercentage = 100.0
+    if (zoneMarkersCount > 0) then
+        zoneVisitedPercentage = (zoneVisitedCount / zoneMarkersCount) * 100.0
+    end
+
+    print("You have visited " .. tostring(zoneVisitedCount) .. " of them. " .. string.format("(%.2f%%).", zoneVisitedPercentage))
+end
+
 -- Function to generate a random player name
 local function GenerateRandomPlayerName()
     local nameLength = math.random(4, 7)
@@ -1904,6 +1928,8 @@ local function SlashCommandHandler(msg)
             deathRecordsDB.visiting = true
         elseif args == "off" then
             deathRecordsDB.visiting = false
+        elseif args == "info" then
+            PrintVisitingInfo()
         end
     elseif command == "danger" then
         local argsArray = {}
@@ -1999,7 +2025,7 @@ local function SlashCommandHandler(msg)
         print("Usage: /tombstones or /ts [show | hide | export | import | unvisit | prune | clear | dedupe | info | debug | icon_size {#SIZE} | icon_pins {0,1,2,3}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
-        print("Usage: /tombstones or /ts [visiting (on | off )]")
+        print("Usage: /tombstones or /ts [visiting (info | on | off )]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
     end
 end
