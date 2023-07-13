@@ -1020,7 +1020,7 @@ function ShowZoneSplashText()
     -- Create and display the splash text frame
     splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
     splashFrame:SetSize(400, 200)
-    splashFrame:SetPoint("CENTER", 0, 330)
+    splashFrame:SetPoint("CENTER", 0, 0.28 * UIParent:GetHeight())
 
     -- Add a texture
     splashFrame.texture = splashFrame:CreateTexture(nil, "BACKGROUND")
