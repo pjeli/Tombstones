@@ -1641,16 +1641,17 @@ local function ActOnNearestTombstone()
         DEFAULT_CHAT_FRAME:AddMessage("You feel the gaze of " .. tostring(proximityUnvisitedCount) .. " nearby unvisited spirits...", 1, 1, 0)
     end
 
-    printDebug("Closest death marker: " .. tostring(closestMarker.user))
-    printDebug("Closest death marker: " .. tostring(closestDistance))
-
-    if closestMarker and closestDistance <= 0.0025 then
-        -- Perform any desired logic with the closest death marker
-        ShowNeartestTombstoneSplashText(closestMarker)
-        closestMarker.visited = true
-        deathVisitCount = deathVisitCount + 1
-        UpdateWorldMapMarkers()
-        hbdp:RemoveAllMinimapIcons("TombstonesMM")
+    if closestMarker then
+        printDebug("Closest death marker: " .. tostring(closestMarker.user))
+        printDebug("Closest death marker: " .. tostring(closestDistance))
+        if closestDistance <= 0.0025 then
+            -- Perform any desired logic with the closest death marker
+            ShowNeartestTombstoneSplashText(closestMarker)
+            closestMarker.visited = true
+            deathVisitCount = deathVisitCount + 1
+            UpdateWorldMapMarkers()
+            hbdp:RemoveAllMinimapIcons("TombstonesMM")
+        end
     end
 end
 
@@ -1723,11 +1724,9 @@ local function FlashWhenNearTombstone()
         end
     end
 
-    printDebug("On move death marker: " .. tostring(closestDistance))
-
     -- Now you have the closest death marker to the player
     if closestMarker then
-
+        printDebug("On move death marker: " .. tostring(closestDistance))
         if (lastClosestMarker == nil) then
             lastClosestMarker = closestMarker
             hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
