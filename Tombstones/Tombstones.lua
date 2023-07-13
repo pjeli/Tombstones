@@ -1446,7 +1446,7 @@ local function ShowLastWordsDialogueBox(marker)
     -- Create the dialogue box frame
     dialogueBox = CreateFrame("Frame", "MyDialogueBox", UIParent)
     dialogueBox:SetSize(300, 100)
-    dialogueBox:SetPoint("CENTER", 0, 350)
+    dialogueBox:SetPoint("CENTER", 0, 0.3 * UIParent:GetHeight())
 
     -- Add a background texture
     dialogueBox.texture = dialogueBox:CreateTexture(nil, "BACKGROUND")
@@ -1522,7 +1522,7 @@ local function ShowNeartestTombstoneSplashText(marker)
     -- Create and display the splash text frame
     tombstoneFrame = CreateFrame("Frame", "SplashFrame", UIParent)
     tombstoneFrame:SetSize(400, 200)
-    tombstoneFrame:SetPoint("CENTER", 0, 330)
+    tombstoneFrame:SetPoint("CENTER", 0, 0.3 * UIParent:GetHeight())
 
     -- Add a texture
     tombstoneFrame.texture = tombstoneFrame:CreateTexture(nil, "BACKGROUND")
