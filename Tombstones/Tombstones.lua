@@ -202,6 +202,7 @@ local function InitializeDeadlyCounts()
     deadlyNPCs = {}
     deadlyZoneLvlSums = {}
     visitingZoneCache = {}
+    deathVisitCount = 0
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)        
     end
@@ -240,6 +241,7 @@ local function ClearDeathRecords()
     deathRecordsDB.deathRecords = {}
     deathRecordCount = 0
     _G["deathRecordsDB"] = deathRecordsDB
+    InitializeDeadlyCounts()
 end
 
 local function UnvisitAllMarkers()
@@ -1639,6 +1641,7 @@ local function ActOnNearestTombstone()
         ShowNeartestTombstoneSplashText(closestMarker)
         closestMarker.visited = true
         deathVisitCount = deathVisitCount + 1
+        UpdateWorldMapMarkers()
     end
 end
 
@@ -1655,8 +1658,13 @@ local function FlashWhenNearTombstone()
     local closestMarker
     local closestDistance = math.huge
 
+    local zoneMarkers = visitingZoneCache[playerInstance]
+    if (zoneMarkers == nil or #zoneMarkers == 0) then
+        return
+    end
+
     -- Iterate through your death markers and calculate the distance from each marker to the player's position
-    for index, marker in ipairs(deathRecordsDB.deathRecords) do
+    for index, marker in ipairs(zoneMarkers) do
         local markerX = marker.posX
         local markerY = marker.posY
         local markerInstance = marker.mapID
@@ -1695,6 +1703,93 @@ local function FlashWhenNearTombstone()
     end
 end
 
+-- Function to generate a random player name
+local function GenerateRandomPlayerName()
+    local nameLength = math.random(4, 7)
+    local playerName = ""
+
+    -- Generate the first character as a capital letter
+    local firstCharAscii = math.random(65, 90) -- ASCII values for capital letters A-Z
+    playerName = playerName .. string.char(firstCharAscii)
+
+    -- Generate the remaining characters
+    for i = 2, nameLength do
+        local charAscii = math.random(97, 122) -- ASCII values for lowercase letters a-z
+        playerName = playerName .. string.char(charAscii)
+    end
+
+    return playerName
+end
+
+-- Function to generate a random timestamp between now and 48 hours ago
+local function GenerateRandomTimestamp()
+    local now = time() -- Current timestamp
+    local fortyEightHoursInSeconds = 48 * 60 * 60 -- 48 hours in seconds
+
+    -- Generate a random time offset between 0 and 48 hours
+    local randomOffset = math.random(0, fortyEightHoursInSeconds)
+
+    -- Calculate the random timestamp by subtracting the offset from the current time
+    local randomTimestamp = now - randomOffset
+
+    return randomTimestamp
+end
+
+local function SillySentence()
+    local words = {
+        "banana", "elephant", "juggling", "noodles", "squirrel", "giraffe", "kangaroo",
+        "singing", "umbrella", "muffin", "pickle", "wombat", "bubblegum", "giggles"
+    }
+    local sentence = ""
+    local sentenceLength = math.random(3, 6)
+    for i = 1, sentenceLength do
+        local randomIndex = math.random(1, #words)
+        local word = words[randomIndex]
+        sentence = sentence .. word .. " "
+    end
+    sentence = sentence .. "!"
+    return sentence
+end
+
+local function StressGen(numberOfMarkers)
+    if (not debug) then
+        return
+    end
+
+    local mapIDs = {}
+    local classNames = {}
+    for mapID, _ in pairs(MAP_TABLE) do
+        table.insert(mapIDs, mapID)
+    end
+    for className, _ in pairs(classNameToID) do
+        table.insert(classNames, className)
+    end
+
+    local min = 0.1
+    local max = 0.9
+
+    for i = 1, numberOfMarkers do 
+        -- Randomly select a MapID
+        local randomIndex = math.random(1, #mapIDs)
+        local map_id = mapIDs[randomIndex]
+        -- Randomly generated posX and posY
+        local randomValue1 = math.random()
+        local randomValue2 = math.random()
+        local posX = min + randomValue1 * (max - min)
+        local posY = min + randomValue2 * (max - min)
+        -- Random Class ID
+        local randomIndex = math.random(1, #classNames)
+        local class_id = classNameToID[classNames[randomIndex]]
+        -- Random others
+        local user = GenerateRandomPlayerName()
+        local timestamp = GenerateRandomTimestamp()
+        local level = math.random(1, 60)
+        local race_id = math.random(1, 8)
+        local last_words = SillySentence()
+        ImportDeathMarker(REALM, map_id, nil, posX, posY, timestamp, user, level, nil, class_id, race_id, last_words)
+    end
+end
+
 -- Define slash commands
 SLASH_TOMBSTONES1 = "/tombstones"
 SLASH_TOMBSTONES2 = "/ts"
@@ -1719,6 +1814,8 @@ local function SlashCommandHandler(msg)
     elseif command == "clear" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_CLEAR_CONFIRMATION")
+    elseif command == "stress" then
+        StressGen(2000)
     elseif command == "prune" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_PRUNE_CONFIRMATION")
@@ -1737,8 +1834,8 @@ local function SlashCommandHandler(msg)
     elseif command == "icon_pins" then
         local tmpIconPinSetting = tonumber(args)
         if (tmpIconPinSetting < 0 or tmpIconPinSetting > 3) then
-            print("Tombstones ERROR : Class not found.")
-            print("Tombstones WARN : Try 'paladin','priest','warrior','rogue','mage','warlock','druid','shaman','hunter'.")
+            print("Tombstones ERROR : Cannot set icon pin flag to that.")
+            print("Tombstones WARN : Try 0, 1, 2 or 3.")
         else
             iconPinSetting = tonumber(args)
             ClearDeathMarkers(true)
