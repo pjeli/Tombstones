@@ -1638,7 +1638,7 @@ local function ActOnNearestTombstone()
 
     if (proximityUnvisitedCount >= 10 and (lastProximityWarning < (time() - 900))) then
         lastProximityWarning = time()
-        DEFAULT_CHAT_FRAME:AddMessage("The air around reeks of " .. tostring(proximityUnvisitedCount) .. " fresh deaths...", 1, 1, 0)
+        DEFAULT_CHAT_FRAME:AddMessage("You feel the gaze of " .. tostring(proximityUnvisitedCount) .. " nearby unvisited spirits...", 1, 1, 0)
     end
 
     if closestMarker and closestDistance <= 0.001 and not closestMarker.visited then
