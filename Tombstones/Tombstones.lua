@@ -1625,13 +1625,13 @@ local function ActOnNearestTombstone()
         local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
 
         -- Check if this marker is closer than the previous closest marker
-        if distance < 0.01 then
-            if (marker.visited == nil or marker.visited == false) then
+        if distance < 0.015 then
+            if not marker.visited then
                 proximityUnvisitedCount = proximityUnvisitedCount + 1
-            end
-            if not marker.visited and distance < closestDistance then
-                closestMarker = marker
-                closestDistance = distance
+                if distance < closestDistance then
+                    closestMarker = marker
+                    closestDistance = distance
+                end
             end
         end
     end
@@ -1641,10 +1641,11 @@ local function ActOnNearestTombstone()
         DEFAULT_CHAT_FRAME:AddMessage("You feel the gaze of " .. tostring(proximityUnvisitedCount) .. " nearby unvisited spirits...", 1, 1, 0)
     end
 
-    if closestMarker and closestDistance <= 0.001 and not closestMarker.visited then
+    printDebug("Closest death marker: " .. tostring(closestMarker.user))
+    printDebug("Closest death marker: " .. tostring(closestDistance))
+
+    if closestMarker and closestDistance <= 0.0025 then
         -- Perform any desired logic with the closest death marker
-        printDebug("Closest death marker: " .. tostring(closestMarker.user))
-        printDebug("Closest death marker: " .. tostring(closestDistance))
         ShowNeartestTombstoneSplashText(closestMarker)
         closestMarker.visited = true
         deathVisitCount = deathVisitCount + 1
@@ -1735,7 +1736,7 @@ local function FlashWhenNearTombstone()
             hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
         end
 
-        if closestDistance <= 0.001 and not closestMarker.visited then
+        if closestDistance <= 0.0025 then
             if (glowFrame == nil) then
                 -- Create a frame for the screen glow effect
                 glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
@@ -1754,6 +1755,9 @@ local function FlashWhenNearTombstone()
             glowFrame:Hide()
             glowFrame = nil
         end
+    elseif (glowFrame ~= nil) then
+        glowFrame:Hide()
+        glowFrame = nil
     end
 end
 
