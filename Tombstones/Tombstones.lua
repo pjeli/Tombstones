@@ -103,6 +103,7 @@ local isPlayerMoving = false
 local movementUpdateInterval = 0.2 -- Update interval in seconds
 local movementTimer = 0
 local lastProximityWarning = 0
+local lastClosestMarker
 local mapButton
 local splashFrame
 local tombstoneFrame
@@ -813,7 +814,7 @@ local function UpdateWorldMapMarkers()
                         end)
                         -- Filtering is disabled; but default is to filter realms.
                         if (filter_realms and marker.realm == REALM) then
-                            hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, iconPinSetting) 
+                            hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY, iconPinSetting)
                         end
                     end
                 end
@@ -1621,7 +1622,7 @@ local function ActOnNearestTombstone()
             if (marker.visited == nil or marker.visited == false) then
                 proximityUnvisitedCount = proximityUnvisitedCount + 1
             end
-            if distance < closestDistance then
+            if not marker.visited and distance < closestDistance then
                 closestMarker = marker
                 closestDistance = distance
             end
@@ -1633,7 +1634,6 @@ local function ActOnNearestTombstone()
         DEFAULT_CHAT_FRAME:AddMessage("The air around reeks of " .. tostring(proximityUnvisitedCount) .. " fresh deaths...", 1, 1, 0)
     end
 
-    -- Now you have the closest death marker to the player
     if closestMarker and closestDistance <= 0.001 and not closestMarker.visited then
         -- Perform any desired logic with the closest death marker
         printDebug("Closest death marker: " .. tostring(closestMarker.user))
@@ -1642,6 +1642,7 @@ local function ActOnNearestTombstone()
         closestMarker.visited = true
         deathVisitCount = deathVisitCount + 1
         UpdateWorldMapMarkers()
+        hbdp:RemoveAllMinimapIcons("TombstonesMM")
     end
 end
 
@@ -1673,7 +1674,7 @@ local function FlashWhenNearTombstone()
         local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
 
         -- Check if this marker is closer than the previous closest marker
-        if distance < closestDistance then
+        if not marker.visited and distance < closestDistance then
             closestMarker = marker
             closestDistance = distance
         end
@@ -1682,24 +1683,51 @@ local function FlashWhenNearTombstone()
     printDebug("On move death marker: " .. tostring(closestDistance))
 
     -- Now you have the closest death marker to the player
-    if closestMarker and closestDistance <= 0.001 and not closestMarker.visited then
-        if (glowFrame == nil) then
-            -- Create a frame for the screen glow effect
-            glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
-            glowFrame:SetAllPoints(UIParent)
-            glowFrame:SetFrameStrata("BACKGROUND")
+    if closestMarker then
 
-            -- Create a texture for the glow effect
-            local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
-            glowTexture:SetAllPoints()
-            glowTexture:SetTexture("Interface\\FullScreenTextures\\OutOfControl")
-            glowTexture:SetBlendMode("ADD")
-            glowTexture:SetVertexColor(1, 1, 1, 0.5) -- Set the texture color to red (RGB values)
-            glowFrame:Show()
+        if (lastClosestMarker == nil) then
+            lastClosestMarker = closestMarker
+            local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
+            iconFrame:SetSize(12, 12)
+            -- Create a texture for the icon
+            local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
+            iconTexture:SetAllPoints()
+            iconTexture:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight") -- Replace with your own texture path
+            iconTexture:SetVertexColor(0, 0, 1, 0.75) -- Set the texture color to blue
+            hbdp:AddMinimapIconMap("TombstonesMM", iconFrame, closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+        elseif (lastClosestMarker ~= closestMarker) then
+            hbdp:RemoveAllMinimapIcons("TombstonesMM")
+            lastClosestMarker = closestMarker
+            local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
+            iconFrame:SetSize(12, 12)
+            -- Create a texture for the icon
+            local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
+            iconTexture:SetAllPoints()
+            iconTexture:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight") -- Replace with your own texture path
+            iconTexture:SetVertexColor(0, 0, 1, 0.5) -- Set the texture color to blue
+            hbdp:AddMinimapIconMap("TombstonesMM", iconFrame, closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
         end
-    elseif(glowFrame ~= nil) then
-        glowFrame:Hide()
-        glowFrame = nil
+        
+
+        if closestDistance <= 0.001 and not closestMarker.visited then
+            if (glowFrame == nil) then
+                -- Create a frame for the screen glow effect
+                glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
+                glowFrame:SetAllPoints(UIParent)
+                glowFrame:SetFrameStrata("BACKGROUND")
+
+                -- Create a texture for the glow effect
+                local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
+                glowTexture:SetAllPoints()
+                glowTexture:SetTexture("Interface\\FullScreenTextures\\OutOfControl")
+                glowTexture:SetBlendMode("ADD")
+                glowTexture:SetVertexColor(1, 1, 1, 0.5) -- Set the texture color to red (RGB values)
+                glowFrame:Show()
+            end
+        elseif(glowFrame ~= nil) then
+            glowFrame:Hide()
+            glowFrame = nil
+        end
     end
 end
 
@@ -1771,7 +1799,8 @@ local function StressGen(numberOfMarkers)
     for i = 1, numberOfMarkers do 
         -- Randomly select a MapID
         local randomIndex = math.random(1, #mapIDs)
-        local map_id = mapIDs[randomIndex]
+        --local map_id = mapIDs[randomIndex]
+        local map_id = C_Map.GetBestMapForUnit("player")
         -- Randomly generated posX and posY
         local randomValue1 = math.random()
         local randomValue2 = math.random()
