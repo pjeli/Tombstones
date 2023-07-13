@@ -2023,6 +2023,9 @@ local function SlashCommandHandler(msg)
         elseif argsArray[1] == "hours" then
             TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HOUR_THRESH"] = tonumber(argsArray[2])
+        elseif argsArray[1] == "days" then
+            TOMB_FILTERS["ENABLED"] = true
+            TOMB_FILTERS["HOUR_THRESH"] = (tonumber(argsArray[2]) * 24)
         elseif argsArray[1] == "class" then
             local className = argsArray[2]
             if (className ~= nil) then
@@ -2047,7 +2050,7 @@ local function SlashCommandHandler(msg)
     else
         -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | unvisit | prune | clear | dedupe | info | debug | icon_size {#SIZE} | icon_pins {0,1,2,3}]")
-        print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
+        print("Usage: /tombstones or /ts [filter (info | off | last_words | last_words_smart | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
