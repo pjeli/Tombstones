@@ -1647,13 +1647,30 @@ local function ActOnNearestTombstone()
     end
 end
 
-local function GenerateMinimapIcon()
+local function GenerateMinimapIcon(marker)
     local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
     iconFrame:SetSize(12, 12)
     local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
     iconTexture:SetAllPoints()
-    iconTexture:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight") -- Replace with your own texture path
-    iconTexture:SetVertexColor(0, 0, 1, 0.75) -- Set the texture color to blue
+    if (marker.level == nil) then
+        iconTexture:SetTexture("Interface\\Icons\\Ability_fiegndead")
+    elseif (marker.level <= 30) then
+        iconTexture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
+    elseif (marker.level <= 59) then
+        iconTexture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
+    else
+        iconTexture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
+    end
+
+    if (marker.last_words ~= nil) then
+        local borderTexture = iconFrame:CreateTexture(nil, "OVERLAY")
+        borderTexture:SetAllPoints(iconFrame)
+        borderTexture:SetTexture("Interface\\Cooldown\\ping4")
+        borderTexture:SetBlendMode("ADD")
+        borderTexture:SetVertexColor(1, 1, 0, 0.7)
+    end
+
+    iconTexture:SetVertexColor(1, 1, 1, 0.75)
     iconFrame:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Tombstone", 1, 1, 1)
@@ -1706,10 +1723,10 @@ local function FlashWhenNearTombstone()
 
         if (lastClosestMarker == nil) then
             lastClosestMarker = closestMarker
-            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
         elseif (lastClosestMarker ~= closestMarker) then
             hbdp:RemoveAllMinimapIcons("TombstonesMM")
-            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
         end
 
         if closestDistance <= 0.001 and not closestMarker.visited then
