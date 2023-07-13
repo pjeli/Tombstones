@@ -1928,6 +1928,7 @@ local function SlashCommandHandler(msg)
             deathRecordsDB.visiting = true
         elseif args == "off" then
             deathRecordsDB.visiting = false
+            hbdp:RemoveAllMinimapIcons("TombstonesMM")
         elseif args == "info" then
             PrintVisitingInfo()
         end
