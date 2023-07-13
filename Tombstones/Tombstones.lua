@@ -440,6 +440,10 @@ function endsWithLevel(str)
     return string.match(str, "has reached level %d?%d?!$") ~= nil
 end
 
+function endsWithResurrected(str)
+    return string.match(str, "has resurrected!$") ~= nil
+end
+
 function startsWith(str, prefix)
     return string.sub(str, 1, string.len(prefix)) == prefix
 end
@@ -714,6 +718,7 @@ local function UpdateWorldMapMarkers()
                             if (allow == true and fDetection(marker.last_words)) then allow = false end
                             if (allow == true and startsWith(marker.last_words, "{rt")) then allow = false end
                             if (allow == true and endsWithLevel(marker.last_words)) then allow = false end
+                            if (allow == true and endsWithResurrected(marker.last_words)) then allow = false end
                             if (allow == true and startsWith(marker.last_words, "Our brave ") 
                                 and stringContains(marker.last_words, "has died at level") 
                                 and not stringContains(marker.last_words, "last words were")) then
@@ -727,6 +732,7 @@ local function UpdateWorldMapMarkers()
                                     if (allow == true and fDetection(quotedPart)) then allow = false end
                                     if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
                                     if (allow == true and endsWithLevel(quotedPart)) then allow = false end
+                                    if (allow == true and endsWithResurrected(quotedPart)) then allow = false end
                                     if (allow == true) then
                                         -- Set the tooltip text to allowed quotation
                                         deathMapIcons[i]:SetScript("OnEnter", function(self)
