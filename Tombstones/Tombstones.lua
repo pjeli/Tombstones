@@ -334,6 +334,7 @@ end
 -- "force" should be used if the underlying DeathRecords have been altered
 local function ClearDeathMarkers(force)
     hbdp:RemoveAllWorldMapIcons("Tombstones")
+    hbdp:RemoveAllMinimapIcons("TombstonesMM")
     if (force ~= nil and force == true) then
         local totalIcons = #deathMapIcons
         for i = 1, totalIcons do
@@ -1646,6 +1647,24 @@ local function ActOnNearestTombstone()
     end
 end
 
+local function GenerateMinimapIcon()
+    local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
+    iconFrame:SetSize(12, 12)
+    local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
+    iconTexture:SetAllPoints()
+    iconTexture:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight") -- Replace with your own texture path
+    iconTexture:SetVertexColor(0, 0, 1, 0.75) -- Set the texture color to blue
+    iconFrame:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Tombstone", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    iconFrame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    return iconFrame
+end 
+
 local function FlashWhenNearTombstone()
     if (deathRecordsDB.visiting == false or IsInInstance()) then
         return
@@ -1687,27 +1706,11 @@ local function FlashWhenNearTombstone()
 
         if (lastClosestMarker == nil) then
             lastClosestMarker = closestMarker
-            local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
-            iconFrame:SetSize(12, 12)
-            -- Create a texture for the icon
-            local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
-            iconTexture:SetAllPoints()
-            iconTexture:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight") -- Replace with your own texture path
-            iconTexture:SetVertexColor(0, 0, 1, 0.75) -- Set the texture color to blue
-            hbdp:AddMinimapIconMap("TombstonesMM", iconFrame, closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
         elseif (lastClosestMarker ~= closestMarker) then
             hbdp:RemoveAllMinimapIcons("TombstonesMM")
-            lastClosestMarker = closestMarker
-            local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
-            iconFrame:SetSize(12, 12)
-            -- Create a texture for the icon
-            local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
-            iconTexture:SetAllPoints()
-            iconTexture:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight") -- Replace with your own texture path
-            iconTexture:SetVertexColor(0, 0, 1, 0.5) -- Set the texture color to blue
-            hbdp:AddMinimapIconMap("TombstonesMM", iconFrame, closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
         end
-        
 
         if closestDistance <= 0.001 and not closestMarker.visited then
             if (glowFrame == nil) then
