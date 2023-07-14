@@ -441,7 +441,7 @@ function endsWithLevel(str)
 end
 
 function endsWithResurrected(str)
-    return string.find(str, "%w+ has resurrected!$") ~= nil
+    return string.find(str, "^%w+ has resurrected!$") ~= nil
 end
 
 function startsWith(str, prefix)
