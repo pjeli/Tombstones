@@ -104,6 +104,7 @@ local movementUpdateInterval = 0.2 -- Update interval in seconds
 local movementTimer = 0
 local lastProximityWarning = 0
 local lastClosestMarker
+local optionsFrame
 local mapButton
 local splashFrame
 local tombstoneFrame
@@ -1045,40 +1046,44 @@ local function FlashWhenNearTombstone()
 end
 
 local function GenerateTombstonesOptionsFrame()
-    -- Create the main frame
-    local myFrame = CreateFrame("Frame", "MyFrame", UIParent)
-    myFrame:SetSize(360, 140)
-    myFrame:SetPoint("CENTER", 0, 80)
+    if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
+        return
+    end
 
-    local titleText = myFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    titleText:SetPoint("TOP", myFrame, "TOP", 0, -10)
+    -- Create the main frame
+    optionsFrame = CreateFrame("Frame", "MyFrame", UIParent)
+    optionsFrame:SetSize(360, 140)
+    optionsFrame:SetPoint("CENTER", 0, 80)
+
+    local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleText:SetPoint("TOP", optionsFrame, "TOP", 0, -10)
     titleText:SetText("Tombstones Options")
 
-    local bgTexture = myFrame:CreateTexture(nil, "BACKGROUND")
+    local bgTexture = optionsFrame:CreateTexture(nil, "BACKGROUND")
     bgTexture:SetAllPoints()
     bgTexture:SetColorTexture(0, 0, 0, 0.75)
 
-    local optionText = myFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    optionText:SetPoint("TOP", myFrame, "TOPLEFT", 40, -40)
+    local optionText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionText:SetPoint("TOP", optionsFrame, "TOPLEFT", 40, -40)
     optionText:SetText("I want...")
     optionText:SetTextColor(1, 1, 1)
 
     -- TOGGLE OPTIONS
-    local toggle1 = CreateFrame("CheckButton", "Visiting", myFrame, "OptionsCheckButtonTemplate")
+    local toggle1 = CreateFrame("CheckButton", "Visiting", optionsFrame, "OptionsCheckButtonTemplate")
     toggle1:SetPoint("TOPLEFT", 20, -60)
     toggle1:SetChecked(deathRecordsDB.visiting)
     local toggle1Text = toggle1:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     toggle1Text:SetPoint("LEFT", toggle1, "RIGHT", 5, 0)
     toggle1Text:SetText("To visit the dead.")
 
-    local toggle2 = CreateFrame("CheckButton", "MapRender", myFrame, "OptionsCheckButtonTemplate")
+    local toggle2 = CreateFrame("CheckButton", "MapRender", optionsFrame, "OptionsCheckButtonTemplate")
     toggle2:SetPoint("TOPLEFT", 20, -80)
     toggle2:SetChecked(deathRecordsDB.showMarkers)
     local toggle2Text = toggle2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     toggle2Text:SetPoint("LEFT", toggle2, "RIGHT", 5, 0)
     toggle2Text:SetText("To see the dead on my world map.")
 
-    local toggle3 = CreateFrame("CheckButton", "ZoneInfo", myFrame, "OptionsCheckButtonTemplate")
+    local toggle3 = CreateFrame("CheckButton", "ZoneInfo", optionsFrame, "OptionsCheckButtonTemplate")
     toggle3:SetPoint("TOPLEFT", 20, -100)
     toggle3:SetChecked(deathRecordsDB.showZoneSplash or deathRecordsDB.showDanger)
     local toggle3Text = toggle3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1137,15 +1142,15 @@ local function GenerateTombstonesOptionsFrame()
     toggle2:SetScript("OnClick", ToggleOnClick)
     toggle3:SetScript("OnClick", ToggleOnClick)
 
-    local closeButton = CreateFrame("Button", "CloseButton", myFrame, "UIPanelCloseButton")
+    local closeButton = CreateFrame("Button", "CloseButton", optionsFrame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -8, -8)
 
-    myFrame:SetMovable(true)
-    myFrame:SetClampedToScreen(true)
-    myFrame:EnableMouse(true)
-    myFrame:RegisterForDrag("LeftButton")
-    myFrame:SetScript("OnDragStart", myFrame.StartMoving)
-    myFrame:SetScript("OnDragStop", myFrame.StopMovingOrSizing)
+    optionsFrame:SetMovable(true)
+    optionsFrame:SetClampedToScreen(true)
+    optionsFrame:EnableMouse(true)
+    optionsFrame:RegisterForDrag("LeftButton")
+    optionsFrame:SetScript("OnDragStart", optionsFrame.StartMoving)
+    optionsFrame:SetScript("OnDragStop", optionsFrame.StopMovingOrSizing)
 end
 
 local function MakeMinimapButton()
@@ -1166,6 +1171,7 @@ local function MakeMinimapButton()
         OnTooltipShow = function(tooltip)
             if not tooltip or not tooltip.AddLine then return end
             tooltip:AddLine("Tombstones")
+            tooltip:AddLine("|cFFCFCFCFrecords:|r "..tostring(#deathRecordsDB.deathRecords))
         end,
     })
 
