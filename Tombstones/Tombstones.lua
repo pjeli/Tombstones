@@ -161,6 +161,42 @@ addon:RegisterEvent("PLAYER_STOPPED_MOVING")
 addon:RegisterEvent("PLAYER_TARGET_CHANGED")
 addon:RegisterEvent("CHAT_MSG_CHANNEL")
 
+
+function fetchQuotedPart(str)
+    local pattern = "\"(.-)\""
+    local quotedPart = string.match(str, pattern)
+    if quotedPart then
+        return quotedPart
+    end
+    return nil  -- Quoted part not found
+end
+
+function endsWithLevel(str)
+    return string.match(str, "has reached level %d?%d?!$") ~= nil
+end
+
+function endsWithResurrected(str)
+    return string.find(str, "^%w+ has resurrected!$") ~= nil
+end
+
+function startsWith(str, prefix)
+    return string.sub(str, 1, string.len(prefix)) == prefix
+end
+
+function stringContains(text, pattern)
+    return string.find(text, pattern) ~= nil
+end
+
+function fDetection(str)
+    return str:match("^%s*[Ff]%s*$") ~= nil
+end
+
+function printDebug(msg)
+    if debug then
+        print(msg)
+    end
+end
+
 local function SaveDeathRecords()
     _G["deathRecordsDB"] = deathRecordsDB
 end
@@ -209,6 +245,37 @@ local function InitializeDeadlyCounts()
     end
 end
 
+-- Has no 'F' detector. Prefer to have visit show F.
+local function LastWordsSmartParser(last_words)
+    if(last_words == nil or lastWords == "") then
+        return nil
+    end
+
+    local allow = true
+
+    if (startsWith(last_words, "{rt")) then allow = false end
+    if (allow == true and endsWithLevel(last_words)) then allow = false end
+    if (allow == true and startsWith(last_words, "Our brave ") 
+        and stringContains(last_words, "has died at level") 
+        and not stringContains(last_words, "last words were")) then
+            allow = false
+    end
+    -- Filter the quoted part of the 'Our brave' last_words
+    if (allow == true and startsWith(last_words, "Our brave ") 
+        and stringContains(last_words, "has died at level")
+        and stringContains(last_words, "last words were")) then
+            local quotedPart = fetchQuotedPart(last_words)
+            if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
+            if (allow == true and endsWithLevel(quotedPart)) then allow = false end
+            if (allow == true) then return quotedPart end
+    end
+    if (allow == true) then
+        return last_words
+    else
+        return nil
+    end
+end
+
 local function LoadDeathRecords()
     deathRecordsDB = _G["deathRecordsDB"]
     if not deathRecordsDB then
@@ -233,7 +300,8 @@ local function LoadDeathRecords()
        deathRecordsDB.dangerFrameUnlocked = true 
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
-        IncrementDeadlyCounts(marker)        
+        IncrementDeadlyCounts(marker)
+        marker.last_words = LastWordsSmartParser(marker.last_words)     
     end
 end
 
@@ -281,29 +349,7 @@ local function PruneDeathRecords()
 
     for i = 1, totalRecords do
         local marker = deathRecordsDB.deathRecords[i]
-        local allow = true        
-        if (filter_has_words == true) then
-            if (marker.last_words == nil) then allow = false end
-            if (allow == true and filter_has_words_smart) then
-                if (allow == true and fDetection(marker.last_words)) then allow = false end
-                if (allow == true and startsWith(marker.last_words, "{rt")) then allow = false end
-                if (allow == true and endsWithLevel(marker.last_words)) then allow = false end
-                if (allow == true and startsWith(marker.last_words, "Our brave ") 
-                    and stringContains(marker.last_words, "has died at level") 
-                    and not stringContains(marker.last_words, "last words were")) then
-                        allow = false
-                end
-                -- Filter the quoted part of the 'Our brave' last_words
-                if (allow == true and startsWith(marker.last_words, "Our brave ") 
-                    and stringContains(marker.last_words, "has died at level")
-                    and stringContains(marker.last_words, "last words were")) then
-                        local quotedPart = fetchQuotedPart(marker.last_words)
-                        if (allow == true and fDetection(quotedPart)) then allow = false end
-                        if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
-                        if (allow == true and endsWithLevel(quotedPart)) then allow = false end
-                end
-            end
-        end
+        local allow = true
         if (allow == true and filter_class ~= nil) then
             if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
         end
@@ -318,6 +364,12 @@ local function PruneDeathRecords()
         end
         if (allow == true and filter_realms) then
             if (marker.realm ~= nil and marker.realm ~= REALM) then allow = false end
+        end
+        if (allow == true and filter_has_words == true) then
+            if (marker.last_words == nil) then allow = false end
+            if (allow == true and filter_has_words_smart) then
+                marker.last_words = LastWordsSmartParser(marker.last_words)
+            end
         end
 
         if (allow == true) then
@@ -425,41 +477,6 @@ local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, us
     table.insert(deathRecordsDB.deathRecords, marker)
     IncrementDeadlyCounts(marker)
     deathRecordCount = deathRecordCount + 1
-end
-
-function fetchQuotedPart(str)
-    local pattern = "\"(.-)\""
-    local quotedPart = string.match(str, pattern)
-    if quotedPart then
-        return quotedPart
-    end
-    return nil  -- Quoted part not found
-end
-
-function endsWithLevel(str)
-    return string.match(str, "has reached level %d?%d?!$") ~= nil
-end
-
-function endsWithResurrected(str)
-    return string.find(str, "^%w+ has resurrected!$") ~= nil
-end
-
-function startsWith(str, prefix)
-    return string.sub(str, 1, string.len(prefix)) == prefix
-end
-
-function stringContains(text, pattern)
-    return string.find(text, pattern) ~= nil
-end
-
-function fDetection(str)
-    return str:match("^%s*[Ff]%s*$") ~= nil
-end
-
-function printDebug(msg)
-    if debug then
-        print(msg)
-    end
 end
 
 -- Function to create a frame to display serialized data
@@ -918,12 +935,15 @@ function TdeathlogReceiveLastWords(sender, data)
   local values = {}
   for w in data:gmatch("(.-)~") do table.insert(values, w) end
   local msg = values[2]
+  local currentTimeHour = (time() / 3600)
 
   -- Iterate over the death records
   for index, record in ipairs(deathRecordsDB.deathRecords) do
-    if record.user == sender and record.realm == REALM then
-        record.last_words = msg
-        break
+    if (record.user == sender and record.realm == REALM) then
+        if (math.floor(record.timestamp / 3600) == currentTimeHour) then
+            record.last_words = LastWordsSmartParser(msg)
+            break
+        end
     end
   end
 end
@@ -1407,37 +1427,6 @@ local function ConvertTimestampToLongForm(timestamp)
     )
 end
 
--- Has no 'F' detector. Prefer to have visit show F.
-local function LastWordsSmartParser(marker)
-    if(marker.last_words == nil) then
-        return nil
-    end
-
-    local allow = true
-
-    if (startsWith(marker.last_words, "{rt")) then allow = false end
-    if (allow == true and endsWithLevel(marker.last_words)) then allow = false end
-    if (allow == true and startsWith(marker.last_words, "Our brave ") 
-        and stringContains(marker.last_words, "has died at level") 
-        and not stringContains(marker.last_words, "last words were")) then
-            allow = false
-    end
-    -- Filter the quoted part of the 'Our brave' last_words
-    if (allow == true and startsWith(marker.last_words, "Our brave ") 
-        and stringContains(marker.last_words, "has died at level")
-        and stringContains(marker.last_words, "last words were")) then
-            local quotedPart = fetchQuotedPart(marker.last_words)
-            if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
-            if (allow == true and endsWithLevel(quotedPart)) then allow = false end
-            if (allow == true) then return quotedPart end
-    end
-    if (allow == true) then
-        return marker.last_words
-    else
-        return nil
-    end
-end
-
 local function ShowLastWordsDialogueBox(marker)
     -- Regardless of words, stop any current boxes
     if (dialogueBox ~= nil) then
@@ -1445,7 +1434,7 @@ local function ShowLastWordsDialogueBox(marker)
         dialogueBox = nil
     end
     -- Safety break
-    local lastWords = LastWordsSmartParser(marker)
+    local lastWords = marker.last_words
     if (lastWords == nil or lastWords == "") then
         return
     end
@@ -1538,7 +1527,7 @@ local function ShowNeartestTombstoneSplashText(marker)
     local race_info = marker.race_id and C_CreatureInfo.GetRaceInfo(marker.race_id).raceName or "unknown"
     local level = marker.level and tostring(marker.level) or "unknown"
     local timeOfDeathLong = ConvertTimestampToLongForm(marker.timestamp)
-    local lastWords = LastWordsSmartParser(marker)
+    local lastWords = marker.last_words
 
     local heroText = marker.user .. ", a " .. class_str .. " of " .. race_info .. " origins from " .. marker.realm .. ", perished here at level " .. level .. "."
     local timeText = "They fell on " .. timeOfDeathLong .. "."
