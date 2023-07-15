@@ -836,6 +836,9 @@ local function MakeWorldMapButton()
     end
     mapButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square") -- Set the highlight texture for the button
     mapButton:SetScript("OnClick", function()
+        if optionsFrame ~= nil and optionsFrame:IsVisible() then
+            return
+        end
         deathRecordsDB.showMarkers = not deathRecordsDB.showMarkers
         if deathRecordsDB.showMarkers then
             mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set the new icon texture
