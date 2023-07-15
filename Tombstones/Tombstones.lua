@@ -1682,10 +1682,10 @@ local function GenerateRandomPlayerName()
     return playerName
 end
 
--- Function to generate a random timestamp between now and 48 hours ago
+-- Function to generate a random timestamp between now and 45 days ago
 local function GenerateRandomTimestamp()
     local now = time() -- Current timestamp
-    local fortyEightHoursInSeconds = 48 * 60 * 60 -- 48 hours in seconds
+    local fortyEightHoursInSeconds = 3888000 -- 45 days in seconds
 
     -- Generate a random time offset between 0 and 48 hours
     local randomOffset = math.random(0, fortyEightHoursInSeconds)
@@ -1713,10 +1713,6 @@ local function SillySentence()
 end
 
 local function StressGen(numberOfMarkers)
-    if (not debug) then
-        return
-    end
-
     local mapIDs = {}
     local classNames = {}
     for mapID, _ in pairs(MAP_TABLE) do
@@ -1770,6 +1766,7 @@ local function SlashCommandHandler(msg)
         ClearDeathMarkers(false)
         MakeWorldMapButton()
     elseif command == "unvisit" then
+        if (not debug) then return end
         UnvisitAllMarkers()
         ClearDeathMarkers(false)
         UpdateWorldMapMarkers()
@@ -1777,12 +1774,13 @@ local function SlashCommandHandler(msg)
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_CLEAR_CONFIRMATION")
     elseif command == "stress" then
+        if (not debug) then return end
         StressGen(2000)
     elseif command == "prune" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_PRUNE_CONFIRMATION")
     elseif command == "dedupe" then
-        -- Dedupe existing death records
+        if (not debug) then return end
         local duplicates = DeduplicateDeathRecords()
         if (duplicates > 0) then
             ClearDeathMarkers(true)
@@ -1918,7 +1916,7 @@ local function SlashCommandHandler(msg)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | unvisit | prune | clear | dedupe | info | debug | icon_size {#SIZE} | max_render {#COUNT}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | debug | icon_size {#SIZE} | max_render {#COUNT}]")
         print("Usage: /tombstones or /ts [filter (info | off | last_words | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
