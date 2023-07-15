@@ -384,17 +384,17 @@ local function PruneDeathRecords()
 end
 
 -- "force" should be used if the underlying DeathRecords have been altered
-local function ClearDeathMarkers(force)
+local function ClearDeathMarkers(clearMM)
     hbdp:RemoveAllWorldMapIcons("Tombstones")
-    hbdp:RemoveAllMinimapIcons("TombstonesMM")
-    if (force ~= nil and force == true) then
-        local totalIcons = #deathMapIcons
-        for i = 1, totalIcons do
-            if (deathMapIcons[i] ~= nil) then
-                deathMapIcons[i]:Hide()
-                deathMapIcons[i] = nil
-            end
+    local totalIcons = #deathMapIcons
+    for i = 1, totalIcons do
+        if (deathMapIcons[i] ~= nil) then
+            deathMapIcons[i]:Hide()
+            deathMapIcons[i] = nil
         end
+    end
+    if (clearMM) then
+        hbdp:RemoveAllMinimapIcons("TombstonesMM")
     end
 end
 
@@ -705,19 +705,19 @@ end
 -- Hook into WorldMapFrame_OnShow and WorldMapFrame_OnHide functions to update markers
 WorldMapFrame:HookScript("OnShow", function()
     renderingScheduled = true
-    ClearDeathMarkers(true)
+    ClearDeathMarkers(false)
     UpdateWorldMapMarkers()
 end)
 
 hooksecurefunc(WorldMapFrame, "OnMapChanged", function() 
-    ClearDeathMarkers(true)
+    ClearDeathMarkers(false)
     currentViewingMapID = WorldMapFrame:GetMapID()
     printDebug("Current viewing Map ID:" .. currentViewingMapID)
     UpdateWorldMapMarkers()
 end);
 
 WorldMapFrame:HookScript("OnHide", function()
-    ClearDeathMarkers(true)
+    ClearDeathMarkers(false)
     renderingScheduled = false
 end)
 
@@ -767,7 +767,7 @@ local function MakeWorldMapButton()
             GameTooltip:SetText("Show Tombstones")
             showMarkers = false
             renderingScheduled = false
-            ClearDeathMarkers()
+            ClearDeathMarkers(false)
         end
     end)
     mapButton:SetScript("OnEnter", function(self)
@@ -1735,11 +1735,11 @@ local function SlashCommandHandler(msg)
         MakeWorldMapButton()
     elseif command == "hide" then
         showMarkers = false
-        ClearDeathMarkers(true)
+        ClearDeathMarkers(false)
         MakeWorldMapButton()
     elseif command == "unvisit" then
         UnvisitAllMarkers()
-        ClearDeathMarkers(true)
+        ClearDeathMarkers(false)
         UpdateWorldMapMarkers()
     elseif command == "clear" then
         -- Clear all death records
@@ -1880,7 +1880,7 @@ local function SlashCommandHandler(msg)
                 print("Tombstones WARN : Try 'human','dwarf','gnome','night elf | nelf','orc','troll','undead','tauren'.")
             end
         end
-        ClearDeathMarkers()
+        ClearDeathMarkers(false)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
