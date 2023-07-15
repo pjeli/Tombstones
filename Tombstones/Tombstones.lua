@@ -279,6 +279,30 @@ local function LastWordsSmartParser(last_words)
     end
 end
 
+local function TdeathlogJoinChannel()
+    if _G["deathlogJoinChannel"] ~= nil then
+        return
+    else
+        local channel_num = GetChannelName(death_alerts_channel)
+        if channel_num == 0 then
+            JoinChannelByName(death_alerts_channel, death_alerts_channel_pw)
+            local channel_num = GetChannelName(death_alerts_channel)
+                if channel_num == 0 then
+                print("Failed to join death alerts channel via Tombstones.")
+            else
+                print("Successfully joined deathlog channel via Tombstones.")
+            end
+            for i = 1, 10 do
+                if _G['ChatFrame'..i] then
+                    ChatFrame_RemoveChannel(_G['ChatFrame'..i], death_alerts_channel)
+                end
+            end
+        else
+                print("Successfully joined deathlog channel via Tombstones.")
+        end
+    end
+end
+
 local function LoadDeathRecords()
     deathRecordsDB = _G["deathRecordsDB"]
     if not deathRecordsDB then
@@ -1937,6 +1961,10 @@ addon:SetScript("OnEvent", function(self, event, ...)
 
             MakeWorldMapButton()
             LoadDeathRecords()
+            -- Try to join only after Hardcore add-on take precedence
+            C_Timer.After(6.0, function()
+                TdeathlogJoinChannel()
+            end)
      
             ac:Embed(self)
             print("Tombstones loaded successfully!")
