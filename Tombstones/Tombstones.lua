@@ -386,41 +386,13 @@ local function PruneDeathRecords()
 
     -- Fetch filtering parameters
     local filtering = TOMB_FILTERS["ENABLED"]
-    local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
-    local filter_class = TOMB_FILTERS["CLASS_ID"]
-    local filter_race = TOMB_FILTERS["RACE_ID"]
-    local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
-    local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
-    local filter_realms = TOMB_FILTERS["REALMS"]
-
     if (not filtering) then
         return recordsToPrune
     end
 
     for i = 1, totalRecords do
         local marker = deathRecordsDB.deathRecords[i]
-        local allow = true
-        if (allow == true and filter_class ~= nil) then
-            if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
-        end
-        if (allow == true and filter_race ~= nil) then
-            if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
-        end
-        if (allow == true and filter_level > 0) then
-            if (marker.level < filter_level) then allow = false end
-        end
-        if (allow == true and filter_hour >= 0) then
-            if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
-        end
-        if (allow == true and filter_realms) then
-            if (marker.realm ~= nil and marker.realm ~= REALM) then allow = false end
-        end
-        if (allow == true and filter_has_words == true) then
-            if (marker.last_words == nil) then allow = false end
-            if (allow == true) then
-                marker.last_words = LastWordsSmartParser(marker.last_words)
-            end
-        end
+        local allow = IsMarkerAllowedByFilters(marker)
 
         if (allow == true) then
             table.insert(prunedRecords, marker)
@@ -464,6 +436,48 @@ StaticPopupDialogs["TOMBSTONES_CLEAR_CONFIRMATION"] = {
     hideOnEscape = true,
     preferredIndex = 3,
 }
+
+local function IsMarkerAllowedByFilters(marker)
+    local currentTime = time()
+    local allow = true
+
+    -- Fetch filtering parameters
+    local filtering = TOMB_FILTERS["ENABLED"]
+    local filter_realms = TOMB_FILTERS["REALMS"]
+
+    if (filtering) then
+        local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
+        local filter_class = TOMB_FILTERS["CLASS_ID"]
+        local filter_race = TOMB_FILTERS["RACE_ID"]
+        local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
+        local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
+        if (allow == true and filter_has_words == true) then
+            if (marker.last_words == nil) then allow = false end
+            -- Smart filter is now the default...
+        end
+        if (allow == true and filter_class ~= nil) then
+            if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
+        end
+        if (allow == true and filter_race ~= nil) then
+            if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
+        end
+        if (allow == true and filter_level > 0) then
+            if (marker.level < filter_level) then allow = false end
+        end
+        if (allow == true and filter_hour >= 0) then
+            if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
+        end
+        return allow
+    else
+        -- Filtering is disabled, but default is to still filter realms.
+        if (filter_realms and marker.realm == REALM) then
+            return allow
+        else
+            return false
+        end
+    end
+    return allow
+end
 
 local function IsNewRecordDuplicate(newRecord)
     local isDuplicate = false
@@ -594,14 +608,6 @@ end
 local function UpdateWorldMapMarkers()
     local worldMapFrame = WorldMapFrame
     if deathRecordsDB.showMarkers and worldMapFrame and worldMapFrame:IsVisible() then
-        -- Fetch filtering parameters
-        local filtering = TOMB_FILTERS["ENABLED"]
-        local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
-        local filter_class = TOMB_FILTERS["CLASS_ID"]
-        local filter_race = TOMB_FILTERS["RACE_ID"]
-        local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
-        local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
-        local filter_realms = TOMB_FILTERS["REALMS"]
 
         local currentZoneMarkers = visitingZoneCache[currentViewingMapID] or {}
         local currentIndex = #currentZoneMarkers
@@ -724,45 +730,14 @@ local function UpdateWorldMapMarkers()
                     markerMapButton.texture:SetVertexColor(.6, .6, .6, 0.5)
                 end
 
-                -- Cache the Map Marker for deletion later
-                deathMapIcons[i] = markerMapButton
-
                 -- Check if filters enabled
                 -- Add the marker to the map if passes filter
-                if (filtering) then
-                    local allow = true
-                    if (allow == true and filter_has_words == true) then
-                        if (marker.last_words == nil) then allow = false end
-                        -- Smart filter is now the default...
-                    end
-                    if (allow == true and filter_class ~= nil) then
-                        if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
-                    end
-                    if (allow == true and filter_race ~= nil) then
-                        if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
-                    end
-                    if (allow == true and filter_level > 0) then
-                        if (marker.level < filter_level) then allow = false end
-                    end
-                    if (allow == true and filter_hour >= 0) then
-                        if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
-                    end
-                    if (allow == true) then
-                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY)
-                        renderCount = renderCount + 1
-                    else
-                        markerMapButton = nil
-                        deathMapIcons[i] = nil
-                    end
-                else
-                    -- Filtering is disabled; but default is to filter realms.
-                    if (filter_realms and marker.realm == REALM) then
-                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY)
-                        renderCount = renderCount + 1
-                    else
-                        markerMapButton = nil
-                        deathMapIcons[i] = nil
-                    end
+                local allowed = IsMarkerAllowedByFilters(marker)
+                if (allowed == true) then
+                    -- Cache the Map Marker for deletion later
+                    deathMapIcons[i] = markerMapButton
+                    hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY)
+                    renderCount = renderCount + 1  
                 end
 
                 if (renderCount > maxRenderCount) then
@@ -1002,9 +977,10 @@ local function FlashWhenNearTombstone()
 
         -- Calculate the distance between the player and the marker
         local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
+        local allowed = IsMarkerAllowedByFilters(marker)
 
         -- Check if this marker is closer than the previous closest marker
-        if not marker.visited and distance < closestDistance then
+        if not marker.visited and allowed and distance < closestDistance then
             closestMarker = marker
             closestDistance = distance
         end
@@ -1789,10 +1765,11 @@ local function ActOnNearestTombstone()
 
         -- Calculate the distance between the player and the marker
         local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
+        local allowed = IsMarkerAllowedByFilters(marker)
 
         -- Check if this marker is closer than the previous closest marker
         if distance < 0.015 then
-            if not marker.visited then
+            if not marker.visited and allowed then
                 proximityUnvisitedCount = proximityUnvisitedCount + 1
                 if distance < closestDistance then
                     closestMarker = marker
@@ -2093,7 +2070,7 @@ local function SlashCommandHandler(msg)
                 print("Tombstones WARN : Try 'human','dwarf','gnome','night elf | nelf','orc','troll','undead','tauren'.")
             end
         end
-        ClearDeathMarkers(false)
+        ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
@@ -2164,7 +2141,7 @@ addon:SetScript("OnUpdate", function(self, elapsed)
     if isPlayerMoving then
         movementTimer = movementTimer + elapsed
         if (movementTimer >= movementUpdateInterval) then
-            printDebug("Movement tick.")
+            --printDebug("Movement tick.")
             FlashWhenNearTombstone()
             movementTimer = 0
         end
