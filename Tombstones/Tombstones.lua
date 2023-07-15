@@ -98,7 +98,6 @@ local iconSize = 12
 local maxRenderCount = 1500
 local renderWarned = false
 local renderingScheduled = false
-local showMarkers = true
 local debug = false
 local isPlayerMoving = false
 local movementUpdateInterval = 0.2 -- Update interval in seconds
@@ -190,6 +189,13 @@ end
 
 function fDetection(str)
     return str:match("^%s*[Ff]%s*$") ~= nil
+end
+
+function GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
+    local deltaX = markerX - playerX
+    local deltaY = markerY - playerY
+    local distance = math.sqrt(deltaX * deltaX + deltaY * deltaY)
+    return distance
 end
 
 function printDebug(msg)
@@ -309,6 +315,7 @@ local function LoadDeathRecords()
         deathRecordsDB = {}
         deathRecordsDB.version = ADDON_SAVED_VARIABLES_VERSION
         deathRecordsDB.deathRecords = {}
+        deathRecordsDB.showMarkers = true
         deathRecordsDB.dangerFrameUnlocked = true
         deathRecordsDB.showDanger = true
         deathRecordsDB.showZoneSplash = true
@@ -317,6 +324,9 @@ local function LoadDeathRecords()
         deathRecordsDB.minimapDB = {}
         deathRecordsDB.minimapDB.minimapPos = 204
         deathRecordsDB.minimapDB.hide = false
+    end
+    if (deathRecordsDB.showMarkers == nil) then
+        deathRecordsDB.showMarkers = true
     end
     if (deathRecordsDB.visiting == nil) then
        deathRecordsDB.visiting = true 
@@ -434,6 +444,7 @@ local function ClearDeathMarkers(clearMM)
     end
     if (clearMM) then
         hbdp:RemoveAllMinimapIcons("TombstonesMM")
+        lastClosestMarker = nil
     end
 end
 
@@ -581,7 +592,7 @@ end
 
 local function UpdateWorldMapMarkers()
     local worldMapFrame = WorldMapFrame
-    if showMarkers and worldMapFrame and worldMapFrame:IsVisible() then
+    if deathRecordsDB.showMarkers and worldMapFrame and worldMapFrame:IsVisible() then
         -- Fetch filtering parameters
         local filtering = TOMB_FILTERS["ENABLED"]
         local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
@@ -817,31 +828,31 @@ local function MakeWorldMapButton()
     mapButton = CreateFrame("Button", nil, WorldMapFrame, "UIPanelButtonTemplate")
     mapButton:SetSize(20, 20) -- Adjust the size of the button as needed
     mapButton:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 30, -35)
-    if (showMarkers == true) then
+    if (deathRecordsDB.showMarkers == true) then
         mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set a custom texture for the button
     else
         mapButton:SetNormalTexture("Interface\\Icons\\INV_Misc_Map_01")
     end
     mapButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square") -- Set the highlight texture for the button
     mapButton:SetScript("OnClick", function()
-        showMarkers = not showMarkers
-        if showMarkers then
+        deathRecordsDB.showMarkers = not deathRecordsDB.showMarkers
+        if deathRecordsDB.showMarkers then
             mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set the new icon texture
             GameTooltip:SetText("Hide Tombstones")
-            showMarkers = true
+            deathRecordsDB.showMarkers = true
             renderingScheduled = true
             UpdateWorldMapMarkers()
         else
             mapButton:SetNormalTexture("Interface\\Icons\\INV_Misc_Map_01") -- Set the default icon texture
             GameTooltip:SetText("Show Tombstones")
-            showMarkers = false
+            deathRecordsDB.showMarkers = false
             renderingScheduled = false
             ClearDeathMarkers(false)
         end
     end)
     mapButton:SetScript("OnEnter", function(self)
          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-         if showMarkers then
+         if deathRecordsDB.showMarkers then
             GameTooltip:SetText("Hide Tombstones")
         else
             GameTooltip:SetText("Show Tombstones")
@@ -853,12 +864,296 @@ local function MakeWorldMapButton()
     end)
 end
 
+local function CreateTargetDangerFrame()
+    targetDangerFrame = CreateFrame("Frame", "TargetDangerFrame", UIParent)
+    targetDangerFrame:SetSize(100, 20)
+    local position = deathRecordsDB.targetDangerFramePos
+    if (position ~= nil) then
+        targetDangerFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", position.x, position.y)
+    else
+        targetDangerFrame:SetPoint("CENTER", 0, 0)
+    end
+    targetDangerFrame:SetMovable(true)
+    targetDangerFrame:SetClampedToScreen(true)
+    targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked)
+    targetDangerFrame:RegisterForDrag("LeftButton")
+    targetDangerFrame:SetScript("OnDragStart", targetDangerFrame.StartMoving)
+    targetDangerFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Save the new position
+        local x, y = self:GetLeft(), self:GetTop()
+        deathRecordsDB.targetDangerFramePos = { x = x, y = y }
+    end)
+
+    targetDangerText = targetDangerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    targetDangerText:SetPoint("CENTER", 0, 0)
+    targetDangerText:SetText("")
+
+    -- Create the background texture
+    local bgTexture = targetDangerFrame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.5) -- Set the RGB values and alpha (0.5 for 50% transparency)
+
+    targetDangerFrame.text = targetDangerText -- Assign the text object to the frame to keep a reference
+end
+
+-- Event handler for UNIT_TARGET event
+local function UnitTargetChange()
+    local target = "target"
+    if (not UnitExists("target") and targetDangerFrame ~= nil) then
+        targetDangerFrame:Hide()
+    end
+    local targetName = UnitName(target)
+    local source_id = npc_to_id[targetName]
+    local friendly = UnitIsFriend("player", target)
+
+    local playerLevel = UnitLevel("player")
+    local targetLevel = UnitLevel("target")
+
+    -- Check if the target is an enemy NPC
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
+        local sourceDeathCount = deadlyNPCs[source_id] or 0
+        local currentMapID = C_Map.GetBestMapForUnit("player")
+        local deathMarkersTotal = deadlyZones[currentMapID] or 0
+        local dangerPercentage = 0.0
+        if (deathMarkersTotal > 0) then
+            dangerPercentage = (sourceDeathCount / deathMarkersTotal) * 100.0
+        end
+
+        if (targetDangerFrame == nil) then
+            CreateTargetDangerFrame()
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        else
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        end
+
+        targetDangerFrame:Show()
+        printDebug(string.format("Tombstones has detected enemy danger at: %.2f%%.", dangerPercentage))
+    else
+        if (targetDangerFrame ~= nil) then
+            targetDangerText:SetText("")
+            targetDangerFrame:Hide()
+        end
+    end
+end
+
+local function GenerateMinimapIcon(marker)
+    local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
+    iconFrame:SetSize(12, 12)
+    local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
+    iconTexture:SetAllPoints()
+    if (marker.level == nil) then
+        iconTexture:SetTexture("Interface\\Icons\\Ability_fiegndead")
+    elseif (marker.level <= 30) then
+        iconTexture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
+    elseif (marker.level <= 59) then
+        iconTexture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
+    else
+        iconTexture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
+    end
+
+    if (marker.last_words ~= nil) then
+        local borderTexture = iconFrame:CreateTexture(nil, "OVERLAY")
+        borderTexture:SetAllPoints(iconFrame)
+        borderTexture:SetTexture("Interface\\Cooldown\\ping4")
+        borderTexture:SetBlendMode("ADD")
+        borderTexture:SetVertexColor(1, 1, 0, 0.7)
+    end
+
+    iconTexture:SetVertexColor(1, 1, 1, 0.75)
+    iconFrame:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Tombstone", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    iconFrame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    return iconFrame
+end
+
+local function FlashWhenNearTombstone()
+    if (deathRecordsDB.visiting == false or IsInInstance()) then
+        return
+    end
+
+    -- Handle player death event
+    local playerInstance = C_Map.GetBestMapForUnit("player")
+    local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
+    local playerX, playerY = playerPosition:GetXY()
+
+    local closestMarker
+    local closestDistance = math.huge
+
+    local zoneMarkers = visitingZoneCache[playerInstance]
+    if (zoneMarkers == nil or #zoneMarkers == 0) then
+        return
+    end
+
+    -- Iterate through your death markers and calculate the distance from each marker to the player's position
+    for index, marker in ipairs(zoneMarkers) do
+        local markerX = marker.posX
+        local markerY = marker.posY
+        local markerInstance = marker.mapID
+
+        -- Calculate the distance between the player and the marker
+        local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
+
+        -- Check if this marker is closer than the previous closest marker
+        if not marker.visited and distance < closestDistance then
+            closestMarker = marker
+            closestDistance = distance
+        end
+    end
+
+    -- Now you have the closest death marker to the player
+    if closestMarker then
+        printDebug("On move death marker: " .. tostring(closestDistance))
+        if (lastClosestMarker == nil) then
+            lastClosestMarker = closestMarker
+            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+        elseif (lastClosestMarker ~= closestMarker) then
+            lastClosestMarker = closestMarker
+            printDebug("Swapping nearest minimap marker.")
+            hbdp:RemoveAllMinimapIcons("TombstonesMM")
+            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+        end
+
+        if closestDistance <= 0.0025 then
+            if (glowFrame == nil) then
+                -- Create a frame for the screen glow effect
+                glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
+                glowFrame:SetAllPoints(UIParent)
+                glowFrame:SetFrameStrata("BACKGROUND")
+
+                -- Create a texture for the glow effect
+                local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
+                glowTexture:SetAllPoints()
+                glowTexture:SetTexture("Interface\\FullScreenTextures\\OutOfControl")
+                glowTexture:SetBlendMode("ADD")
+                glowTexture:SetVertexColor(1, 1, 1, 0.5) -- Set the texture color to red (RGB values)
+                glowFrame:Show()
+            end
+        elseif(glowFrame ~= nil) then
+            glowFrame:Hide()
+            glowFrame = nil
+        end
+    elseif (glowFrame ~= nil) then
+        glowFrame:Hide()
+        glowFrame = nil
+    end
+end
+
+local function GenerateTombstonesOptionsFrame()
+    -- Create the main frame
+    local myFrame = CreateFrame("Frame", "MyFrame", UIParent)
+    myFrame:SetSize(360, 140)
+    myFrame:SetPoint("CENTER", 0, 80)
+
+    local titleText = myFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleText:SetPoint("TOP", myFrame, "TOP", 0, -10)
+    titleText:SetText("Tombstones Options")
+
+    local bgTexture = myFrame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.75)
+
+    local optionText = myFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionText:SetPoint("TOP", myFrame, "TOPLEFT", 40, -40)
+    optionText:SetText("I want...")
+    optionText:SetTextColor(1, 1, 1)
+
+    -- TOGGLE OPTIONS
+    local toggle1 = CreateFrame("CheckButton", "Visiting", myFrame, "OptionsCheckButtonTemplate")
+    toggle1:SetPoint("TOPLEFT", 20, -60)
+    toggle1:SetChecked(deathRecordsDB.visiting)
+    local toggle1Text = toggle1:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    toggle1Text:SetPoint("LEFT", toggle1, "RIGHT", 5, 0)
+    toggle1Text:SetText("To visit the dead.")
+
+    local toggle2 = CreateFrame("CheckButton", "MapRender", myFrame, "OptionsCheckButtonTemplate")
+    toggle2:SetPoint("TOPLEFT", 20, -80)
+    toggle2:SetChecked(deathRecordsDB.showMarkers)
+    local toggle2Text = toggle2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    toggle2Text:SetPoint("LEFT", toggle2, "RIGHT", 5, 0)
+    toggle2Text:SetText("To see the dead on my world map.")
+
+    local toggle3 = CreateFrame("CheckButton", "ZoneInfo", myFrame, "OptionsCheckButtonTemplate")
+    toggle3:SetPoint("TOPLEFT", 20, -100)
+    toggle3:SetChecked(deathRecordsDB.showZoneSplash or deathRecordsDB.showDanger)
+    local toggle3Text = toggle3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    toggle3Text:SetPoint("LEFT", toggle3, "RIGHT", 5, 0)
+    toggle3Text:SetText("Information about dangers in my zone.")
+    -- TOGGLE OPTIONS
+
+    -- Callback function for toggle button click event
+    local function ToggleOnClick(self)
+        local isChecked = self:GetChecked()
+        local toggleName = self:GetName()
+        
+        if isChecked then
+            -- Perform actions for selected state
+            if (toggleName == "Visiting") then
+                deathRecordsDB.visiting = true
+            elseif (toggleName == "MapRender") then
+                deathRecordsDB.showMarkers = true
+                UpdateWorldMapMarkers()
+                MakeWorldMapButton()
+            elseif (toggleName == "ZoneInfo") then
+                deathRecordsDB.showZoneSplash = true
+                deathRecordsDB.showDanger = true
+                UnitTargetChange()
+            end
+        else
+            -- Perform actions for unselected state
+            if (toggleName == "Visiting") then
+                deathRecordsDB.visiting = false
+                hbdp:RemoveAllMinimapIcons("TombstonesMM")
+                lastClosestMarker = nil
+            elseif (toggleName == "MapRender") then
+                deathRecordsDB.showMarkers = false
+                ClearDeathMarkers(false)
+                MakeWorldMapButton()
+            elseif (toggleName == "ZoneInfo") then
+                deathRecordsDB.showZoneSplash = false
+                deathRecordsDB.showDanger = false
+                if (splashFrame ~= nil) then
+                  splashFrame:Hide()
+                  splashFrame = nil
+                end
+                if (targetDangerFrame ~= nil) then
+                    targetDangerFrame:Hide()
+                    targetDangerFrame = nil
+                end
+                if (targetDangerText ~= nil) then
+                    targetDangerText = nil
+                end
+            end
+        end
+    end
+
+    -- Assign the callback function to toggle buttons' OnClick event
+    toggle1:SetScript("OnClick", ToggleOnClick)
+    toggle2:SetScript("OnClick", ToggleOnClick)
+    toggle3:SetScript("OnClick", ToggleOnClick)
+
+    local closeButton = CreateFrame("Button", "CloseButton", myFrame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", -8, -8)
+
+    myFrame:SetMovable(true)
+    myFrame:SetClampedToScreen(true)
+    myFrame:EnableMouse(true)
+    myFrame:RegisterForDrag("LeftButton")
+    myFrame:SetScript("OnDragStart", myFrame.StartMoving)
+    myFrame:SetScript("OnDragStop", myFrame.StopMovingOrSizing)
+end
+
 local function MakeMinimapButton()
     -- Minimap button click function
     local function MiniBtnClickFunc(btn)
         -- Prevent options panel from showing if Blizzard options panel is showing
         if InterfaceOptionsFrame:IsShown() or VideoOptionsFrame:IsShown() or ChatConfigFrame:IsShown() then return end
-        print("Clicked the button!")
+        GenerateTombstonesOptionsFrame()
     end
     -- Create minimap button using LibDBIcon
     local miniButton = LibStub("LibDataBroker-1.1"):NewDataObject("Tombstones", {
@@ -1055,79 +1350,6 @@ function ShowZoneSplashText()
 
     splashFrame:Show()
     splashFrame.fadeOut:Play()
-end
-
-local function CreateTargetDangerFrame()
-    targetDangerFrame = CreateFrame("Frame", "TargetDangerFrame", UIParent)
-    targetDangerFrame:SetSize(100, 20)
-    local position = deathRecordsDB.targetDangerFramePos
-    if (position ~= nil) then
-        targetDangerFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", position.x, position.y)
-    else
-        targetDangerFrame:SetPoint("CENTER", 0, 0)
-    end
-    targetDangerFrame:SetMovable(true)
-    targetDangerFrame:SetClampedToScreen(true)
-    targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked)
-    targetDangerFrame:RegisterForDrag("LeftButton")
-    targetDangerFrame:SetScript("OnDragStart", targetDangerFrame.StartMoving)
-    targetDangerFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        -- Save the new position
-        local x, y = self:GetLeft(), self:GetTop()
-        deathRecordsDB.targetDangerFramePos = { x = x, y = y }
-    end)
-
-    targetDangerText = targetDangerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    targetDangerText:SetPoint("CENTER", 0, 0)
-    targetDangerText:SetText("")
-
-    -- Create the background texture
-    local bgTexture = targetDangerFrame:CreateTexture(nil, "BACKGROUND")
-    bgTexture:SetAllPoints()
-    bgTexture:SetColorTexture(0, 0, 0, 0.5) -- Set the RGB values and alpha (0.5 for 50% transparency)
-
-    targetDangerFrame.text = targetDangerText -- Assign the text object to the frame to keep a reference
-end
-
--- Event handler for UNIT_TARGET event
-local function UnitTargetChange()
-    local target = "target"
-    if (not UnitExists("target") and targetDangerFrame ~= nil) then
-        targetDangerFrame:Hide()
-    end
-    local targetName = UnitName(target)
-    local source_id = npc_to_id[targetName]
-    local friendly = UnitIsFriend("player", target)
-
-    local playerLevel = UnitLevel("player")
-    local targetLevel = UnitLevel("target")
-
-    -- Check if the target is an enemy NPC
-    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
-        local sourceDeathCount = deadlyNPCs[source_id] or 0
-        local currentMapID = C_Map.GetBestMapForUnit("player")
-        local deathMarkersTotal = deadlyZones[currentMapID] or 0
-        local dangerPercentage = 0.0
-        if (deathMarkersTotal > 0) then
-            dangerPercentage = (sourceDeathCount / deathMarkersTotal) * 100.0
-        end
-
-        if (targetDangerFrame == nil) then
-            CreateTargetDangerFrame()
-            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
-        else
-            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
-        end
-
-        targetDangerFrame:Show()
-        printDebug(string.format("Tombstones has detected enemy danger at: %.2f%%.", dangerPercentage))
-    else
-        if (targetDangerFrame ~= nil) then
-            targetDangerText:SetText("")
-            targetDangerFrame:Hide()
-        end
-    end
 end
 
 local function IsImportRecordDuplicate(importedRecord)
@@ -1331,13 +1553,6 @@ local function CreateDataImportFrame()
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
     frame:Show()
-end
-
-local function GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
-    local deltaX = markerX - playerX
-    local deltaY = markerY - playerY
-    local distance = math.sqrt(deltaX * deltaX + deltaY * deltaY)
-    return distance
 end
 
 local function ConvertTimestampToLongForm(timestamp)
@@ -1597,111 +1812,6 @@ local function ActOnNearestTombstone()
     end
 end
 
-local function GenerateMinimapIcon(marker)
-    local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
-    iconFrame:SetSize(12, 12)
-    local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
-    iconTexture:SetAllPoints()
-    if (marker.level == nil) then
-        iconTexture:SetTexture("Interface\\Icons\\Ability_fiegndead")
-    elseif (marker.level <= 30) then
-        iconTexture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
-    elseif (marker.level <= 59) then
-        iconTexture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
-    else
-        iconTexture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
-    end
-
-    if (marker.last_words ~= nil) then
-        local borderTexture = iconFrame:CreateTexture(nil, "OVERLAY")
-        borderTexture:SetAllPoints(iconFrame)
-        borderTexture:SetTexture("Interface\\Cooldown\\ping4")
-        borderTexture:SetBlendMode("ADD")
-        borderTexture:SetVertexColor(1, 1, 0, 0.7)
-    end
-
-    iconTexture:SetVertexColor(1, 1, 1, 0.75)
-    iconFrame:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Tombstone", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    iconFrame:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-    return iconFrame
-end 
-
-local function FlashWhenNearTombstone()
-    if (deathRecordsDB.visiting == false or IsInInstance()) then
-        return
-    end
-
-    -- Handle player death event
-    local playerInstance = C_Map.GetBestMapForUnit("player")
-    local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
-    local playerX, playerY = playerPosition:GetXY()
-
-    local closestMarker
-    local closestDistance = math.huge
-
-    local zoneMarkers = visitingZoneCache[playerInstance]
-    if (zoneMarkers == nil or #zoneMarkers == 0) then
-        return
-    end
-
-    -- Iterate through your death markers and calculate the distance from each marker to the player's position
-    for index, marker in ipairs(zoneMarkers) do
-        local markerX = marker.posX
-        local markerY = marker.posY
-        local markerInstance = marker.mapID
-
-        -- Calculate the distance between the player and the marker
-        local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
-
-        -- Check if this marker is closer than the previous closest marker
-        if not marker.visited and distance < closestDistance then
-            closestMarker = marker
-            closestDistance = distance
-        end
-    end
-
-    -- Now you have the closest death marker to the player
-    if closestMarker then
-        printDebug("On move death marker: " .. tostring(closestDistance))
-        if (lastClosestMarker == nil) then
-            lastClosestMarker = closestMarker
-            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
-        elseif (lastClosestMarker ~= closestMarker) then
-            hbdp:RemoveAllMinimapIcons("TombstonesMM")
-            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
-        end
-
-        if closestDistance <= 0.0025 then
-            if (glowFrame == nil) then
-                -- Create a frame for the screen glow effect
-                glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
-                glowFrame:SetAllPoints(UIParent)
-                glowFrame:SetFrameStrata("BACKGROUND")
-
-                -- Create a texture for the glow effect
-                local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
-                glowTexture:SetAllPoints()
-                glowTexture:SetTexture("Interface\\FullScreenTextures\\OutOfControl")
-                glowTexture:SetBlendMode("ADD")
-                glowTexture:SetVertexColor(1, 1, 1, 0.5) -- Set the texture color to red (RGB values)
-                glowFrame:Show()
-            end
-        elseif(glowFrame ~= nil) then
-            glowFrame:Hide()
-            glowFrame = nil
-        end
-    elseif (glowFrame ~= nil) then
-        glowFrame:Hide()
-        glowFrame = nil
-    end
-end
-
 local function PrintVisitingInfo()
     local mapID = C_Map.GetBestMapForUnit("player")
     local zoneMarkers = visitingZoneCache[mapID] or {}
@@ -1820,11 +1930,11 @@ local function SlashCommandHandler(msg)
     -- Process the command and perform the desired actions
     if command == "show" then
         -- Show death markers
-        showMarkers = true
+        deathRecordsDB.showMarkers = true
         UpdateWorldMapMarkers()
         MakeWorldMapButton()
     elseif command == "hide" then
-        showMarkers = false
+        deathRecordsDB.showMarkers = false
         ClearDeathMarkers(false)
         MakeWorldMapButton()
     elseif command == "unvisit" then
