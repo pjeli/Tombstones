@@ -206,6 +206,7 @@ function printDebug(msg)
 end
 
 local function SaveDeathRecords()
+    deathRecordsDB.TOMB_FILTERS = TOMB_FILTERS
     _G["deathRecordsDB"] = deathRecordsDB
 end
 
@@ -350,6 +351,9 @@ local function LoadDeathRecords()
     if (deathRecordsDB.minimapDB.hide == nil) then
         deathRecordsDB.minimapDB.hide = false
     end
+    if (deathRecordsDB.TOMB_FILTERS ~= nil) then
+        TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
+    end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)
         marker.last_words = LastWordsSmartParser(marker.last_words)     
@@ -467,6 +471,7 @@ local function IsMarkerAllowedByFilters(marker)
         if (allow == true and filter_hour >= 0) then
             if (marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
         end
+        if (allow == true and filter_realms and marker.realm ~= REALM) then allow = false end
         return allow
     else
         -- Filtering is disabled, but default is to still filter realms.
