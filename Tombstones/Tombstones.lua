@@ -255,7 +255,7 @@ local function LastWordsSmartParser(last_words)
 
     if (startsWith(last_words, "{rt")) then allow = false end
     if (allow == true and endsWithLevel(last_words)) then allow = false end
-    if (allow == true and endsWithResurrected(marker.last_words)) then allow = false end
+    if (allow == true and endsWithResurrected(last_words)) then allow = false end
     if (allow == true and startsWith(last_words, "Our brave ") 
         and stringContains(last_words, "has died at level") 
         and not stringContains(last_words, "last words were")) then
