@@ -313,6 +313,10 @@ local function LoadDeathRecords()
         deathRecordsDB.showDanger = true
         deathRecordsDB.showZoneSplash = true
         deathRecordsDB.visiting = true
+        deathRecordsDB.hide = false
+        deathRecordsDB.minimapDB = {}
+        deathRecordsDB.minimapDB.minimapPos = 204
+        deathRecordsDB.minimapDB.hide = false
     end
     if (deathRecordsDB.visiting == nil) then
        deathRecordsDB.visiting = true 
@@ -325,6 +329,15 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.dangerFrameUnlocked == nil) then
        deathRecordsDB.dangerFrameUnlocked = true 
+    end
+    if (deathRecordsDB.minimapDB == nil) then
+        deathRecordsDB.minimapDB = {}
+    end
+    if (deathRecordsDB.minimapDB.minimapPos == nil) then
+        deathRecordsDB.minimapDB.minimapPos = 204
+    end
+    if (deathRecordsDB.minimapDB.hide == nil) then
+        deathRecordsDB.minimapDB.hide = false
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)
@@ -838,6 +851,31 @@ local function MakeWorldMapButton()
     mapButton:SetScript("OnLeave", function(self)
        GameTooltip:Hide()
     end)
+end
+
+local function MakeMinimapButton()
+    -- Minimap button click function
+    local function MiniBtnClickFunc(btn)
+        -- Prevent options panel from showing if Blizzard options panel is showing
+        if InterfaceOptionsFrame:IsShown() or VideoOptionsFrame:IsShown() or ChatConfigFrame:IsShown() then return end
+        print("Clicked the button!")
+    end
+    -- Create minimap button using LibDBIcon
+    local miniButton = LibStub("LibDataBroker-1.1"):NewDataObject("Tombstones", {
+        type = "data source",
+        text = "Tombstones",
+        icon = "Interface\\Icons\\Ability_fiegndead",
+        OnClick = function(self, btn)
+            MiniBtnClickFunc(btn)
+        end,
+        OnTooltipShow = function(tooltip)
+            if not tooltip or not tooltip.AddLine then return end
+            tooltip:AddLine("Tombstones")
+        end,
+    })
+
+    local icon = LibStub("LibDBIcon-1.0", true)
+    icon:Register("Tombstones", miniButton, deathRecordsDB.minimapDB)
 end
 
 function TdeathlogReceiveLastWords(sender, data)
@@ -1959,8 +1997,9 @@ addon:SetScript("OnEvent", function(self, event, ...)
         if addonName == ADDON_NAME then
             printDebug("Tombstones is loading...")
 
-            MakeWorldMapButton()
             LoadDeathRecords()
+            MakeWorldMapButton()
+            MakeMinimapButton()
             -- Try to join only after Hardcore add-on take precedence
             C_Timer.After(6.0, function()
                 TdeathlogJoinChannel()
