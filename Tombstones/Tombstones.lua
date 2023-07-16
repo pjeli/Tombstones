@@ -151,6 +151,7 @@ local hbdp = LibStub("HereBeDragons-Pins-2.0")
 local ac = LibStub("AceComm-3.0")
 local ls = LibStub("LibSerialize")
 local lc = LibStub("LibCompress")
+local ld = LibStub("LibDeflate")
 local l64 = LibStub("LibBase64-1.0")
 
 -- Register events
@@ -547,6 +548,7 @@ local function CreateDataDisplayFrame(data)
     local frame = CreateFrame("Frame", "SerializedDisplayFrame", UIParent)
     frame:SetSize(400, 300)
     frame:SetPoint("CENTER", 0, 200)
+    frame:SetFrameStrata("HIGH")
 
     local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
     bgTexture:SetAllPoints()
@@ -710,8 +712,8 @@ local function UpdateWorldMapMarkers()
                                 local singleRecordTable = {}
                                 table.insert(singleRecordTable, marker)
                                 local serializedData = ls:Serialize(singleRecordTable)
-                                local compressedData = lc:Compress(serializedData)
-                                local encodedData = l64:encode(compressedData)
+                                local compressedData = ld:CompressDeflate(serializedData)
+                                local encodedData = ld:EncodeForPrint(compressedData)
                                 CreateDataDisplayFrame(encodedData)
                             else
                                 local worldMapFrame = WorldMapFrame:GetCanvasContainer()
@@ -1300,6 +1302,21 @@ function TdecodeMessage(msg)
   return player_data
 end
 
+-- (name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words, realm)
+function TencodeMessageFull(marker)
+  local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
+  local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.guild or "") .. COMM_FIELD_DELIM .. (marker.source_id or "") .. COMM_FIELD_DELIM .. (marker.race_id or "") .. COMM_FIELD_DELIM .. 
+  (marker.class_id or "") .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM ..  (marker.instID or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. 
+  loc_str .. COMM_FIELD_DELIM ..  marker.timestamp .. COMM_FIELD_DELIM ..  (marker.last_words or "") .. COMM_FIELD_DELIM ..  (marker.realm or "")
+  return comm_message
+end
+
+function TencodeMessageLite(marker)
+  local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
+  local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. loc_str
+  return comm_message
+end
+
 function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
   return {
     ["name"] = name,
@@ -1547,6 +1564,7 @@ local function CreateDataImportFrame()
     local frame = CreateFrame("Frame", "TombstonesImportFrame", UIParent)
     frame:SetSize(400, 300)
     frame:SetPoint("CENTER", 0, 200)
+    frame:SetFrameStrata("HIGH")
 
     -- Create the background texture
     local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
@@ -1591,13 +1609,10 @@ local function CreateDataImportFrame()
     importButton:SetScript("OnClick", function()
         local encodedData = editBox:GetText()
         printDebug("Input data size is: " .. tostring(string.len(encodedData)))
-        -- Decode the encoded data from Base64
-        local decodedData = l64:decode(encodedData)
-        printDebug("Base64 decoded data size is: " .. tostring(string.len(decodedData)))
-        -- Decompress the decoded data
-        local decompressedData = lc:Decompress(decodedData)
+        local decodedData = ld:DecodeForPrint(encodedData)
+        printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
+        local decompressedData = ld:DecompressDeflate(decodedData)
         printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
-        -- Deserialize the decompressed data
         local success, importedDeathRecords = ls:Deserialize(decompressedData)
         -- Example: Print the received data to the chat frame
         printDebug("Deserialization sucess: " .. tostring(success))
@@ -1610,7 +1625,7 @@ local function CreateDataImportFrame()
             ImportDeathMarker(marker.realm, marker.mapID, marker.instID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
         end
         UpdateWorldMapMarkers()
-        print("Tombstones imported in " .. tostring(numNewRecords) .. " new de-dupe'd records out of " .. tostring(numImportRecords) .. ".")
+        print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
         frame:Hide()
         frame = nil
     end)
@@ -2043,10 +2058,16 @@ local function SlashCommandHandler(msg)
     elseif command == "export" then
         local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
         printDebug("Serialized data size is: " .. tostring(string.len(serializedData)))
-        -- Compress the serialized data
+        local compressedData = ld:CompressDeflate(serializedData)
+        printDebug("Compressed data size is: " .. tostring(string.len(compressedData)))
+        local encodedData = ld:EncodeForPrint(compressedData)
+        printDebug("Encoded data size is: " .. tostring(string.len(encodedData)))
+        CreateDataDisplayFrame(encodedData)
+    elseif command == "export_legacy" then
+        local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
+        printDebug("Serialized data size is: " .. tostring(string.len(serializedData)))
         local compressedData = lc:Compress(serializedData)
         printDebug("Compressed data size is: " .. tostring(string.len(compressedData)))
-        -- Encode the compressed data using Base64
         local encodedData = l64:encode(compressedData)
         printDebug("Base64 data size is: " .. tostring(string.len(encodedData)))
         CreateDataDisplayFrame(encodedData)
