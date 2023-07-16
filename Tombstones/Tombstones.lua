@@ -1,6 +1,9 @@
 -- Constants
 local ADDON_NAME = "Tombstones"
-local ADDON_CHANNEL = "Tombstones"
+local TS_COMM_NAME = "TSKarmaChannel"
+local tombstones_channel = "tsbroadcastchannel"
+local tombstones_channel_pw = "tsbroadcastchannelpw"
+local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local COLORS = {
     Reset = "\27[0m",
@@ -100,6 +103,7 @@ local renderWarned = false
 local renderingScheduled = false
 local renderCycleCount = 0
 local debug = false
+local trace = false
 local isPlayerMoving = false
 local movementUpdateInterval = 0.2 -- Update interval in seconds
 local movementTimer = 0
@@ -114,6 +118,7 @@ local targetDangerFrame
 local targetDangerText
 local glowFrame
 local currentViewingMapID
+local subTooltip
 local TOMB_FILTERS = {
   --["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
@@ -145,6 +150,12 @@ local raceNameToID = {
     ["gnome"] = 7,
     ["troll"] = 8,
 }
+
+-- Message/Karma Variables
+local throttlePlayer = {}
+local karmaMessageBuffer = {}
+local karmaBatchSize = 100
+local karmaBatchInterval = 3
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -207,6 +218,12 @@ end
 
 function printDebug(msg)
     if debug then
+        print(msg)
+    end
+end
+
+function printTrace(msg)
+    if trace then
         print(msg)
     end
 end
@@ -314,6 +331,26 @@ local function TdeathlogJoinChannel()
         else
                 print("Successfully joined deathlog channel via Tombstones.")
         end
+    end
+end
+
+local function TombstonesJoinChannel()
+    local channel_num = GetChannelName(tombstones_channel)
+    if channel_num == 0 then
+        JoinChannelByName(tombstones_channel, tombstones_channel_pw)
+        local channel_num = GetChannelName(tombstones_channel)
+            if channel_num == 0 then
+            print("Failed to join Tombstones channel.")
+        else
+            printDebug("Successfully Tombstones channel.")
+        end
+        for i = 1, 10 do
+            if _G['ChatFrame'..i] then
+                ChatFrame_RemoveChannel(_G['ChatFrame'..i], tombstones_channel)
+            end
+        end
+    else
+        printDebug("Successfully Tombstones channel.")
     end
 end
 
@@ -702,9 +739,29 @@ local function UpdateWorldMapMarkers()
                             if (marker.last_words ~= nil) then
                                GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
                             end
+                            if (marker.karma ~= nil) then
+                                subTooltip = CreateFrame("Frame", "KarmaSubtooltip", UIParent)
+                                subTooltip:SetFrameStrata("HIGH")
+                                subTooltip:SetSize(120, 16)
+                                subTooltip:SetPoint("BOTTOM", GameTooltip, "BOTTOM", 0, -14)
+                                local bgTexture = subTooltip:CreateTexture(nil, "BACKGROUND")
+                                bgTexture:SetAllPoints()
+                                bgTexture:SetColorTexture(0, 0, 0, 0.75)
+                                local subTooltipText = subTooltip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                                subTooltipText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+                                subTooltipText:SetPoint("CENTER", subTooltip, "CENTER", 0, 0)
+                                subTooltipText:SetText("rating: "..marker.karma)
+                                subTooltip:Show()
+                            end
                             GameTooltip:Show()
                         end)
                         markerMapButton:SetScript("OnLeave", function(self)
+                            if subTooltip then
+                                subTooltip:Hide()
+                                subTooltip:ClearAllPoints()
+                                subTooltip:SetParent(nil)
+                                subTooltip = nil
+                            end
                             GameTooltip:Hide()
                         end)
                         markerMapButton:SetScript("OnMouseDown", function(self, button)
@@ -715,6 +772,20 @@ local function UpdateWorldMapMarkers()
                                 local compressedData = ld:CompressDeflate(serializedData)
                                 local encodedData = ld:EncodeForPrint(compressedData)
                                 CreateDataDisplayFrame(encodedData)
+                            elseif (button == "LeftButton" and IsControlKeyDown()) then
+                                local encodedKarmaMsg = TencodeMessageLite(marker) .. COMM_FIELD_DELIM .. "+"
+                                local channel_num = GetChannelName(tombstones_channel)
+                                if(channel_num == 0) then
+                                    printDebug("Failed to send Karma message. Not in TS channel.")
+                                end
+                                CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedKarmaMsg, "CHANNEL", nil, channel_num)
+                            elseif (button == "LeftButton" and IsAltKeyDown()) then
+                                local encodedKarmaMsg = TencodeMessageLite(marker) .. COMM_FIELD_DELIM .. "-"
+                                local channel_num = GetChannelName(tombstones_channel)
+                                if(channel_num == 0) then
+                                    printDebug("Failed to send Karma message. Not in TS channel.")
+                                end
+                                CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedKarmaMsg, "CHANNEL", nil, channel_num)
                             else
                                 local worldMapFrame = WorldMapFrame:GetCanvasContainer()
                                 worldMapFrame:OnMouseDown(button)
@@ -985,7 +1056,7 @@ local function FlashWhenNearTombstone()
 
     -- Now you have the closest death marker to the player
     if closestMarker then
-        printDebug("On move death marker: " .. tostring(closestDistance))
+        printTrace("On move death marker: " .. tostring(closestDistance))
         if (lastClosestMarker == nil) then
             lastClosestMarker = closestMarker
             hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
@@ -1297,7 +1368,6 @@ function TdecodeMessage(msg)
 	local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
 	return malformed_player_data
   end
-  local mapInfo = C_Map.GetMapInfo(map_id)
   local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
   return player_data
 end
@@ -1311,10 +1381,40 @@ function TencodeMessageFull(marker)
   return comm_message
 end
 
+-- (name, level, map_id, map_pos)
 function TencodeMessageLite(marker)
   local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
   local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. loc_str
   return comm_message
+end
+
+function TdecodeMessageLite(msg)
+  local values = {}
+  for w in msg:gmatch("(.-)~") do table.insert(values, w) end
+  if #values ~= 4 then
+    print(tostring(#values))
+    -- Return something that causes the calling function to return on the isValidEntry check
+    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
+    return malformed_player_data
+  end
+  local date = time()
+  local last_words = nil
+  local name = values[1]
+  local guild = nil
+  local source_id = nil
+  local race_id = nil
+  local class_id = nil
+  local level = tonumber(values[2])
+  local instance_id = nil
+  local map_id = tonumber(values[3])
+  local map_pos = values[4]
+  if (map_id == nil) then
+    -- Return something that causes the calling function to return on the isValidEntry check
+    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
+    return malformed_player_data
+  end
+  local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
+  return player_data
 end
 
 function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
@@ -1885,8 +1985,8 @@ local function ActOnNearestTombstone()
     end
 
     if closestMarker then
-        printDebug("Closest death marker: " .. tostring(closestMarker.user))
-        printDebug("Closest death marker: " .. tostring(closestDistance))
+        printTrace("Closest death marker: " .. tostring(closestMarker.user))
+        printTrace("Closest death marker: " .. tostring(closestDistance))
         if closestDistance <= 0.0025 then
             -- Perform any desired logic with the closest death marker
             ShowNearestTombstoneSplashText(closestMarker)
@@ -1896,6 +1996,61 @@ local function ActOnNearestTombstone()
             UpdateWorldMapMarkers()
         end
     end
+end
+
+local function ProcessKarmaMessages()
+    local numMsgs = math.min(#karmaMessageBuffer, karmaBatchSize) -- Determine the number of messages to process in the current batch
+    for i = 1, numMsgs do
+        local msg = karmaMessageBuffer[i]
+        local liteDecodedPlayerData = TdecodeMessageLite(msg)
+        if(liteDecodedPlayerData["name"] ~= "MalformedData") then
+            local karmaScore = msg:sub(-1)
+            if(karmaScore == "+" or karmaScore == "-") then
+                local user = liteDecodedPlayerData["name"]
+                local level = liteDecodedPlayerData["level"]
+                local mapID = liteDecodedPlayerData["map_id"]
+                local posX, posY = strsplit(",", liteDecodedPlayerData["map_pos"], 2)
+                local zoneMarkers = visitingZoneCache[mapID]
+                local foundMarker = false
+                for _, marker in ipairs(zoneMarkers) do
+                    if ((not foundMarker) and marker ~= nil and marker.user == user and marker.level == tonumber(level) and marker.posX == tonumber(posX) and marker.posY == tonumber(posY) and marker.realm == REALM) then
+                        foundMarker = true
+                        if (karmaScore == "+") then
+                           if(marker.karma == nil) then
+                                marker.karma = 1
+                            else
+                                marker.karma = marker.karma + 1
+                            end 
+                        else
+                            if(marker.karma == nil) then
+                                marker.karma = -1
+                            else
+                                marker.karma = marker.karma - 1
+                            end 
+                        end
+                        printDebug("Got Karma " .. karmaScore .. " ping for " .. liteDecodedPlayerData["name"] .. ".")
+                    end
+                end
+            end
+        end
+    end
+    -- Remove the processed messages from the buffer
+    for i = 1, numMsgs do
+        table.remove(karmaMessageBuffer, 1)
+    end
+    -- Reset throttle on process finish
+    throttlePlayer = {}
+end
+
+-- Only allow 1 ping per process batch
+local function AddKarmaMessageToBuffer(sender, msg)
+    if throttlePlayer[sender] == nil then throttlePlayer[sender] = 1 else return end
+    table.insert(karmaMessageBuffer, msg)
+end
+
+local function StartKarmaBatchProcessing()
+     -- Start a timer to execute the ProcessMessages function at regular intervals
+    C_Timer.NewTicker(karmaBatchInterval, ProcessKarmaMessages)
 end
 
 local function PrintVisitingInfo()
@@ -2047,6 +2202,9 @@ local function SlashCommandHandler(msg)
     elseif command == "debug" then
         debug = not debug
         print("Tombstones debug mode is: ".. tostring(debug))
+    elseif command == "trace" then
+        trace = not trace
+        print("Tombstones trace mode is: ".. tostring(trace))
     elseif command == "icon_size" then
         iconSize = tonumber(args)
     elseif command == "max_render" then
@@ -2178,7 +2336,7 @@ local function SlashCommandHandler(msg)
         UpdateWorldMapMarkers()
     else
         -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | debug | icon_size {#SIZE} | max_render {#COUNT}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT}]")
         print("Usage: /tombstones or /ts [filter (info | reset | last_words | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
@@ -2203,6 +2361,8 @@ addon:SetScript("OnEvent", function(self, event, ...)
             -- Try to join only after Hardcore add-on take precedence
             C_Timer.After(6.0, function()
                 TdeathlogJoinChannel()
+                TombstonesJoinChannel()
+                StartKarmaBatchProcessing()
             end)
      
             ac:Embed(self)
@@ -2223,19 +2383,22 @@ addon:SetScript("OnEvent", function(self, event, ...)
         ActOnNearestTombstone()
     elseif event == "CHAT_MSG_CHANNEL" then
         local _, channel_name = string.split(" ", arg[4])
-        if channel_name ~= death_alerts_channel then return end
-        local command, msg = string.split(COMM_COMMAND_DELIM, arg[1])
-
-        if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
+        if channel_name == death_alerts_channel then
+            local command, msg = string.split(COMM_COMMAND_DELIM, arg[1])
+            if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
+                local player_name_short, _ = string.split("-", arg[2])
+                printDebug("Receiving DeathLog death ping for " .. player_name_short .. ".")
+                TdeathlogReceiveChannelMessage(player_name_short, msg)
+            end
+            if command == COMM_COMMANDS["LAST_WORDS"] then
+                local player_name_short, _ = string.split("-", arg[2])
+                printDebug("Receiving DeathLog last_words ping for " .. player_name_short .. ".")
+                TdeathlogReceiveLastWords(player_name_short, msg)
+            end
+        elseif channel_name == tombstones_channel then
             local player_name_short, _ = string.split("-", arg[2])
-            printDebug("Receiving DeathLog death ping for " .. player_name_short .. ".")
-            TdeathlogReceiveChannelMessage(player_name_short, msg)
-        end
-
-        if command == COMM_COMMANDS["LAST_WORDS"] then
-            local player_name_short, _ = string.split("-", arg[2])
-            printDebug("Receiving DeathLog last_words ping for " .. player_name_short .. ".")
-            TdeathlogReceiveLastWords(player_name_short, msg)
+            printTrace("Receiving Karma ping from " .. player_name_short .. ".")
+            AddKarmaMessageToBuffer(player_name_short, arg[1])
         end
     end
 end)
@@ -2245,7 +2408,6 @@ addon:SetScript("OnUpdate", function(self, elapsed)
     if isPlayerMoving then
         movementTimer = movementTimer + elapsed
         if (movementTimer >= movementUpdateInterval) then
-            --printDebug("Movement tick.")
             FlashWhenNearTombstone()
             movementTimer = 0
         end
