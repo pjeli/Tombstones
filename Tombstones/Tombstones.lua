@@ -494,10 +494,14 @@ local function IsMarkerAllowedByFilters(marker)
     local filter_race = TOMB_FILTERS["RACE_ID"]
     local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
     local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
+    local filter_rating = TOMB_FILTERS["RATING"]
 
     if (allow == true and filter_has_words == true) then
         if (marker.last_words == nil) then allow = false end
         -- Smart filter is now the default...
+    end
+    if (allow == true and filter_rating == true) then
+        if (marker.karma == nil) then allow = false end
     end
     if (allow == true and filter_class ~= nil) then
         if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
@@ -2301,9 +2305,13 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["LEVEL_THRESH"] = 0
             TOMB_FILTERS["HOUR_THRESH"] = 0
             TOMB_FILTERS["REALMS"] = true
+            TOMB_FILTERS["RATING"] = false
         elseif argsArray[1] == "last_words" then
             --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HAS_LAST_WORDS"] = true
+        elseif argsArray[1] == "rating" then
+            --TOMB_FILTERS["ENABLED"] = true
+            TOMB_FILTERS["RATING"] = true
         elseif argsArray[1] == "realms" then
             --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["REALMS"] = false
