@@ -155,7 +155,7 @@ local raceNameToID = {
 local throttlePlayer = {}
 local karmaMessageBuffer = {}
 local karmaBatchSize = 100
-local karmaBatchInterval = 3
+local karmaBatchInterval = 1
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
