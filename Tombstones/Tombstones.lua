@@ -1321,11 +1321,11 @@ function TdeathlogReceiveLastWords(sender, data)
   local values = {}
   for w in data:gmatch("(.-)~") do table.insert(values, w) end
   local msg = values[2]
-  local currentTimeHour = (time() / 3600)
+  local currentTimeHour = math.floor(time() / 3600)
 
   -- Iterate over the death records
   for index, record in ipairs(deathRecordsDB.deathRecords) do
-    if (record.user == sender and record.realm == REALM) then
+    if (record.user == sender and record.realm == REALM and record.last_words == nil) then
         if (math.floor(record.timestamp / 3600) == currentTimeHour) then
             record.last_words = LastWordsSmartParser(msg)
             break
