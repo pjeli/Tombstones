@@ -5,16 +5,10 @@ local tombstones_channel = "tsbroadcastchannel"
 local tombstones_channel_pw = "tsbroadcastchannelpw"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
-local COLORS = {
-    Reset = "\27[0m",
-    Red = "\27[31m",
-    Green = "\27[32m",
-    Yellow = "\27[33m",
-    Blue = "\27[34m",
-    Magenta = "\27[35m",
-    Cyan = "\27[36m",
-    White = "\27[37m",
-    Grey = "\27[90m",
+local PLAYER_NAME, _ = UnitName("player")
+local TS_COMM_COMMANDS = {
+  ["BROADCAST_TALLY_REQUEST"] = "1",
+  ["WHISPER_TALLY_REPLY"] = "2",
 }
 local MAP_TABLE = {
 -- Eastern Kingdoms
@@ -120,6 +114,7 @@ local targetDangerText
 local glowFrame
 local currentViewingMapID
 local subTooltip
+local tooltipKarmaBackgroundTexture
 local TOMB_FILTERS = {
   --["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
@@ -154,10 +149,9 @@ local raceNameToID = {
 }
 
 -- Message/Karma Variables
-local throttlePlayer = {}
-local karmaMessageBuffer = {}
-local karmaBatchSize = 100
-local karmaBatchInterval = 1
+local expectingTallyReply = false
+local expectingTallyReplyMapID = nil
+local ratings = {}
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -175,8 +169,8 @@ addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_STARTED_MOVING")
 addon:RegisterEvent("PLAYER_STOPPED_MOVING")
 addon:RegisterEvent("PLAYER_TARGET_CHANGED")
+addon:RegisterEvent("CHAT_MSG_ADDON")
 addon:RegisterEvent("CHAT_MSG_CHANNEL")
-
 
 function fetchQuotedPart(str)
     local pattern = "\"(.-)\""
@@ -336,7 +330,49 @@ local function TdeathlogJoinChannel()
     end
 end
 
+local function TwhisperRatingForMarkerTo(msg, player_name_short)
+    if (player_name_short == PLAYER_NAME) then
+        printDebug("Ignoring rating ping for self.")
+        return 
+    end
+    local liteDecodedPlayerData = TdecodeMessageLite(msg)
+    if(liteDecodedPlayerData["name"] ~= "MalformedData") then
+        local user = liteDecodedPlayerData["name"]
+        local level = liteDecodedPlayerData["level"]
+        local mapID = liteDecodedPlayerData["map_id"]
+        local posX, posY = strsplit(",", liteDecodedPlayerData["map_pos"], 2)
+        local zoneMarkers = visitingZoneCache[mapID]
+        local foundMarker = nil
+        for _, marker in ipairs(zoneMarkers) do
+            if (marker ~= nil and marker.user == user and marker.level == tonumber(level) and marker.posX == tonumber(posX) and marker.posY == tonumber(posY) and marker.realm == REALM) then
+                foundMarker = marker
+                break
+            end
+        end
+        if foundMarker ~= nil and foundMarker.karma ~= nil then
+            local karmaScore = foundMarker.karma > 0 and "+" or "-"
+            local replyMsg = TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] .. COMM_COMMAND_DELIM .. msg .. karmaScore
+            CTL:SendAddonMessage("BULK", "TombstonesRating", replyMsg, "WHISPER", player_name_short)
+            printDebug("Sent rating ping for " .. liteDecodedPlayerData["name"] .. ".")
+            return
+        else
+            printDebug("Ignoring rating ping for " .. liteDecodedPlayerData["name"] .. " because marker unrated.")
+        end
+    else
+        printDebug("Ignoring rating ping for " .. liteDecodedPlayerData["name"] .. " because marker malformed.")
+    end
+end
+
+local function TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
+    local liteDecodedPlayerData = TdecodeMessageLite(msg)
+    local karmaScore = msg:sub(-1)
+    if (karmaScore ~= '+' and karmaScore ~= '-') then return end
+    if (tonumber(liteDecodedPlayerData["map_id"]) ~= expectingTallyReplyMapID) then return end
+    ratings[player_name_short] = karmaScore == "+" and 1 or -1
+end
+
 local function TombstonesJoinChannel()
+    C_ChatInfo.RegisterAddonMessagePrefix("TombstonesRating")
     local channel_num = GetChannelName(tombstones_channel)
     if channel_num == 0 then
         JoinChannelByName(tombstones_channel, tombstones_channel_pw)
@@ -351,8 +387,9 @@ local function TombstonesJoinChannel()
                 ChatFrame_RemoveChannel(_G['ChatFrame'..i], tombstones_channel)
             end
         end
+
     else
-        printDebug("Successfully Tombstones channel.")
+        printDebug("Successfully joined Tombstones channel.")
     end
 end
 
@@ -426,6 +463,19 @@ local function UnvisitAllMarkers()
         end
     end
     deathVisitCount = 0
+end
+
+local function UnrateAllMarkers()
+    local totalRecords = #deathRecordsDB.deathRecords
+    local totalIcons = #deathMapIcons
+    for i = 1, totalRecords do
+        deathRecordsDB.deathRecords[i].karma = nil
+    end
+    if tooltipKarmaBackgroundTexture then
+        tooltipKarmaBackgroundTexture:Hide()
+        tooltipKarmaBackgroundTexture:ClearAllPoints()
+        tooltipKarmaBackgroundTexture = nil
+    end
 end
 
 local function PruneDeathRecords()
@@ -648,6 +698,38 @@ local function CreateDataDisplayFrame(data)
     frame:Show()
 end
 
+-- Function to display the tally after a delay
+local function DisplayTally()
+    -- Calculate the total tally
+    local totalRating = 0
+    for _, rating in pairs(ratings) do
+        totalRating = totalRating + rating
+    end
+    -- Display the tally
+    if subTooltip then
+        subTooltip:Hide()
+        subTooltip:ClearAllPoints()
+        subTooltip:SetParent(nil)
+        subTooltip = nil
+    end
+    subTooltip = CreateFrame("Frame", "KarmaSubtooltip", UIParent)
+    subTooltip:SetFrameStrata("HIGH")
+    subTooltip:SetSize(120, 16)
+    subTooltip:SetPoint("BOTTOM", GameTooltip, "BOTTOM", 0, -14)
+    local bgTexture = subTooltip:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.75)
+    local subTooltipText = subTooltip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    subTooltipText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    subTooltipText:SetPoint("CENTER", subTooltip, "CENTER", 0, 0)
+    subTooltipText:SetText("rating: "..totalRating)
+    subTooltip:Show()
+    printDebug("Tally: " .. tostring(totalRating) .. ".")
+    expectingTallyReply = false
+    expectingTallyReplyMapID = nil
+    ratings = {}
+end
+
 local function UpdateWorldMapMarkers()
     local worldMapFrame = WorldMapFrame
     if deathRecordsDB.showMarkers and worldMapFrame and worldMapFrame:IsVisible() then
@@ -745,23 +827,30 @@ local function UpdateWorldMapMarkers()
                             if (marker.last_words ~= nil) then
                                GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
                             end
-                            if (marker.karma ~= nil) then
-                                subTooltip = CreateFrame("Frame", "KarmaSubtooltip", UIParent)
-                                subTooltip:SetFrameStrata("HIGH")
-                                subTooltip:SetSize(120, 16)
-                                subTooltip:SetPoint("BOTTOM", GameTooltip, "BOTTOM", 0, -14)
-                                local bgTexture = subTooltip:CreateTexture(nil, "BACKGROUND")
-                                bgTexture:SetAllPoints()
-                                bgTexture:SetColorTexture(0, 0, 0, 0.75)
-                                local subTooltipText = subTooltip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-                                subTooltipText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-                                subTooltipText:SetPoint("CENTER", subTooltip, "CENTER", 0, 0)
-                                subTooltipText:SetText("rating: "..marker.karma)
-                                subTooltip:Show()
-                            end
                             GameTooltip:Show()
+                            if (marker.karma ~= nil) then
+                                tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                                if(marker.karma > 0) then 
+                                    tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25) 
+                                else
+                                    tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
+                                end
+                                tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                                tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
+                            end
+                            if subTooltip then
+                                subTooltip:Hide()
+                                subTooltip:ClearAllPoints()
+                                subTooltip:SetParent(nil)
+                                subTooltip = nil
+                            end                         
                         end)
                         markerMapButton:SetScript("OnLeave", function(self)
+                            if tooltipKarmaBackgroundTexture then
+                                tooltipKarmaBackgroundTexture:Hide()
+                                tooltipKarmaBackgroundTexture:ClearAllPoints()
+                                tooltipKarmaBackgroundTexture = nil
+                            end
                             if subTooltip then
                                 subTooltip:Hide()
                                 subTooltip:ClearAllPoints()
@@ -792,6 +881,7 @@ local function UpdateWorldMapMarkers()
                         scaleUp2:SetOrder(2)
 
                         markerMapButton:SetScript("OnMouseDown", function(self, button)
+                            -- Share Tombstone export
                             if (button == "LeftButton" and IsShiftKeyDown()) then
                                 local singleRecordTable = {}
                                 table.insert(singleRecordTable, marker)
@@ -799,24 +889,50 @@ local function UpdateWorldMapMarkers()
                                 local compressedData = ld:CompressDeflate(serializedData)
                                 local encodedData = ld:EncodeForPrint(compressedData)
                                 CreateDataDisplayFrame(encodedData)
-                            elseif (button == "LeftButton" and IsControlKeyDown() and marker.realm == REALM) then
-                                local encodedKarmaMsg = TencodeMessageLite(marker) .. COMM_FIELD_DELIM .. "+"
-                                local channel_num = GetChannelName(tombstones_channel)
-                                if(channel_num == 0) then
-                                    printDebug("Failed to send Karma message. Not in TS channel.")
+                            -- Reset Karma score
+                            elseif (button == "RightButton" and IsShiftKeyDown()) then
+                                marker.karma = nil
+                                if tooltipKarmaBackgroundTexture then
+                                    tooltipKarmaBackgroundTexture:Hide()
+                                    tooltipKarmaBackgroundTexture:ClearAllPoints()
+                                    tooltipKarmaBackgroundTexture = nil
                                 end
-                                CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedKarmaMsg, "CHANNEL", nil, channel_num)
+                            -- Trigger karma tally broadcast; Marker must be from THIS Realm
+                            elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown() and marker.realm == REALM) then
+                                local encodedRatingRquestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
+                                local channel_num = GetChannelName(tombstones_channel)
+                                CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingRquestMsg, "CHANNEL", nil, channel_num)
+                                expectingTallyReply = true
+                                expectingTallyReplyMapID = marker.mapID
+                                ratings[PLAYER_NAME] = marker.karma
+                                C_Timer.NewTimer(1, DisplayTally)
+                            -- Postive karma rating
+                            elseif (button == "LeftButton" and IsControlKeyDown()) then
+                                marker.karma = 1
                                 scaleUpAnimation:Stop()
                                 scaleUpAnimation:Play()
-                            elseif (button == "LeftButton" and IsAltKeyDown() and marker.realm == REALM) then
-                                local encodedKarmaMsg = TencodeMessageLite(marker) .. COMM_FIELD_DELIM .. "-"
-                                local channel_num = GetChannelName(tombstones_channel)
-                                if(channel_num == 0) then
-                                    printDebug("Failed to send Karma message. Not in TS channel.")
+
+                                if(tooltipKarmaBackgroundTexture == nil) then
+                                    tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                                    tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                                    tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                                 end
-                                CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedKarmaMsg, "CHANNEL", nil, channel_num)
+                                tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25)                                                         
+                                
+                            -- Negative karma rating
+                            elseif (button == "LeftButton" and IsAltKeyDown()) then
+                                marker.karma = -1
                                 scaleDownAnimation:Stop()
                                 scaleDownAnimation:Play()
+
+                                if(tooltipKarmaBackgroundTexture == nil) then
+                                    tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                                    tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                                    tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
+                                end
+                                tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
+
+                            -- Else propogate the click down the WorldMap    
                             else
                                 local worldMapFrame = WorldMapFrame:GetCanvasContainer()
                                 worldMapFrame:OnMouseDown(button)
@@ -1408,14 +1524,14 @@ function TencodeMessageFull(marker)
   local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
   local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.guild or "") .. COMM_FIELD_DELIM .. (marker.source_id or "") .. COMM_FIELD_DELIM .. (marker.race_id or "") .. COMM_FIELD_DELIM .. 
   (marker.class_id or "") .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM ..  (marker.instID or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. 
-  loc_str .. COMM_FIELD_DELIM ..  marker.timestamp .. COMM_FIELD_DELIM ..  (marker.last_words or "") .. COMM_FIELD_DELIM ..  (marker.realm or "")
+  loc_str .. COMM_FIELD_DELIM ..  marker.timestamp .. COMM_FIELD_DELIM ..  (marker.last_words or "") .. COMM_FIELD_DELIM ..  (marker.realm or "") .. COMM_FIELD_DELIM
   return comm_message
 end
 
 -- (name, level, map_id, map_pos)
 function TencodeMessageLite(marker)
   local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
-  local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. loc_str
+  local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. loc_str .. COMM_FIELD_DELIM
   return comm_message
 end
 
@@ -1423,7 +1539,6 @@ function TdecodeMessageLite(msg)
   local values = {}
   for w in msg:gmatch("(.-)~") do table.insert(values, w) end
   if #values ~= 4 then
-    print(tostring(#values))
     -- Return something that causes the calling function to return on the isValidEntry check
     local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
     return malformed_player_data
@@ -2032,62 +2147,6 @@ local function ActOnNearestTombstone()
     end
 end
 
-local function ProcessKarmaMessages()
-    local numMsgs = math.min(#karmaMessageBuffer, karmaBatchSize) -- Determine the number of messages to process in the current batch
-    for i = 1, numMsgs do
-        local msg = karmaMessageBuffer[i]
-        local liteDecodedPlayerData = TdecodeMessageLite(msg)
-        if(liteDecodedPlayerData["name"] ~= "MalformedData") then
-            local karmaScore = msg:sub(-1)
-            if(karmaScore == "+" or karmaScore == "-") then
-                local user = liteDecodedPlayerData["name"]
-                local level = liteDecodedPlayerData["level"]
-                local mapID = liteDecodedPlayerData["map_id"]
-                local posX, posY = strsplit(",", liteDecodedPlayerData["map_pos"], 2)
-                local zoneMarkers = visitingZoneCache[mapID]
-                local foundMarker = false
-                for _, marker in ipairs(zoneMarkers) do
-                    if ((not foundMarker) and marker ~= nil and marker.user == user and marker.level == tonumber(level) and marker.posX == tonumber(posX) and marker.posY == tonumber(posY) and marker.realm == REALM) then
-                        foundMarker = true
-                        if (karmaScore == "+") then
-                           if(marker.karma == nil) then
-                                marker.karma = 1
-                            else
-                                marker.karma = marker.karma + 1
-                            end 
-                        else
-                            if(marker.karma == nil) then
-                                marker.karma = -1
-                            else
-                                marker.karma = marker.karma - 1
-                            end 
-                        end
-                        karmaRecordCount = karmaRecordCount + 1
-                        printDebug("Got Karma " .. karmaScore .. " ping for " .. liteDecodedPlayerData["name"] .. ".")
-                    end
-                end
-            end
-        end
-    end
-    -- Remove the processed messages from the buffer
-    for i = 1, numMsgs do
-        table.remove(karmaMessageBuffer, 1)
-    end
-    -- Reset throttle on process finish
-    throttlePlayer = {}
-end
-
--- Only allow 1 ping per process batch
-local function AddKarmaMessageToBuffer(sender, msg)
-    if throttlePlayer[sender] == nil then throttlePlayer[sender] = 1 else return end
-    table.insert(karmaMessageBuffer, msg)
-end
-
-local function StartKarmaBatchProcessing()
-     -- Start a timer to execute the ProcessMessages function at regular intervals
-    C_Timer.NewTicker(karmaBatchInterval, ProcessKarmaMessages)
-end
-
 local function PrintVisitingInfo()
     local mapID = C_Map.GetBestMapForUnit("player")
     local zoneMarkers = visitingZoneCache[mapID] or {}
@@ -2217,6 +2276,11 @@ local function SlashCommandHandler(msg)
         if (not debug) then return end
         UnvisitAllMarkers()
         ClearDeathMarkers(false)
+        UpdateWorldMapMarkers()
+    elseif command == "unrate" then
+        if (not debug) then return end
+        UnrateAllMarkers()
+        ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
     elseif command == "clear" then
         -- Clear all death records
@@ -2400,10 +2464,9 @@ addon:SetScript("OnEvent", function(self, event, ...)
             MakeWorldMapButton()
             MakeMinimapButton()
             -- Try to join only after Hardcore add-on take precedence
-            C_Timer.After(6.0, function()
+            C_Timer.After(5.0, function()
                 TdeathlogJoinChannel()
                 TombstonesJoinChannel()
-                StartKarmaBatchProcessing()
             end)
      
             ac:Embed(self)
@@ -2437,9 +2500,21 @@ addon:SetScript("OnEvent", function(self, event, ...)
                 TdeathlogReceiveLastWords(player_name_short, msg)
             end
         elseif channel_name == tombstones_channel then
-            local player_name_short, _ = string.split("-", arg[2])
-            printTrace("Receiving Karma ping from " .. player_name_short .. ".")
-            AddKarmaMessageToBuffer(player_name_short, arg[1])
+            local command, msg = string.split(COMM_COMMAND_DELIM, arg[1])
+            if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] then
+                local player_name_short, _ = string.split("-", arg[2])
+                printDebug("Receiving TS_RatingRequest ping for " .. player_name_short .. ".")
+                TwhisperRatingForMarkerTo(msg, player_name_short)
+                --AddKarmaMessageToBuffer(player_name_short, arg[1])
+            end
+        end
+    elseif event == "CHAT_MSG_ADDON" then 
+        local prefix, channel, player_name_long = arg[1], arg[3], arg[4]
+        local player_name_short, _ = string.split("-", player_name_long)
+        local command, msg = string.split(COMM_COMMAND_DELIM, arg[2])
+        -- TALLY RESPONSE HANDLING
+        if (command == TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] and expectingTallyReply and prefix == "TombstonesRating" and channel == "WHISPER") then
+            TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
         end
     end
 end)
