@@ -86,7 +86,6 @@ local environment_damage = {
 local deathRecordsDB
 local deathMapIcons = {}
 local deathRecordCount = 0
-local karmaRecordCount = 0
 local deathVisitCount = 0
 local deadlyNPCs = {}
 local deadlyZones = {}
@@ -2324,7 +2323,6 @@ local function SlashCommandHandler(msg)
     elseif command == "info" then
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
         print("Tombstones saw " .. deathRecordCount .. " records this session.")
-        print("Tombstones saw " .. karmaRecordCount .. " ratings this session.")
         print("You have visited " .. deathVisitCount .. " tombstones.")
     elseif command == "export" then
         local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
@@ -2518,7 +2516,6 @@ addon:SetScript("OnEvent", function(self, event, ...)
                 local player_name_short, _ = string.split("-", arg[2])
                 printDebug("Receiving TS_RatingRequest ping for " .. player_name_short .. ".")
                 TwhisperRatingForMarkerTo(msg, player_name_short)
-                --AddKarmaMessageToBuffer(player_name_short, arg[1])
             end
         end
     elseif event == "CHAT_MSG_ADDON" then 
