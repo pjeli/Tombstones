@@ -1706,9 +1706,6 @@ local function IsImportRecordDuplicate(importedRecord)
             math.floor(existingRecord.timestamp / 3600) == math.floor(importedRecord.timestamp / 3600) and
             existingRecord.user == importedRecord.user and
             existingRecord.level == importedRecord.level then
-            if (importedRecord.karma ~= nil) then
-                existingRecord.karma = importedRecord.karma
-            end
             -- The record is a duplicate match; check last_words...
             if (existingRecord.last_words == nil and importedRecord.last_words == nil) or
                 (existingRecord.last_words ~= nil and importedRecord.last_words == nil) or
