@@ -898,7 +898,8 @@ local function UpdateWorldMapMarkers()
                                     tooltipKarmaBackgroundTexture = nil
                                 end
                             -- Trigger karma tally broadcast; Marker must be from THIS Realm
-                            elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown() and marker.realm == REALM) then
+                            elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown()) then
+                                if (marker.realm ~= REALM) then return end
                                 local encodedRatingRquestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
                                 local channel_num = GetChannelName(tombstones_channel)
                                 CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingRquestMsg, "CHANNEL", nil, channel_num)
@@ -1924,6 +1925,29 @@ local function ConvertTimestampToLongForm(timestamp)
     )
 end
 
+-- Function to insert line breaks for word-wrapping
+local function InsertLineBreaks(text)
+    local maxWidth = 22
+    local wrappedText = ""
+    local line = ""
+
+    for word in string.gmatch(text, "%S+") do
+        local testLine = line .. word
+
+        if #testLine > 0 and #testLine > maxWidth then
+            wrappedText = wrappedText .. line .. "\n"
+            line = word .. " "
+        else
+            line = testLine .. " "
+        end
+    end
+
+    wrappedText = wrappedText .. line
+    wrappedText = string.sub(wrappedText, 1, -2) -- Remove the last character
+
+    return wrappedText
+end
+
 local function ShowLastWordsDialogueBox(marker)
     -- Regardless of words, stop any current boxes
     if (dialogueBox ~= nil) then
@@ -1956,21 +1980,13 @@ local function ShowLastWordsDialogueBox(marker)
     dialogueBox.model:SetPosition(0, 0, -0.7)
 
     -- Add a text area for the dialogue text
-    local editBox = CreateFrame("EditBox", nil, dialogueBox)
-    dialogueBox.editBox = editBox
-    editBox:SetMultiLine(true)
-    editBox:SetMaxLetters(0)
-    editBox:SetAutoFocus(false)
-    editBox:SetFontObject("GameFontNormal")
-    editBox:SetWidth(160) -- Adjust width as needed
-    editBox:SetHeight(100) -- Adjust height as needed
-    editBox:SetPoint("TOP", dialogueBox, "TOP", 70, -20)
-    editBox:SetJustifyH("LEFT")
-    editBox:SetJustifyV("TOP")
-    editBox:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-    end)
-    editBox:SetText(marker.user..":\n\n\"" .. lastWords .."\"")
+    local text = dialogueBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local linedBreakedLastWords = InsertLineBreaks(lastWords)
+    dialogueBox.text = text
+    text:SetPoint("TOPLEFT", dialogueBox, "TOPLEFT", 110, -10)
+    text:SetJustifyH("LEFT")
+    text:SetJustifyV("TOP")
+    text:SetText(marker.user..":\n\n\"" .. linedBreakedLastWords .. "\"")
 
     -- Apply fade-out animation to the splash frame
     dialogueBox.fade = dialogueBox:CreateAnimationGroup()
