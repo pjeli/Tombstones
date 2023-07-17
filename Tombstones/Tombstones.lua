@@ -2297,6 +2297,7 @@ local function SlashCommandHandler(msg)
             print("Tombstones 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
             print("Tombstones 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
             print("Tombstones 'Realms' filtering on: " .. tostring(TOMB_FILTERS["REALMS"]))
+            print("Tombstones 'Rating' filtering on: " .. tostring(TOMB_FILTERS["RATING"]))
             return
         elseif argsArray[1] == "reset" then
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
@@ -2348,7 +2349,7 @@ local function SlashCommandHandler(msg)
     else
         -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT}]")
-        print("Usage: /tombstones or /ts [filter (info | reset | last_words | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
+        print("Usage: /tombstones or /ts [filter (info | reset | last_words | rating | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
