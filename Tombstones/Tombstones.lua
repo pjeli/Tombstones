@@ -799,7 +799,7 @@ local function UpdateWorldMapMarkers()
                                 local compressedData = ld:CompressDeflate(serializedData)
                                 local encodedData = ld:EncodeForPrint(compressedData)
                                 CreateDataDisplayFrame(encodedData)
-                            elseif (button == "LeftButton" and IsControlKeyDown()) then
+                            elseif (button == "LeftButton" and IsControlKeyDown() and marker.realm == REALM) then
                                 local encodedKarmaMsg = TencodeMessageLite(marker) .. COMM_FIELD_DELIM .. "+"
                                 local channel_num = GetChannelName(tombstones_channel)
                                 if(channel_num == 0) then
@@ -808,7 +808,7 @@ local function UpdateWorldMapMarkers()
                                 CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedKarmaMsg, "CHANNEL", nil, channel_num)
                                 scaleUpAnimation:Stop()
                                 scaleUpAnimation:Play()
-                            elseif (button == "LeftButton" and IsAltKeyDown()) then
+                            elseif (button == "LeftButton" and IsAltKeyDown() and marker.realm == REALM) then
                                 local encodedKarmaMsg = TencodeMessageLite(marker) .. COMM_FIELD_DELIM .. "-"
                                 local channel_num = GetChannelName(tombstones_channel)
                                 if(channel_num == 0) then
