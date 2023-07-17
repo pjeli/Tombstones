@@ -92,6 +92,7 @@ local environment_damage = {
 local deathRecordsDB
 local deathMapIcons = {}
 local deathRecordCount = 0
+local karmaRecordCount = 0
 local deathVisitCount = 0
 local deadlyNPCs = {}
 local deadlyZones = {}
@@ -2061,6 +2062,7 @@ local function ProcessKarmaMessages()
                                 marker.karma = marker.karma - 1
                             end 
                         end
+                        karmaRecordCount = karmaRecordCount + 1
                         printDebug("Got Karma " .. karmaScore .. " ping for " .. liteDecodedPlayerData["name"] .. ".")
                     end
                 end
@@ -2243,8 +2245,9 @@ local function SlashCommandHandler(msg)
     elseif command == "max_render" then
         maxRenderCount = tonumber(args)
     elseif command == "info" then
-        print("Tombstones saw " .. deathRecordCount .. " records this session.")
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
+        print("Tombstones saw " .. deathRecordCount .. " records this session.")
+        print("Tombstones saw " .. karmaRecordCount .. " ratings this session.")
         print("You have visited " .. deathVisitCount .. " tombstones.")
     elseif command == "export" then
         local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
