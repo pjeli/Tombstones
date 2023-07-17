@@ -127,6 +127,7 @@ local TOMB_FILTERS = {
   ["LEVEL_THRESH"] = 0,
   ["HOUR_THRESH"] = 0,
   ["REALMS"] = true,
+  ["RATING"] = false,
 }
 local classNameToID = {
     ["warrior"] = 1,
