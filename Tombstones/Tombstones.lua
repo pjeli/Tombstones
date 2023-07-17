@@ -148,7 +148,10 @@ local raceNameToID = {
 }
 
 -- Message/Karma Variables
+local TallyInterval = 2
 local expectingTallyReply = false
+local expectingTallyReplyMapMarker = nil
+local currentViewingMapMarker = nil
 local expectingTallyReplyMapID = nil
 local ratings = {}
 
@@ -507,6 +510,7 @@ local function ClearDeathMarkers(clearMM)
             deathMapIcons[i]:Hide()
             deathMapIcons[i] = nil
         end
+        currentViewingMapMarker = nil
     end
     if (clearMM) then
         hbdp:RemoveAllMinimapIcons("TombstonesMM")
@@ -711,20 +715,23 @@ local function DisplayTally()
         subTooltip:SetParent(nil)
         subTooltip = nil
     end
-    subTooltip = CreateFrame("Frame", "KarmaSubtooltip", UIParent)
-    subTooltip:SetFrameStrata("HIGH")
-    subTooltip:SetSize(120, 16)
-    subTooltip:SetPoint("BOTTOM", GameTooltip, "BOTTOM", 0, -14)
-    local bgTexture = subTooltip:CreateTexture(nil, "BACKGROUND")
-    bgTexture:SetAllPoints()
-    bgTexture:SetColorTexture(0, 0, 0, 0.75)
-    local subTooltipText = subTooltip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    subTooltipText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-    subTooltipText:SetPoint("CENTER", subTooltip, "CENTER", 0, 0)
-    subTooltipText:SetText("rating: "..totalRating)
-    subTooltip:Show()
+    if GameTooltip:IsVisible() and currentViewingMapMarker == expectingTallyReplyMapMarker then
+        subTooltip = CreateFrame("Frame", "KarmaSubtooltip", UIParent)
+        subTooltip:SetFrameStrata("HIGH")
+        subTooltip:SetSize(120, 16)
+        subTooltip:SetPoint("BOTTOM", GameTooltip, "BOTTOM", 0, -14)
+        local bgTexture = subTooltip:CreateTexture(nil, "BACKGROUND")
+        bgTexture:SetAllPoints()
+        bgTexture:SetColorTexture(0, 0, 0, 0.75)
+        local subTooltipText = subTooltip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        subTooltipText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+        subTooltipText:SetPoint("CENTER", subTooltip, "CENTER", 0, 0)
+        subTooltipText:SetText("rating: "..totalRating)
+        subTooltip:Show()
+    end
     printDebug("Tally: " .. tostring(totalRating) .. ".")
     expectingTallyReply = false
+    expectingTallyReplyMapMarker = nil
     expectingTallyReplyMapID = nil
     ratings = {}
 end
@@ -800,6 +807,7 @@ local function UpdateWorldMapMarkers()
 
                         -- Set the tooltip text to the name of the player who died
                         markerMapButton:SetScript("OnEnter", function(self)
+                            currentViewingMapMarker = marker
                             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
                             local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
                             if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
@@ -845,6 +853,7 @@ local function UpdateWorldMapMarkers()
                             end                         
                         end)
                         markerMapButton:SetScript("OnLeave", function(self)
+                            currentViewingMapMarker = nil
                             if tooltipKarmaBackgroundTexture then
                                 tooltipKarmaBackgroundTexture:Hide()
                                 tooltipKarmaBackgroundTexture:ClearAllPoints()
@@ -904,8 +913,9 @@ local function UpdateWorldMapMarkers()
                                 CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingRquestMsg, "CHANNEL", nil, channel_num)
                                 expectingTallyReply = true
                                 expectingTallyReplyMapID = marker.mapID
+                                expectingTallyReplyMapMarker = marker
                                 ratings[PLAYER_NAME] = marker.karma
-                                C_Timer.NewTimer(1, DisplayTally)
+                                C_Timer.NewTimer(TallyInterval, DisplayTally)
                             -- Postive karma rating
                             elseif (button == "LeftButton" and IsControlKeyDown()) then
                                 marker.karma = 1
