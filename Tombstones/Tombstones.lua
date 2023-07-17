@@ -1454,7 +1454,6 @@ end
 local function MakeMinimapButton()
     -- Minimap button click function
     local function MiniBtnClickFunc(btn)
-        -- Prevent options panel from showing if Blizzard options panel is showing
         if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
             optionsFrame:Hide()
             optionsFrame = nil
@@ -2429,6 +2428,10 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["HOUR_THRESH"] = 720
             TOMB_FILTERS["REALMS"] = true
             TOMB_FILTERS["RATING"] = false
+            if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
+                optionsFrame:Hide()
+                optionsFrame = nil
+            end
         elseif argsArray[1] == "last_words" then
             --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HAS_LAST_WORDS"] = true
