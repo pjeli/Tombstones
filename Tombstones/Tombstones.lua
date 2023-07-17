@@ -120,7 +120,7 @@ local TOMB_FILTERS = {
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
   ["LEVEL_THRESH"] = 0,
-  ["HOUR_THRESH"] = 0,
+  ["HOUR_THRESH"] = 720,
   ["REALMS"] = true,
   ["RATING"] = false,
 }
@@ -437,6 +437,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
+        if (TOMB_FILTERS["HOUR_THRESH"] <= 0) then
+            TOMB_FILTERS["HOUR_THRESH"] = 720 -- 30 days in hours
+        end
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)
@@ -762,214 +765,209 @@ local function UpdateWorldMapMarkers()
                 local marker = currentZoneMarkers[i]
                 local allowed = IsMarkerAllowedByFilters(marker)
                 if (allowed == true) then
-                    -- If marker is older than 30 days, skip map render
-                    local timeDifference = currentTime - marker.timestamp
-                    local thirtyDaysInSeconds = 2592000
-                    if (timeDifference < thirtyDaysInSeconds) then
-                        -- Generate marker for that Zone
-                        local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
-                        markerMapButton:SetSize(iconSize , iconSize) -- Adjust the size of the marker as needed
-                        markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
-                        markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
-                        markerMapButton.texture:SetAllPoints(true)
-                        if (marker.level == nil) then
-                            markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
-                        elseif (marker.level <= 30) then
-                            markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
-                        elseif (marker.level <= 59) then
-                            markerMapButton.texture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
+                    -- Generate marker for that Zone
+                    local markerMapButton = CreateFrame("Button", nil, WorldMapButton)
+                    markerMapButton:SetSize(iconSize , iconSize) -- Adjust the size of the marker as needed
+                    markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
+                    markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
+                    markerMapButton.texture:SetAllPoints(true)
+                    if (marker.level == nil) then
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
+                    elseif (marker.level <= 30) then
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
+                    elseif (marker.level <= 59) then
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
+                    else
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
+                    end
+
+                    if (marker.visited == true and markerMapButton.checkmarkTexture == nil) then
+                        -- Create the checkmark texture
+                        local checkmarkTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
+                        markerMapButton.checkmarkTexture = checkmarkTexture
+                        checkmarkTexture:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+                        checkmarkTexture:SetSize(10, 10)
+                        checkmarkTexture:SetPoint("CENTER", markerMapButton, "CENTER", 0, 0)
+                    end
+
+                    if (marker.last_words ~= nil and markerMapButton.borderTexture == nil) then
+                        local borderTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
+                        markerMapButton.borderTexture = borderTexture
+                        borderTexture:SetAllPoints(markerMapButton)
+                        borderTexture:SetTexture("Interface\\Cooldown\\ping4")
+                        borderTexture:SetBlendMode("ADD")
+                        borderTexture:SetVertexColor(1, 1, 0, 0.7)
+                    end
+
+                    local markerUsername = marker.user
+                    if (filtering and not filter_realms and marker.realm ~= REALM) then
+                        markerUsername = marker.user .. "@" .. marker.realm
+                    end
+
+                    -- Set the tooltip text to the name of the player who died
+                    markerMapButton:SetScript("OnEnter", function(self)
+                        currentViewingMapMarker = marker
+                        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                        local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
+                        if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
+                            local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
+                            GameTooltip:SetText(markerUsername .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
+                        elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
+                            GameTooltip:SetText(markerUsername .. " - " .. class_str .." - " .. marker.level)
+                        elseif (marker.level ~= nil and marker.class_id == nil) then
+                            GameTooltip:SetText(markerUsername .. " - ? - " .. marker.level)
                         else
-                            markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
+                            GameTooltip:SetText(markerUsername .. " - ? - ?")
                         end
-
-                        if (marker.visited == true and markerMapButton.checkmarkTexture == nil) then
-                            -- Create the checkmark texture
-                            local checkmarkTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
-                            markerMapButton.checkmarkTexture = checkmarkTexture
-                            checkmarkTexture:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-                            checkmarkTexture:SetSize(10, 10)
-                            checkmarkTexture:SetPoint("CENTER", markerMapButton, "CENTER", 0, 0)
+                        local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
+                        GameTooltip:AddLine(date_str, .8, .8, .8, true)
+                        if (marker.source_id ~= nil) then
+                            local source_id = id_to_npc[marker.source_id]
+                            local env_dmg = environment_damage[marker.source_id]
+                            if (source_id ~= nil) then 
+                                GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
+                            elseif (env_dmg ~= nil) then
+                                GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                            end
                         end
-
-                        if (marker.last_words ~= nil and markerMapButton.borderTexture == nil) then
-                            local borderTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
-                            markerMapButton.borderTexture = borderTexture
-                            borderTexture:SetAllPoints(markerMapButton)
-                            borderTexture:SetTexture("Interface\\Cooldown\\ping4")
-                            borderTexture:SetBlendMode("ADD")
-                            borderTexture:SetVertexColor(1, 1, 0, 0.7)
+                        if (marker.last_words ~= nil) then
+                           GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
                         end
-
-                        local markerUsername = marker.user
-                        if (filtering and not filter_realms and marker.realm ~= REALM) then
-                            markerUsername = marker.user .. "@" .. marker.realm
-                        end
-
-                        -- Set the tooltip text to the name of the player who died
-                        markerMapButton:SetScript("OnEnter", function(self)
-                            currentViewingMapMarker = marker
-                            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                            local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
-                            if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
-                                local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
-                                GameTooltip:SetText(markerUsername .. " - " .. race_info.raceName .. " " .. class_str .." - " .. marker.level)
-                            elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
-                                GameTooltip:SetText(markerUsername .. " - " .. class_str .." - " .. marker.level)
-                            elseif (marker.level ~= nil and marker.class_id == nil) then
-                                GameTooltip:SetText(markerUsername .. " - ? - " .. marker.level)
+                        GameTooltip:Show()
+                        if (marker.karma ~= nil) then
+                            tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                            if(marker.karma > 0) then 
+                                tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25) 
                             else
-                                GameTooltip:SetText(markerUsername .. " - ? - ?")
+                                tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
                             end
-                            local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
-                            GameTooltip:AddLine(date_str, .8, .8, .8, true)
-                            if (marker.source_id ~= nil) then
-                                local source_id = id_to_npc[marker.source_id]
-                                local env_dmg = environment_damage[marker.source_id]
-                                if (source_id ~= nil) then 
-                                    GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
-                                elseif (env_dmg ~= nil) then
-                                    GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
-                                end
-                            end
-                            if (marker.last_words ~= nil) then
-                               GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
-                            end
-                            GameTooltip:Show()
-                            if (marker.karma ~= nil) then
-                                tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
-                                if(marker.karma > 0) then 
-                                    tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25) 
-                                else
-                                    tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
-                                end
-                                tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
-                                tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
-                            end
-                            if subTooltip then
-                                subTooltip:Hide()
-                                subTooltip:ClearAllPoints()
-                                subTooltip:SetParent(nil)
-                                subTooltip = nil
-                            end                         
-                        end)
-                        markerMapButton:SetScript("OnLeave", function(self)
-                            currentViewingMapMarker = nil
+                            tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                            tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
+                        end
+                        if subTooltip then
+                            subTooltip:Hide()
+                            subTooltip:ClearAllPoints()
+                            subTooltip:SetParent(nil)
+                            subTooltip = nil
+                        end                         
+                    end)
+                    markerMapButton:SetScript("OnLeave", function(self)
+                        currentViewingMapMarker = nil
+                        if tooltipKarmaBackgroundTexture then
+                            tooltipKarmaBackgroundTexture:Hide()
+                            tooltipKarmaBackgroundTexture:ClearAllPoints()
+                            tooltipKarmaBackgroundTexture = nil
+                        end
+                        if subTooltip then
+                            subTooltip:Hide()
+                            subTooltip:ClearAllPoints()
+                            subTooltip:SetParent(nil)
+                            subTooltip = nil
+                        end
+                        GameTooltip:Hide()
+                    end)
+
+                    local scaleUpAnimation = markerMapButton:CreateAnimationGroup()
+                    local scaleUp1 = scaleUpAnimation:CreateAnimation("Scale")
+                    scaleUp1:SetScale(1.5, 1.5)
+                    scaleUp1:SetDuration(0.2)
+                    scaleUp1:SetOrder(1)
+                    local scaleDown1 = scaleUpAnimation:CreateAnimation("Scale")
+                    scaleDown1:SetScale(1, 1)
+                    scaleDown1:SetDuration(0.2)
+                    scaleDown1:SetOrder(2)
+
+                    local scaleDownAnimation = markerMapButton:CreateAnimationGroup()
+                    local scaleDown2 = scaleDownAnimation:CreateAnimation("Scale")
+                    scaleDown2:SetScale(0.6, 0.6)
+                    scaleDown2:SetDuration(0.2)
+                    scaleDown2:SetOrder(1)
+                    local scaleUp2 = scaleDownAnimation:CreateAnimation("Scale")
+                    scaleUp2:SetScale(1, 1)
+                    scaleUp2:SetDuration(0.2)
+                    scaleUp2:SetOrder(2)
+
+                    markerMapButton:SetScript("OnMouseDown", function(self, button)
+                        -- Share Tombstone export
+                        if (button == "LeftButton" and IsShiftKeyDown()) then
+                            local singleRecordTable = {}
+                            table.insert(singleRecordTable, marker)
+                            local serializedData = ls:Serialize(singleRecordTable)
+                            local compressedData = ld:CompressDeflate(serializedData)
+                            local encodedData = ld:EncodeForPrint(compressedData)
+                            CreateDataDisplayFrame(encodedData)
+                        -- Reset Karma score
+                        elseif (button == "RightButton" and IsShiftKeyDown()) then
+                            marker.karma = nil
                             if tooltipKarmaBackgroundTexture then
                                 tooltipKarmaBackgroundTexture:Hide()
                                 tooltipKarmaBackgroundTexture:ClearAllPoints()
                                 tooltipKarmaBackgroundTexture = nil
                             end
-                            if subTooltip then
-                                subTooltip:Hide()
-                                subTooltip:ClearAllPoints()
-                                subTooltip:SetParent(nil)
-                                subTooltip = nil
+                        -- Trigger karma tally broadcast; Marker must be from THIS Realm
+                        elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown()) then
+                            if (marker.realm ~= REALM) then return end
+                            local encodedRatingRquestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
+                            local channel_num = GetChannelName(tombstones_channel)
+                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingRquestMsg, "CHANNEL", nil, channel_num)
+                            expectingTallyReply = true
+                            expectingTallyReplyMapID = marker.mapID
+                            expectingTallyReplyMapMarker = marker
+                            ratings[PLAYER_NAME] = marker.karma
+                            C_Timer.NewTimer(TallyInterval, DisplayTally)
+                        -- Postive karma rating
+                        elseif (button == "LeftButton" and IsControlKeyDown()) then
+                            marker.karma = 1
+                            scaleUpAnimation:Stop()
+                            scaleUpAnimation:Play()
+
+                            if(tooltipKarmaBackgroundTexture == nil) then
+                                tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                                tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                                tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                             end
-                            GameTooltip:Hide()
-                        end)
+                            tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25)                                                         
+                            
+                        -- Negative karma rating
+                        elseif (button == "LeftButton" and IsAltKeyDown()) then
+                            marker.karma = -1
+                            scaleDownAnimation:Stop()
+                            scaleDownAnimation:Play()
 
-                        local scaleUpAnimation = markerMapButton:CreateAnimationGroup()
-                        local scaleUp1 = scaleUpAnimation:CreateAnimation("Scale")
-                        scaleUp1:SetScale(1.5, 1.5)
-                        scaleUp1:SetDuration(0.2)
-                        scaleUp1:SetOrder(1)
-                        local scaleDown1 = scaleUpAnimation:CreateAnimation("Scale")
-                        scaleDown1:SetScale(1, 1)
-                        scaleDown1:SetDuration(0.2)
-                        scaleDown1:SetOrder(2)
-
-                        local scaleDownAnimation = markerMapButton:CreateAnimationGroup()
-                        local scaleDown2 = scaleDownAnimation:CreateAnimation("Scale")
-                        scaleDown2:SetScale(0.6, 0.6)
-                        scaleDown2:SetDuration(0.2)
-                        scaleDown2:SetOrder(1)
-                        local scaleUp2 = scaleDownAnimation:CreateAnimation("Scale")
-                        scaleUp2:SetScale(1, 1)
-                        scaleUp2:SetDuration(0.2)
-                        scaleUp2:SetOrder(2)
-
-                        markerMapButton:SetScript("OnMouseDown", function(self, button)
-                            -- Share Tombstone export
-                            if (button == "LeftButton" and IsShiftKeyDown()) then
-                                local singleRecordTable = {}
-                                table.insert(singleRecordTable, marker)
-                                local serializedData = ls:Serialize(singleRecordTable)
-                                local compressedData = ld:CompressDeflate(serializedData)
-                                local encodedData = ld:EncodeForPrint(compressedData)
-                                CreateDataDisplayFrame(encodedData)
-                            -- Reset Karma score
-                            elseif (button == "RightButton" and IsShiftKeyDown()) then
-                                marker.karma = nil
-                                if tooltipKarmaBackgroundTexture then
-                                    tooltipKarmaBackgroundTexture:Hide()
-                                    tooltipKarmaBackgroundTexture:ClearAllPoints()
-                                    tooltipKarmaBackgroundTexture = nil
-                                end
-                            -- Trigger karma tally broadcast; Marker must be from THIS Realm
-                            elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown()) then
-                                if (marker.realm ~= REALM) then return end
-                                local encodedRatingRquestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
-                                local channel_num = GetChannelName(tombstones_channel)
-                                CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingRquestMsg, "CHANNEL", nil, channel_num)
-                                expectingTallyReply = true
-                                expectingTallyReplyMapID = marker.mapID
-                                expectingTallyReplyMapMarker = marker
-                                ratings[PLAYER_NAME] = marker.karma
-                                C_Timer.NewTimer(TallyInterval, DisplayTally)
-                            -- Postive karma rating
-                            elseif (button == "LeftButton" and IsControlKeyDown()) then
-                                marker.karma = 1
-                                scaleUpAnimation:Stop()
-                                scaleUpAnimation:Play()
-
-                                if(tooltipKarmaBackgroundTexture == nil) then
-                                    tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
-                                    tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
-                                    tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
-                                end
-                                tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25)                                                         
-                                
-                            -- Negative karma rating
-                            elseif (button == "LeftButton" and IsAltKeyDown()) then
-                                marker.karma = -1
-                                scaleDownAnimation:Stop()
-                                scaleDownAnimation:Play()
-
-                                if(tooltipKarmaBackgroundTexture == nil) then
-                                    tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
-                                    tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
-                                    tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
-                                end
-                                tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
-
-                            -- Else propogate the click down the WorldMap    
-                            else
-                                local worldMapFrame = WorldMapFrame:GetCanvasContainer()
-                                worldMapFrame:OnMouseDown(button)
+                            if(tooltipKarmaBackgroundTexture == nil) then
+                                tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                                tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                                tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                             end
-                        end)
-                        markerMapButton:SetScript("OnMouseUp", function(self, button)
+                            tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
+
+                        -- Else propogate the click down the WorldMap    
+                        else
                             local worldMapFrame = WorldMapFrame:GetCanvasContainer()
-                            worldMapFrame:OnMouseUp(button)
-                        end)
-                        -- Check if the marker timestamp within the last 24 hours
-                        local timeDifference = currentTime - marker.timestamp
-                        local secondsIn24Hours = 24 * 60 * 60 -- 12 hours in seconds
-                        if (timeDifference >= secondsIn24Hours) then
-                            markerMapButton.texture:SetVertexColor(.6, .6, .6, 0.5)
+                            worldMapFrame:OnMouseDown(button)
                         end
-                        -- Cache the Map Marker for deletion later
-                        deathMapIcons[i] = markerMapButton
-                        hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY)
-                        renderCount = renderCount + 1  
-                        -- Cap marker rendering
-                        if (renderCount > maxRenderCount) then
-                            if (not renderWarned) then
-                                print("Tombstones rendering too many markers in zone. Capping. Consider pruning.")
-                                renderWarned = true
-                            end
-                            return
+                    end)
+                    markerMapButton:SetScript("OnMouseUp", function(self, button)
+                        local worldMapFrame = WorldMapFrame:GetCanvasContainer()
+                        worldMapFrame:OnMouseUp(button)
+                    end)
+                    -- Check if the marker timestamp within the last 24 hours
+                    local timeDifference = currentTime - marker.timestamp
+                    local secondsIn24Hours = 24 * 60 * 60 -- 12 hours in seconds
+                    if (timeDifference >= secondsIn24Hours) then
+                        markerMapButton.texture:SetVertexColor(.6, .6, .6, 0.5)
+                    end
+                    -- Cache the Map Marker for deletion later
+                    deathMapIcons[i] = markerMapButton
+                    hbdp:AddWorldMapIconMap("Tombstones", deathMapIcons[i], marker.mapID, marker.posX, marker.posY)
+                    renderCount = renderCount + 1  
+                    -- Cap marker rendering
+                    if (renderCount > maxRenderCount) then
+                        if (not renderWarned) then
+                            print("Tombstones rendering too many markers in zone. Capping. Consider pruning.")
+                            renderWarned = true
                         end
+                        return
                     end
                 end
             end
@@ -1378,7 +1376,7 @@ local function GenerateTombstonesOptionsFrame()
     slider:SetHeight(20)
     slider:SetPoint("TOPLEFT", 20, -260)
     slider:SetOrientation("HORIZONTAL")
-    slider:SetMinMaxValues(0, 30) -- Set the minimum and maximum values for the slider
+    slider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
     slider:SetValueStep(0.5) -- Set the step value for the slider
     slider:SetValue(roundNearestHalf(TOMB_FILTERS["HOUR_THRESH"]/24)) -- Set the default value for the slider
     local sliderOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2418,7 +2416,7 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["CLASS_ID"] = nil
             TOMB_FILTERS["RACE_ID"] = nil
             TOMB_FILTERS["LEVEL_THRESH"] = 0
-            TOMB_FILTERS["HOUR_THRESH"] = 0
+            TOMB_FILTERS["HOUR_THRESH"] = 720
             TOMB_FILTERS["REALMS"] = true
             TOMB_FILTERS["RATING"] = false
         elseif argsArray[1] == "last_words" then
