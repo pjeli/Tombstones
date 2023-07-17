@@ -343,7 +343,7 @@ local function TombstonesJoinChannel()
             if channel_num == 0 then
             print("Failed to join Tombstones channel.")
         else
-            printDebug("Successfully Tombstones channel.")
+            printDebug("Successfully joined Tombstones channel.")
         end
         for i = 1, 10 do
             if _G['ChatFrame'..i] then
@@ -769,6 +769,27 @@ local function UpdateWorldMapMarkers()
                             end
                             GameTooltip:Hide()
                         end)
+
+                        local scaleUpAnimation = markerMapButton:CreateAnimationGroup()
+                        local scaleUp1 = scaleUpAnimation:CreateAnimation("Scale")
+                        scaleUp1:SetScale(1.5, 1.5)
+                        scaleUp1:SetDuration(0.2)
+                        scaleUp1:SetOrder(1)
+                        local scaleDown1 = scaleUpAnimation:CreateAnimation("Scale")
+                        scaleDown1:SetScale(1, 1)
+                        scaleDown1:SetDuration(0.2)
+                        scaleDown1:SetOrder(2)
+
+                        local scaleDownAnimation = markerMapButton:CreateAnimationGroup()
+                        local scaleDown2 = scaleDownAnimation:CreateAnimation("Scale")
+                        scaleDown2:SetScale(0.6, 0.6)
+                        scaleDown2:SetDuration(0.2)
+                        scaleDown2:SetOrder(1)
+                        local scaleUp2 = scaleDownAnimation:CreateAnimation("Scale")
+                        scaleUp2:SetScale(1, 1)
+                        scaleUp2:SetDuration(0.2)
+                        scaleUp2:SetOrder(2)
+
                         markerMapButton:SetScript("OnMouseDown", function(self, button)
                             if (button == "LeftButton" and IsShiftKeyDown()) then
                                 local singleRecordTable = {}
@@ -784,6 +805,8 @@ local function UpdateWorldMapMarkers()
                                     printDebug("Failed to send Karma message. Not in TS channel.")
                                 end
                                 CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedKarmaMsg, "CHANNEL", nil, channel_num)
+                                scaleUpAnimation:Stop()
+                                scaleUpAnimation:Play()
                             elseif (button == "LeftButton" and IsAltKeyDown()) then
                                 local encodedKarmaMsg = TencodeMessageLite(marker) .. COMM_FIELD_DELIM .. "-"
                                 local channel_num = GetChannelName(tombstones_channel)
@@ -791,6 +814,8 @@ local function UpdateWorldMapMarkers()
                                     printDebug("Failed to send Karma message. Not in TS channel.")
                                 end
                                 CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedKarmaMsg, "CHANNEL", nil, channel_num)
+                                scaleDownAnimation:Stop()
+                                scaleDownAnimation:Play()
                             else
                                 local worldMapFrame = WorldMapFrame:GetCanvasContainer()
                                 worldMapFrame:OnMouseDown(button)
