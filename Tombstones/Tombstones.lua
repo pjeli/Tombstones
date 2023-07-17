@@ -262,6 +262,16 @@ local function IncrementDeadlyCounts(marker)
     if marker.visited and marker.visited == true then
         deathVisitCount = deathVisitCount + 1
     end
+    -- Not ideal; but fixes broken Karma from previous system.
+    if marker.karma then
+        if marker.karma > 0 then
+            marker.karma = 1
+        elseif marker.karma < 0 then
+            marker.karma = -1
+        else
+            marker.karma = nil
+        end
+    end
 end
 
 local function InitializeDeadlyCounts()
