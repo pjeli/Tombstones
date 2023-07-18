@@ -576,7 +576,7 @@ local function IsMarkerAllowedByFilters(marker)
         if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
     end
     if (allow == true and filter_level > 0) then
-        if (marker.level < filter_level) then allow = false end
+        if (marker.level ~= nil and marker.level < filter_level) then allow = false end
     end
     if (allow == true and filter_hour > 0) then
         if (marker.timestamp ~= nil and marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
@@ -1386,13 +1386,13 @@ local function GenerateTombstonesOptionsFrame()
     hourSlider:SetOrientation("HORIZONTAL")
     hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
     hourSlider:SetValueStep(0.5) -- Set the step value for the slider
-    hourSlider:SetValue(roundNearestHalf(TOMB_FILTERS["HOUR_THRESH"]/24)) -- Set the default value for the slider
+    hourSlider:SetValue(30.5 - roundNearestHalf(TOMB_FILTERS["HOUR_THRESH"]/24)) -- Set the default value for the slider
     local hourSliderOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     hourSliderOptionText:SetPoint("LEFT", hourSlider, "RIGHT", 10, 0)
     hourSliderOptionText:SetText("Days old, at most.")
     -- Add labels for minimum and maximum values
-    hourSlider.Low:SetText("0.5")
-    hourSlider.High:SetText("30")
+    hourSlider.Low:SetText("30")
+    hourSlider.High:SetText("0.5")
 
     -- Add a label for the current value
     local hourText = hourSlider:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -1402,12 +1402,12 @@ local function GenerateTombstonesOptionsFrame()
 
     -- Set the OnValueChanged callback function
     hourSlider:SetScript("OnValueChanged", function(self, value)
-        value = roundNearestHalf(value)
+        value = 30.5 - roundNearestHalf(value)
         hourText:SetText(string.format("%.1f", value))
     end)
 
     hourSlider:SetScript("OnMouseUp", function(self)
-        local value = roundNearestHalf(hourSlider:GetValue())
+        local value = 30.5 - roundNearestHalf(hourSlider:GetValue())
         TOMB_FILTERS["HOUR_THRESH"] = value * 24
         ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
