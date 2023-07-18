@@ -1149,7 +1149,7 @@ local function UnitTargetChange()
         local deathMarkersTotal = deadlyZones[currentMapID] or 0
         local dangerPercentage = 0.0
         if (deathMarkersTotal > 0) then
-            dangerPercentage = (sourceDeathCount / deathMarkersTotal) * 100.0
+            dangerPercentage = math.min((sourceDeathCount / deathMarkersTotal) * 100.0, 100.0)
         end
 
         if (targetDangerFrame == nil) then
