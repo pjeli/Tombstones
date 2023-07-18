@@ -13,10 +13,8 @@ libs\LibStub\LibStub.lua
 libs\LibSerialize-1.1.3\lib.xml
 libs\LibCompress\lib.xml
 libs\LibDeflate\lib.xml
-libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
 libs\HereBeDragons\HereBeDragons-2.0.lua
 libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
-libs\AceComm-3.0\AceComm-3.0.xml
 libs\LibBase64-1.0\LibBase64-1.0.xml
 
 Tombstones.lua
