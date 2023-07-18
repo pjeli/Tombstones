@@ -1,8 +1,6 @@
 -- Constants
 local ADDON_NAME = "Tombstones"
 local TS_COMM_NAME = "TSKarmaChannel"
-local tombstones_channel = "tsbroadcastchannel"
-local tombstones_channel_pw = "tsbroadcastchannelpw"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
@@ -61,6 +59,8 @@ local MAP_TABLE = {
 --[[Un'Goro Crater]]        [1449] = {minLevel = 48,    maxLevel = 55,},
 --[[Winterspring]]          [1452] = {minLevel = 55,    maxLevel = 60,},
 }
+local tombstones_channel = "tsbroadcastchannel"
+local tombstones_channel_pw = "tsbroadcastchannelpw"
 
 -- DeathLog Constants
 local death_alerts_channel = "hcdeathalertschannel"
@@ -99,8 +99,8 @@ local renderCycleCount = 0
 local debug = false
 local trace = false
 local isPlayerMoving = false
-local movementUpdateInterval = 0.2 -- Update interval in seconds
-local movementTimer = 0
+local movementUpdateInterval = 0.5 -- Update interval in seconds
+local movementTimer = nil
 local lastProximityWarning = 0
 local lastClosestMarker
 local optionsFrame
@@ -114,8 +114,8 @@ local glowFrame
 local currentViewingMapID
 local subTooltip
 local tooltipKarmaBackgroundTexture
+local debugCount = 0
 local TOMB_FILTERS = {
-  --["ENABLED"] = false,
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
@@ -157,22 +157,13 @@ local ratings = {}
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
-local ac = LibStub("AceComm-3.0")
 local ls = LibStub("LibSerialize")
 local lc = LibStub("LibCompress")
 local ld = LibStub("LibDeflate")
 local l64 = LibStub("LibBase64-1.0")
 
--- Register events
-local addon = CreateFrame("Frame")
-addon:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-addon:RegisterEvent("PLAYER_LOGOUT")
-addon:RegisterEvent("ADDON_LOADED")
-addon:RegisterEvent("PLAYER_STARTED_MOVING")
-addon:RegisterEvent("PLAYER_STOPPED_MOVING")
-addon:RegisterEvent("PLAYER_TARGET_CHANGED")
-addon:RegisterEvent("CHAT_MSG_ADDON")
-addon:RegisterEvent("CHAT_MSG_CHANNEL")
+-- Main Frame
+local Tombstones = CreateFrame("Frame")
 
 function fetchQuotedPart(str)
     local pattern = "\"(.-)\""
@@ -1512,9 +1503,9 @@ function TdecodeMessage(msg)
   local values = {}
   for w in msg:gmatch("(.-)~") do table.insert(values, w) end
   if #values < 9 then
-	-- Return something that causes the calling function to return on the isValidEntry check
-	local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
-	return malformed_player_data
+    -- Return something that causes the calling function to return on the isValidEntry check
+    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
+    return malformed_player_data
   end
   local date = time()
   local last_words = nil
@@ -1528,9 +1519,9 @@ function TdecodeMessage(msg)
   local map_id = tonumber(values[8])
   local map_pos = values[9]
   if (map_id == nil) then
-	-- Return something that causes the calling function to return on the isValidEntry check
-	local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
-	return malformed_player_data
+    -- Return something that causes the calling function to return on the isValidEntry check
+    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
+    return malformed_player_data
   end
   local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
   return player_data
@@ -2263,7 +2254,7 @@ local function StressGen(numberOfMarkers)
 
     for i = 1, numberOfMarkers do 
         -- Randomly select a MapID
-        local randomIndex = math.random(1, #mapIDs)
+        --local randomIndex = math.random(1, #mapIDs)
         --local map_id = mapIDs[randomIndex]
         local map_id = C_Map.GetBestMapForUnit("player")
         -- Randomly generated posX and posY
@@ -2284,10 +2275,11 @@ local function StressGen(numberOfMarkers)
     end
 end
 
--- Define slash commands
+
+--[[ Slash Command Handler ]]
+--
 SLASH_TOMBSTONES1 = "/tombstones"
 SLASH_TOMBSTONES2 = "/ts"
-
 -- Slash command handler function
 local function SlashCommandHandler(msg)
     local command, args = strsplit(" ", msg, 2) -- Split the command and arguments
@@ -2480,85 +2472,121 @@ local function SlashCommandHandler(msg)
         print("Usage: /tombstones or /ts [zone (show | hide )]")
     end
 end
-
--- Register slash command handler
 SlashCmdList["TOMBSTONES"] = SlashCommandHandler
 
--- Initialize
-addon:SetScript("OnEvent", function(self, event, ...)
-    local arg = { ... }
-    if event == "ADDON_LOADED" then
-        local addonName = ...
-        if addonName == ADDON_NAME then
-            printDebug("Tombstones is loading...")
 
-            LoadDeathRecords()
-            MakeWorldMapButton()
-            MakeMinimapButton()
-            -- Try to join only after Hardcore add-on take precedence
-            C_Timer.After(5.0, function()
-                TdeathlogJoinChannel()
-                TombstonesJoinChannel()
-            end)
-     
-            ac:Embed(self)
-            print("Tombstones loaded successfully!")
-        end
-    elseif event == "PLAYER_LOGOUT" then
-        -- Handle player logout event
-        SaveDeathRecords()
-    elseif event == "ZONE_CHANGED_NEW_AREA" then
-        ShowZoneSplashText()
-    elseif event == "PLAYER_TARGET_CHANGED" then
-        UnitTargetChange()
-    elseif event == "PLAYER_STARTED_MOVING" then
-        isPlayerMoving = true
-        movementTimer = 0
-    elseif event == "PLAYER_STOPPED_MOVING" then
-        isPlayerMoving = false
-        ActOnNearestTombstone()
-    elseif event == "CHAT_MSG_CHANNEL" then
-        local _, channel_name = string.split(" ", arg[4])
-        if channel_name == death_alerts_channel then
-            local command, msg = string.split(COMM_COMMAND_DELIM, arg[1])
-            if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
-                local player_name_short, _ = string.split("-", arg[2])
-                printDebug("Receiving DeathLog death ping for " .. player_name_short .. ".")
-                TdeathlogReceiveChannelMessage(player_name_short, msg)
-            end
-            if command == COMM_COMMANDS["LAST_WORDS"] then
-                local player_name_short, _ = string.split("-", arg[2])
-                printDebug("Receiving DeathLog last_words ping for " .. player_name_short .. ".")
-                TdeathlogReceiveLastWords(player_name_short, msg)
-            end
-        elseif channel_name == tombstones_channel then
-            local command, msg = string.split(COMM_COMMAND_DELIM, arg[1])
-            if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] then
-                local player_name_short, _ = string.split("-", arg[2])
-                printDebug("Receiving TS_RatingRequest ping for " .. player_name_short .. ".")
-                TwhisperRatingForMarkerTo(msg, player_name_short)
-            end
-        end
-    elseif event == "CHAT_MSG_ADDON" then 
-        local prefix, channel, player_name_long = arg[1], arg[3], arg[4]
-        local player_name_short, _ = string.split("-", player_name_long)
-        local command, msg = string.split(COMM_COMMAND_DELIM, arg[2])
-        -- TALLY RESPONSE HANDLING
-        if (command == TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] and expectingTallyReply and prefix == "TombstonesRating" and channel == "WHISPER") then
-            TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
-        end
-    end
-end)
+--[[ Initialize Event Handlers ]]
+--
+function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
+  local player_name_short, _ = string.split("-", sender_name_long)
+  local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
+  -- TALLY RESPONSE HANDLING
+  if (command == TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] and expectingTallyReply and prefix == "TombstonesRating" and channel == "WHISPER") then
+      TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
+  end
+end
 
--- Movement monitoring
-addon:SetScript("OnUpdate", function(self, elapsed)
-    if isPlayerMoving then
-        movementTimer = movementTimer + elapsed
-        if (movementTimer >= movementUpdateInterval) then
-            FlashWhenNearTombstone()
-            movementTimer = 0
-        end
-    end
-end)
+function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name_long)
+  local _, channel_name = string.split(" ", channel_name_long)
+  local player_name_short, _ = string.split("-", sender_name_long)
+  if channel_name == death_alerts_channel then
+      local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
+      if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
+          printDebug("Receiving DeathLog death ping for " .. player_name_short .. ".")
+          TdeathlogReceiveChannelMessage(player_name_short, msg)
+      end
+      if command == COMM_COMMANDS["LAST_WORDS"] then
+          printDebug("Receiving DeathLog last_words ping for " .. player_name_short .. ".")
+          TdeathlogReceiveLastWords(player_name_short, msg)
+      end
+  elseif channel_name == tombstones_channel then
+      local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
+      if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] then
+          printDebug("Receiving TS_RatingRequest ping for " .. player_name_short .. ".")
+          TwhisperRatingForMarkerTo(msg, player_name_short)
+      end
+  end
+end
 
-addon:SetScript("OnUpdate", addon:GetScript("OnUpdate"))
+local function OnUpdateMovementHandler(self, elapsed)
+  if isPlayerMoving then
+    FlashWhenNearTombstone()
+  end
+end
+
+function Tombstones:PLAYER_STOPPED_MOVING()
+  isPlayerMoving = false
+  if movementTimer then
+    movementTimer:Cancel()
+    movementTimer = nil
+  end
+  -- Movement monitoring ended
+  ActOnNearestTombstone()
+end
+
+function Tombstones:PLAYER_STARTED_MOVING()
+  isPlayerMoving = true
+  if not movementTimer then
+    movementTimer = C_Timer.NewTicker(movementUpdateInterval, OnUpdateMovementHandler)
+  end
+  -- Movement monitoring started
+end
+
+function Tombstones:PLAYER_TARGET_CHANGED()
+  UnitTargetChange()
+end
+
+function Tombstones:ZONE_CHANGED_NEW_AREA()
+  ShowZoneSplashText()
+end
+
+function Tombstones:PLAYER_LOGOUT()
+  -- Handle player logout event
+  SaveDeathRecords()
+end
+
+function Tombstones:ADDON_LOADED(addonName)
+  if addonName == ADDON_NAME then
+      printDebug("Tombstones is loading...")
+      
+      C_Timer.After(5.0, function()
+        TdeathlogJoinChannel()
+        TombstonesJoinChannel()
+      end)
+
+      print("Tombstones loaded successfully!")
+  end
+end
+
+function Tombstones:PLAYER_LOGIN()
+  -- called during load screen
+  LoadDeathRecords()
+  MakeWorldMapButton()
+  MakeMinimapButton()
+  
+  self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+  self:RegisterEvent("PLAYER_TARGET_CHANGED")
+  self:RegisterEvent("PLAYER_STARTED_MOVING")
+  self:RegisterEvent("PLAYER_STOPPED_MOVING")
+  self:RegisterEvent("CHAT_MSG_CHANNEL")
+	self:RegisterEvent("CHAT_MSG_ADDON")
+end
+
+function Tombstones:StartUp()
+	-- the entry point of our addon
+	-- called inside loading screen before player sees world, some api functions are not available yet.
+
+	-- event handling helper
+	self:SetScript("OnEvent", function(self, event, ...)
+		self[event](self, ...)
+	end)
+	-- actually start loading the addon once player ui is loading
+  self:RegisterEvent("ADDON_LOADED")
+	self:RegisterEvent("PLAYER_LOGIN")
+	self:RegisterEvent("PLAYER_LOGOUT")
+end
+
+
+--[[ Start Addon ]]
+--
+Tombstones:StartUp()
