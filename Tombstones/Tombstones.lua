@@ -1931,8 +1931,34 @@ local function CreateDataImportFrame()
         for _, marker in ipairs(cleanImportRecords) do
             ImportDeathMarker(marker.realm, marker.mapID, marker.instID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
         end
+        ClearDeathMarkers(false)
         UpdateWorldMapMarkers()
         print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+        if(numImportRecords == 1) then
+            if not WorldMapFrame:IsVisible() then
+                ToggleWorldMap()
+            end
+            
+            local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+            overlayFrame:SetFrameStrata("FULLSCREEN")
+            overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
+            overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
+            local importedDeathRecord = importedDeathRecords[1]         
+            local mapID = importedDeathRecord.mapID
+            local posX = importedDeathRecord.posX
+            local posY = importedDeathRecord.posY
+
+            WorldMapFrame:SetMapID(mapID)
+            
+            overlayFrame.Texture = overlayFrame:CreateTexture(nil, "ARTWORK")
+            overlayFrame.Texture:SetAllPoints()
+            overlayFrame.Texture:SetTexture("Interface\\Icons\\Spell_Nature_WispSplode")
+
+            hbdp:AddWorldMapIconMap("TombstonesImport", overlayFrame, mapID, posX, posY)
+            C_Timer.After(3.0, function()
+              hbdp:RemoveWorldMapIcon("TombstonesImport", overlayFrame)
+            end)
+        end
         frame:Hide()
         frame = nil
     end)
