@@ -4,7 +4,45 @@ local TS_COMM_NAME = "TSKarmaChannel"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
+local classNameToID = {
+    ["warrior"] = 1,
+    ["paladin"] = 2,
+    ["hunter"] = 3,
+    ["rogue"] = 4,
+    ["priest"] = 5,
+    ["shaman"] = 7,
+    ["mage"] = 8,
+    ["warlock"] = 9,
+    ["druid"] = 11,
+}
 local PLAYER_CLASS = select(3, UnitClass("player"))
+local raceNameToID = {
+    ["human"] = 1,
+    ["orc"] = 2,
+    ["dwarf"] = 3,
+    ["night elf"] = 4,
+    ["nelf"] = 4,
+    ["undead"] = 5,
+    ["tauren"] = 6,
+    ["gnome"] = 7,
+    ["troll"] = 8,
+}
+local raceIDToFactionID = {
+    [1] = 1,
+    [2] = 2,
+    [3] = 1,
+    [4] = 1,
+    [5] = 2,
+    [6] = 2,
+    [7] = 1,
+    [8] = 2,
+}
+local factionNameToFactionID = {
+    ["alliance"] = 1,
+    ["horde"] = 2,
+}
+local PLAYER_RACE = raceNameToID[string.lower(UnitRace("player"))]
+local PLAYER_FACTION = raceIDToFactionID[PLAYER_RACE]
 local TS_COMM_COMMANDS = {
   ["BROADCAST_TALLY_REQUEST"] = "1",
   ["WHISPER_TALLY_REPLY"] = "2",
@@ -120,32 +158,11 @@ local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
+  ["FACTION_ID"] = nil,
   ["LEVEL_THRESH"] = 1,
   ["HOUR_THRESH"] = 720,
   ["REALMS"] = true,
   ["RATING"] = false,
-}
-local classNameToID = {
-    ["warrior"] = 1,
-    ["paladin"] = 2,
-    ["hunter"] = 3,
-    ["rogue"] = 4,
-    ["priest"] = 5,
-    ["shaman"] = 7,
-    ["mage"] = 8,
-    ["warlock"] = 9,
-    ["druid"] = 11,
-}
-local raceNameToID = {
-    ["human"] = 1,
-    ["orc"] = 2,
-    ["dwarf"] = 3,
-    ["night elf"] = 4,
-    ["nelf"] = 4,
-    ["undead"] = 5,
-    ["tauren"] = 6,
-    ["gnome"] = 7,
-    ["troll"] = 8,
 }
 
 -- Message/Karma Variables
@@ -559,6 +576,7 @@ local function IsMarkerAllowedByFilters(marker)
     local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
     local filter_class = TOMB_FILTERS["CLASS_ID"]
     local filter_race = TOMB_FILTERS["RACE_ID"]
+    local filter_faction = TOMB_FILTERS["FACTION_ID"]
     local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
     local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
     local filter_rating = TOMB_FILTERS["RATING"]
@@ -572,6 +590,9 @@ local function IsMarkerAllowedByFilters(marker)
     end
     if (allow == true and filter_class ~= nil) then
         if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
+    end
+    if (allow == true and filter_faction ~= nil) then
+        if (marker.race_id == nil or raceIDToFactionID[marker.race_id] ~= filter_faction) then allow = false end
     end
     if (allow == true and filter_race ~= nil) then
         if (marker.race_id == nil or marker.race_id ~= filter_race) then allow = false end
@@ -1264,7 +1285,7 @@ local function GenerateTombstonesOptionsFrame()
     -- Create the main frame
     optionsFrame = CreateFrame("Frame", "MyFrame", UIParent)
     optionsFrame:SetFrameStrata("HIGH")
-    optionsFrame:SetSize(360, 350)
+    optionsFrame:SetSize(360, 370)
     optionsFrame:SetPoint("CENTER", 0, 80)
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1379,9 +1400,16 @@ local function GenerateTombstonesOptionsFrame()
     local classOptionText = classOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     classOptionText:SetPoint("LEFT", classOption, "RIGHT", 5, 0)
     classOptionText:SetText("Are same class as me.")
+    
+    local factionOption = CreateFrame("CheckButton", "Faction", optionsFrame, "OptionsCheckButtonTemplate")
+    factionOption:SetPoint("TOPLEFT", 20, -250)
+    factionOption:SetChecked(TOMB_FILTERS["FACTION_ID"] ~= nil)
+    local factionOptionText = factionOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    factionOptionText:SetPoint("LEFT", factionOption, "RIGHT", 5, 0)
+    factionOptionText:SetText("Are same faction as me.")
 
     local realmsOption = CreateFrame("CheckButton", "Realms", optionsFrame, "OptionsCheckButtonTemplate")
-    realmsOption:SetPoint("TOPLEFT", 20, -250)
+    realmsOption:SetPoint("TOPLEFT", 20, -270)
     realmsOption:SetChecked(TOMB_FILTERS["REALMS"])
     local realmsOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     realmsOptionText:SetPoint("LEFT", realmsOption, "RIGHT", 5, 0)
@@ -1390,7 +1418,7 @@ local function GenerateTombstonesOptionsFrame()
     local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
     hourSlider:SetWidth(180)
     hourSlider:SetHeight(20)
-    hourSlider:SetPoint("TOPLEFT", 20, -280)
+    hourSlider:SetPoint("TOPLEFT", 20, -300)
     hourSlider:SetOrientation("HORIZONTAL")
     hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
     hourSlider:SetValueStep(0.5) -- Set the step value for the slider
@@ -1424,7 +1452,7 @@ local function GenerateTombstonesOptionsFrame()
     local levelSlider = CreateFrame("Slider", "LevelSlider", optionsFrame, "OptionsSliderTemplate")
     levelSlider:SetWidth(180)
     levelSlider:SetHeight(20)
-    levelSlider:SetPoint("TOPLEFT", 20, -310)
+    levelSlider:SetPoint("TOPLEFT", 20, -330)
     levelSlider:SetOrientation("HORIZONTAL")
     levelSlider:SetMinMaxValues(1, 60) -- Set the minimum and maximum values for the slider
     levelSlider:SetValueStep(1) -- Set the step value for the slider
@@ -1468,6 +1496,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["REALMS"] = true
             elseif (toggleName == "Class") then
                 TOMB_FILTERS["CLASS_ID"] = PLAYER_CLASS
+            elseif (toggleName == "Faction") then
+                TOMB_FILTERS["FACTION_ID"] = PLAYER_FACTION
             end
         else
             -- Perform actions for unselected state
@@ -1477,6 +1507,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["REALMS"] = false
             elseif (toggleName == "Class") then
                 TOMB_FILTERS["CLASS_ID"] = nil
+            elseif (toggleName == "Faction") then
+                TOMB_FILTERS["FACTION_ID"] = nil
             end
         end
         ClearDeathMarkers(true)
@@ -1485,6 +1517,7 @@ local function GenerateTombstonesOptionsFrame()
 
     lastWordsOption:SetScript("OnClick", ToggleFilter)
     classOption:SetScript("OnClick", ToggleFilter)
+    factionOption:SetScript("OnClick", ToggleFilter)
     realmsOption:SetScript("OnClick", ToggleFilter)
 
     optionsFrame:SetMovable(true)
@@ -2486,6 +2519,7 @@ local function SlashCommandHandler(msg)
             print("Tombstones 'Last Words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
             print("Tombstones 'ClassID' filtering on: " .. tostring(TOMB_FILTERS["CLASS_ID"]))
             print("Tombstones 'RaceID' filtering on: " .. tostring(TOMB_FILTERS["RACE_ID"]))
+            print("Tombstones 'Faction' filtering on: " .. tostring(TOMB_FILTERS["FACTION_ID"]))
             print("Tombstones 'Level Thresh' filtering on: " .. tostring(TOMB_FILTERS["LEVEL_THRESH"]))
             print("Tombstones 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
             print("Tombstones 'Realms' filtering on: " .. tostring(TOMB_FILTERS["REALMS"]))
@@ -2495,6 +2529,7 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
             TOMB_FILTERS["CLASS_ID"] = nil
             TOMB_FILTERS["RACE_ID"] = nil
+            TOMB_FILTERS["FACTION_ID"] = nil
             TOMB_FILTERS["LEVEL_THRESH"] = 1
             TOMB_FILTERS["HOUR_THRESH"] = 720
             TOMB_FILTERS["REALMS"] = true
@@ -2504,27 +2539,20 @@ local function SlashCommandHandler(msg)
                 optionsFrame = nil
             end
         elseif argsArray[1] == "last_words" then
-            --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HAS_LAST_WORDS"] = true
         elseif argsArray[1] == "rating" then
-            --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["RATING"] = true
         elseif argsArray[1] == "realms" then
-            --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["REALMS"] = false
         elseif argsArray[1] == "level" then
-            --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["LEVEL_THRESH"] = tonumber(argsArray[2])
         elseif argsArray[1] == "hours" then
-            --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HOUR_THRESH"] = tonumber(argsArray[2])
         elseif argsArray[1] == "days" then
-            --TOMB_FILTERS["ENABLED"] = true
             TOMB_FILTERS["HOUR_THRESH"] = (tonumber(argsArray[2]) * 24)
         elseif argsArray[1] == "class" then
             local className = argsArray[2]
             if (className ~= nil) then
-                --TOMB_FILTERS["ENABLED"] = true
                 TOMB_FILTERS["CLASS_ID"] = classNameToID[className]
             else
                 print("Tombstones ERROR : Class not found.")
@@ -2533,11 +2561,18 @@ local function SlashCommandHandler(msg)
         elseif argsArray[1] == "race" then
             local raceName = argsArray[2]
             if (raceName ~= nil) then
-                --TOMB_FILTERS["ENABLED"] = true
-                TOMB_FILTERS["RACE_ID"] = raceNameToID[raceName]
+                TOMB_FILTERS["RACE_ID"] = raceNameToID[string.lower(raceName)]
             else
                 print("Tombstones ERROR : Race not found.")
                 print("Tombstones WARN : Try 'human','dwarf','gnome','night elf | nelf','orc','troll','undead','tauren'.")
+            end
+        elseif argsArray[1] == "faction" then
+            local factionName = argsArray[2]
+            if (factionName ~= nil) then
+                TOMB_FILTERS["FACTION_ID"] = factionNameToFactionID[string.lower(factionName)]
+            else
+                print("Tombstones ERROR : Faction not found.")
+                print("Tombstones WARN : Try 'alliance','horde'.")
             end
         end
         ClearDeathMarkers(true)
