@@ -4,6 +4,7 @@ local TS_COMM_NAME = "TSKarmaChannel"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
+local PLAYER_CLASS = select(3, UnitClass("player"))
 local TS_COMM_COMMANDS = {
   ["BROADCAST_TALLY_REQUEST"] = "1",
   ["WHISPER_TALLY_REPLY"] = "2",
@@ -1263,7 +1264,7 @@ local function GenerateTombstonesOptionsFrame()
     -- Create the main frame
     optionsFrame = CreateFrame("Frame", "MyFrame", UIParent)
     optionsFrame:SetFrameStrata("HIGH")
-    optionsFrame:SetSize(360, 330)
+    optionsFrame:SetSize(360, 350)
     optionsFrame:SetPoint("CENTER", 0, 80)
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1371,9 +1372,16 @@ local function GenerateTombstonesOptionsFrame()
     local lastWordsOptionText = lastWordsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     lastWordsOptionText:SetPoint("LEFT", lastWordsOption, "RIGHT", 5, 0)
     lastWordsOptionText:SetText("Have last words.")
+    
+    local classOption = CreateFrame("CheckButton", "Class", optionsFrame, "OptionsCheckButtonTemplate")
+    classOption:SetPoint("TOPLEFT", 20, -230)
+    classOption:SetChecked(TOMB_FILTERS["CLASS_ID"] ~= nil)
+    local classOptionText = classOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    classOptionText:SetPoint("LEFT", classOption, "RIGHT", 5, 0)
+    classOptionText:SetText("Are same class as me.")
 
     local realmsOption = CreateFrame("CheckButton", "Realms", optionsFrame, "OptionsCheckButtonTemplate")
-    realmsOption:SetPoint("TOPLEFT", 20, -230)
+    realmsOption:SetPoint("TOPLEFT", 20, -250)
     realmsOption:SetChecked(TOMB_FILTERS["REALMS"])
     local realmsOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     realmsOptionText:SetPoint("LEFT", realmsOption, "RIGHT", 5, 0)
@@ -1382,7 +1390,7 @@ local function GenerateTombstonesOptionsFrame()
     local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
     hourSlider:SetWidth(180)
     hourSlider:SetHeight(20)
-    hourSlider:SetPoint("TOPLEFT", 20, -260)
+    hourSlider:SetPoint("TOPLEFT", 20, -280)
     hourSlider:SetOrientation("HORIZONTAL")
     hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
     hourSlider:SetValueStep(0.5) -- Set the step value for the slider
@@ -1416,7 +1424,7 @@ local function GenerateTombstonesOptionsFrame()
     local levelSlider = CreateFrame("Slider", "LevelSlider", optionsFrame, "OptionsSliderTemplate")
     levelSlider:SetWidth(180)
     levelSlider:SetHeight(20)
-    levelSlider:SetPoint("TOPLEFT", 20, -290)
+    levelSlider:SetPoint("TOPLEFT", 20, -310)
     levelSlider:SetOrientation("HORIZONTAL")
     levelSlider:SetMinMaxValues(1, 60) -- Set the minimum and maximum values for the slider
     levelSlider:SetValueStep(1) -- Set the step value for the slider
@@ -1458,6 +1466,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["HAS_LAST_WORDS"] = true
             elseif (toggleName == "Realms") then
                 TOMB_FILTERS["REALMS"] = true
+            elseif (toggleName == "Class") then
+                TOMB_FILTERS["CLASS_ID"] = PLAYER_CLASS
             end
         else
             -- Perform actions for unselected state
@@ -1465,6 +1475,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["HAS_LAST_WORDS"] = false
             elseif (toggleName == "Realms") then
                 TOMB_FILTERS["REALMS"] = false
+            elseif (toggleName == "Class") then
+                TOMB_FILTERS["CLASS_ID"] = nil
             end
         end
         ClearDeathMarkers(true)
@@ -1472,6 +1484,7 @@ local function GenerateTombstonesOptionsFrame()
     end
 
     lastWordsOption:SetScript("OnClick", ToggleFilter)
+    classOption:SetScript("OnClick", ToggleFilter)
     realmsOption:SetScript("OnClick", ToggleFilter)
 
     optionsFrame:SetMovable(true)
