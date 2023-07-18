@@ -119,7 +119,7 @@ local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
-  ["LEVEL_THRESH"] = 0,
+  ["LEVEL_THRESH"] = 1,
   ["HOUR_THRESH"] = 720,
   ["REALMS"] = true,
   ["RATING"] = false,
@@ -196,6 +196,10 @@ end
 
 function roundNearestHalf(value)
     return math.floor(value * 2 + 0.5) / 2
+end
+
+function round(value)
+  return math.floor(value + 0.5)
 end
 
 function GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
@@ -440,6 +444,9 @@ local function LoadDeathRecords()
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
         if (TOMB_FILTERS["HOUR_THRESH"] <= 0) then
             TOMB_FILTERS["HOUR_THRESH"] = 720 -- 30 days in hours
+        end
+        if (TOMB_FILTERS["LEVEL_THRESH"] <= 0) then
+            TOMB_FILTERS["LEVEL_THRESH"] = 1
         end
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
@@ -1256,7 +1263,7 @@ local function GenerateTombstonesOptionsFrame()
     -- Create the main frame
     optionsFrame = CreateFrame("Frame", "MyFrame", UIParent)
     optionsFrame:SetFrameStrata("HIGH")
-    optionsFrame:SetSize(360, 310)
+    optionsFrame:SetSize(360, 330)
     optionsFrame:SetPoint("CENTER", 0, 80)
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1267,10 +1274,10 @@ local function GenerateTombstonesOptionsFrame()
     bgTexture:SetAllPoints()
     bgTexture:SetColorTexture(0, 0, 0, 0.75)
 
-    local optionText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    optionText:SetPoint("TOP", optionsFrame, "TOPLEFT", 40, -40)
-    optionText:SetText("I want...")
-    optionText:SetTextColor(1, 1, 1)
+    local optionText1 = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionText1:SetPoint("TOP", optionsFrame, "TOPLEFT", 40, -40)
+    optionText1:SetText("I want...")
+    optionText1:SetTextColor(1, 1, 1)
 
     -- TOGGLE OPTIONS
     local toggle1 = CreateFrame("CheckButton", "Visiting", optionsFrame, "OptionsCheckButtonTemplate")
@@ -1353,10 +1360,10 @@ local function GenerateTombstonesOptionsFrame()
     filtersText:SetPoint("TOP", optionsFrame, "TOP", 0, -160)
     filtersText:SetText("Filters")
 
-    local optionText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    optionText:SetPoint("TOP", filtersText, "TOPLEFT", -35, -30)
-    optionText:SetText("I only want to see Tombstones that...")
-    optionText:SetTextColor(1, 1, 1)
+    local optionText2 = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionText2:SetPoint("TOP", filtersText, "TOPLEFT", -35, -30)
+    optionText2:SetText("I only want to see Tombstones that...")
+    optionText2:SetTextColor(1, 1, 1)
 
     local lastWordsOption = CreateFrame("CheckButton", "HasLastWords", optionsFrame, "OptionsCheckButtonTemplate")
     lastWordsOption:SetPoint("TOPLEFT", 20, -210)
@@ -1372,37 +1379,70 @@ local function GenerateTombstonesOptionsFrame()
     realmsOptionText:SetPoint("LEFT", realmsOption, "RIGHT", 5, 0)
     realmsOptionText:SetText("Are from this realm.")
 
-    local slider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
-    slider:SetWidth(180)
-    slider:SetHeight(20)
-    slider:SetPoint("TOPLEFT", 20, -260)
-    slider:SetOrientation("HORIZONTAL")
-    slider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
-    slider:SetValueStep(0.5) -- Set the step value for the slider
-    slider:SetValue(roundNearestHalf(TOMB_FILTERS["HOUR_THRESH"]/24)) -- Set the default value for the slider
-    local sliderOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sliderOptionText:SetPoint("LEFT", slider, "RIGHT", 10, 0)
-    sliderOptionText:SetText("Days old, at most.")
-
+    local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
+    hourSlider:SetWidth(180)
+    hourSlider:SetHeight(20)
+    hourSlider:SetPoint("TOPLEFT", 20, -260)
+    hourSlider:SetOrientation("HORIZONTAL")
+    hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
+    hourSlider:SetValueStep(0.5) -- Set the step value for the slider
+    hourSlider:SetValue(roundNearestHalf(TOMB_FILTERS["HOUR_THRESH"]/24)) -- Set the default value for the slider
+    local hourSliderOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    hourSliderOptionText:SetPoint("LEFT", hourSlider, "RIGHT", 10, 0)
+    hourSliderOptionText:SetText("Days old, at most.")
     -- Add labels for minimum and maximum values
-    slider.Low:SetText("0")
-    slider.High:SetText("30")
+    hourSlider.Low:SetText("0.5")
+    hourSlider.High:SetText("30")
 
     -- Add a label for the current value
-    local valueText = slider:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    valueText:SetPoint("TOP", slider, "BOTTOM", 0, -5)
-    valueText:SetText(roundNearestHalf(TOMB_FILTERS["HOUR_THRESH"]/24)) -- Set the initial value
-    slider.valueText = valueText
+    local hourText = hourSlider:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    hourText:SetPoint("TOP", hourSlider, "BOTTOM", 0, 0)
+    hourText:SetText(roundNearestHalf(TOMB_FILTERS["HOUR_THRESH"]/24)) -- Set the initial value
+    hourSlider.hourText = hourText
 
     -- Set the OnValueChanged callback function
-    slider:SetScript("OnValueChanged", function(self, value)
+    hourSlider:SetScript("OnValueChanged", function(self, value)
         value = roundNearestHalf(value)
-        valueText:SetText(string.format("%.1f", value))
+        hourText:SetText(string.format("%.1f", value))
     end)
 
-    slider:SetScript("OnMouseUp", function(self)
-        local value = roundNearestHalf(slider:GetValue())
+    hourSlider:SetScript("OnMouseUp", function(self)
+        local value = roundNearestHalf(hourSlider:GetValue())
         TOMB_FILTERS["HOUR_THRESH"] = value * 24
+        ClearDeathMarkers(true)
+        UpdateWorldMapMarkers()
+    end)
+      
+    local levelSlider = CreateFrame("Slider", "LevelSlider", optionsFrame, "OptionsSliderTemplate")
+    levelSlider:SetWidth(180)
+    levelSlider:SetHeight(20)
+    levelSlider:SetPoint("TOPLEFT", 20, -290)
+    levelSlider:SetOrientation("HORIZONTAL")
+    levelSlider:SetMinMaxValues(1, 60) -- Set the minimum and maximum values for the slider
+    levelSlider:SetValueStep(1) -- Set the step value for the slider
+    levelSlider:SetValue(round(TOMB_FILTERS["LEVEL_THRESH"])) -- Set the default value for the slider
+    local levelSliderOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    levelSliderOptionText:SetPoint("LEFT", levelSlider, "RIGHT", 10, 0)
+    levelSliderOptionText:SetText("At least this level.")
+    -- Add labels for minimum and maximum values
+    levelSlider.Low:SetText("1")
+    levelSlider.High:SetText("60")
+
+    -- Add a label for the current value
+    local levelText = levelSlider:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    levelText:SetPoint("TOP", levelSlider, "BOTTOM", 0, 0)
+    levelText:SetText(round(TOMB_FILTERS["LEVEL_THRESH"])) -- Set the initial value
+    levelSlider.levelText = levelText
+
+    -- Set the OnValueChanged callback function
+    levelSlider:SetScript("OnValueChanged", function(self, value)
+        value = round(value)
+        levelText:SetText(value)
+    end)
+
+    levelSlider:SetScript("OnMouseUp", function(self)
+        local value = round(levelSlider:GetValue())
+        TOMB_FILTERS["LEVEL_THRESH"] = value
         ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
     end)
@@ -2416,7 +2456,7 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
             TOMB_FILTERS["CLASS_ID"] = nil
             TOMB_FILTERS["RACE_ID"] = nil
-            TOMB_FILTERS["LEVEL_THRESH"] = 0
+            TOMB_FILTERS["LEVEL_THRESH"] = 1
             TOMB_FILTERS["HOUR_THRESH"] = 720
             TOMB_FILTERS["REALMS"] = true
             TOMB_FILTERS["RATING"] = false
