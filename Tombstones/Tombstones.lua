@@ -44,6 +44,7 @@ local factionNameToFactionID = {
 local PLAYER_RACE = raceNameToID[string.lower(UnitRace("player"))]
 local PLAYER_FACTION = raceIDToFactionID[PLAYER_RACE]
 local TS_COMM_COMMANDS = {
+  ["BROADCAST_KARMA_PING"] = "0",
   ["BROADCAST_TALLY_REQUEST"] = "1",
   ["WHISPER_TALLY_REPLY"] = "2",
 }
@@ -123,6 +124,8 @@ local environment_damage = {
 
 -- Variables
 local deathRecordsDB
+local miniButton
+local icon
 local deathMapIcons = {}
 local deathRecordCount = 0
 local deathVisitCount = 0
@@ -172,6 +175,8 @@ local expectingTallyReplyMapMarker = nil
 local currentViewingMapMarker = nil
 local expectingTallyReplyMapID = nil
 local ratings = {}
+local ratingsSeenCount = 0
+local ratingsSeenTotal = 0
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -937,16 +942,16 @@ local function UpdateWorldMapMarkers()
                         -- Trigger karma tally broadcast; Marker must be from THIS Realm
                         elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown()) then
                             if (marker.realm ~= REALM) then return end
-                            local encodedRatingRquestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
+                            local encodedRatingRequestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
                             local channel_num = GetChannelName(tombstones_channel)
-                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingRquestMsg, "CHANNEL", nil, channel_num)
+                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingRequestMsg, "CHANNEL", nil, channel_num)
                             expectingTallyReply = true
                             expectingTallyReplyMapID = marker.mapID
                             expectingTallyReplyMapMarker = marker
                             ratings[PLAYER_NAME] = marker.karma
                             C_Timer.NewTimer(TallyInterval, DisplayTally)
                         -- Postive karma rating
-                        elseif (button == "LeftButton" and IsControlKeyDown()) then
+                        elseif (button == "LeftButton" and IsControlKeyDown() and (marker.karma == nil or marker.karma == -1)) then
                             marker.karma = 1
                             scaleUpAnimation:Stop()
                             scaleUpAnimation:Play()
@@ -956,10 +961,14 @@ local function UpdateWorldMapMarkers()
                                 tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
                                 tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                             end
-                            tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25)                                                         
+                            tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25)    
+                            
+                            local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
+                            local channel_num = GetChannelName(tombstones_channel)
+                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
                             
                         -- Negative karma rating
-                        elseif (button == "LeftButton" and IsAltKeyDown()) then
+                        elseif (button == "LeftButton" and IsAltKeyDown() and (marker.karma == nil or marker.karma == 1)) then
                             marker.karma = -1
                             scaleDownAnimation:Stop()
                             scaleDownAnimation:Play()
@@ -970,6 +979,10 @@ local function UpdateWorldMapMarkers()
                                 tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                             end
                             tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
+                            
+                            local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
+                            local channel_num = GetChannelName(tombstones_channel)
+                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
 
                         -- Else propogate the click down the WorldMap    
                         else
@@ -1539,7 +1552,7 @@ local function MakeMinimapButton()
         end
     end
     -- Create minimap button using LibDBIcon
-    local miniButton = LibStub("LibDataBroker-1.1"):NewDataObject("Tombstones", {
+    miniButton = LibStub("LibDataBroker-1.1"):NewDataObject("Tombstones", {
         type = "data source",
         text = "Tombstones",
         icon = "Interface\\Icons\\Ability_fiegndead",
@@ -1553,7 +1566,7 @@ local function MakeMinimapButton()
         end,
     })
 
-    local icon = LibStub("LibDBIcon-1.0", true)
+    icon = LibStub("LibDBIcon-1.0", true)
     icon:Register("Tombstones", miniButton, deathRecordsDB.minimapDB)
 end
 
@@ -1613,50 +1626,6 @@ function TdecodeMessage(msg)
   return player_data
 end
 
--- (name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words, realm)
-function TencodeMessageFull(marker)
-  local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
-  local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.guild or "") .. COMM_FIELD_DELIM .. (marker.source_id or "") .. COMM_FIELD_DELIM .. (marker.race_id or "") .. COMM_FIELD_DELIM .. 
-  (marker.class_id or "") .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM ..  (marker.instID or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. 
-  loc_str .. COMM_FIELD_DELIM ..  marker.timestamp .. COMM_FIELD_DELIM ..  (marker.last_words or "") .. COMM_FIELD_DELIM ..  (marker.realm or "") .. COMM_FIELD_DELIM
-  return comm_message
-end
-
--- (name, level, map_id, map_pos)
-function TencodeMessageLite(marker)
-  local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
-  local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. loc_str .. COMM_FIELD_DELIM
-  return comm_message
-end
-
-function TdecodeMessageLite(msg)
-  local values = {}
-  for w in msg:gmatch("(.-)~") do table.insert(values, w) end
-  if #values ~= 4 then
-    -- Return something that causes the calling function to return on the isValidEntry check
-    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
-    return malformed_player_data
-  end
-  local date = time()
-  local last_words = nil
-  local name = values[1]
-  local guild = nil
-  local source_id = nil
-  local race_id = nil
-  local class_id = nil
-  local level = tonumber(values[2])
-  local instance_id = nil
-  local map_id = tonumber(values[3])
-  local map_pos = values[4]
-  if (map_id == nil) then
-    -- Return something that causes the calling function to return on the isValidEntry check
-    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
-    return malformed_player_data
-  end
-  local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
-  return player_data
-end
-
 function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
   return {
     ["name"] = name,
@@ -1670,6 +1639,49 @@ function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_
     ["map_pos"] = map_pos,
     ["date"] = date,
     ["last_words"] = last_words,
+  }
+end
+
+-- (name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words, realm)
+function TencodeMessageFull(marker)
+  local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
+  local comm_message = marker.user .. COMM_FIELD_DELIM .. (marker.guild or "") .. COMM_FIELD_DELIM .. (marker.source_id or "") .. COMM_FIELD_DELIM .. (marker.race_id or "") .. COMM_FIELD_DELIM .. 
+  (marker.class_id or "") .. COMM_FIELD_DELIM .. (marker.level or "") .. COMM_FIELD_DELIM ..  (marker.instID or "") .. COMM_FIELD_DELIM .. (marker.mapID or "") .. COMM_FIELD_DELIM .. 
+  loc_str .. COMM_FIELD_DELIM ..  marker.timestamp .. COMM_FIELD_DELIM ..  (marker.last_words or "") .. COMM_FIELD_DELIM ..  (marker.realm or "") .. COMM_FIELD_DELIM
+  return comm_message
+end
+
+-- (map_id, map_pos, karma)
+function TencodeMessageLite(marker)
+  local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
+  local karmaScore = marker.karma > 0 and "+" or "-"
+  local comm_message = (marker.mapID or "") .. COMM_FIELD_DELIM .. loc_str .. COMM_FIELD_DELIM .. karmaScore .. COMM_FIELD_DELIM
+  return comm_message
+end
+
+function TdecodeMessageLite(msg)
+  local values = {}
+  for w in msg:gmatch("(.-)~") do table.insert(values, w) end
+  if #values ~= 3 then
+    -- Return something that causes the calling function to return on the isValidEntry check
+    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
+    return malformed_player_data
+  end
+  local map_id = tonumber(values[1])
+  local map_pos = values[2]
+  local karma = values[3]
+  if (map_id == nil or map_pos == nil or karma == nil) then
+    return nil
+  end
+  local location_ping_data = TLocationPing(map_id, map_pos, karma)
+  return location_ping_data
+end
+
+function TLocationPing(map_id, map_pos, karma)
+  return {
+    ["map_id"] = map_id,
+    ["map_pos"] = map_pos,
+    ["karma"] = karma,
   }
 end
 
@@ -1990,6 +2002,10 @@ local function CreateDataImportFrame()
             hbdp:AddWorldMapIconMap("TombstonesImport", overlayFrame, mapID, posX, posY)
             C_Timer.After(3.0, function()
               hbdp:RemoveWorldMapIcon("TombstonesImport", overlayFrame)
+              if overlayFrame ~= nil then
+                overlayFrame:Hide()
+                overlayFrame = nil 
+              end
             end)
         end
         frame:Hide()
@@ -2445,6 +2461,7 @@ local function SlashCommandHandler(msg)
         print("Tombstones has " .. #deathRecordsDB.deathRecords.. " records in total.")
         print("Tombstones saw " .. deathRecordCount .. " records this session.")
         print("You have visited " .. deathVisitCount .. " tombstones.")
+        print("You have seen " .. ratingsSeenTotal .. " ratings broadcasted.")
     elseif command == "export" then
         local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
         printDebug("Serialized data size is: " .. tostring(string.len(serializedData)))
@@ -2606,24 +2623,64 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
   if channel_name == death_alerts_channel then
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
       if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
-          printDebug("Receiving DeathLog death ping for " .. player_name_short .. ".")
+          printDebug("Receiving HC:DeathLog death for " .. player_name_short .. ".")
           TdeathlogReceiveChannelMessage(player_name_short, msg)
       end
       if command == COMM_COMMANDS["LAST_WORDS"] then
-          printDebug("Receiving DeathLog last_words ping for " .. player_name_short .. ".")
+          printDebug("Receiving HC:DeathLog last_words for " .. player_name_short .. ".")
           TdeathlogReceiveLastWords(player_name_short, msg)
       end
   elseif channel_name == tombstones_channel then
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
       if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] then
-          printDebug("Receiving TS_RatingRequest ping for " .. player_name_short .. ".")
+          printDebug("Receiving TS:RatingRequest for " .. player_name_short .. ".")
           TwhisperRatingForMarkerTo(msg, player_name_short)
+      end
+      if command == TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] then
+          printDebug("Receiving TS:RatingPing from " .. player_name_short .. ".")
+          ratingsSeenCount = ratingsSeenCount + 1
+          ratingsSeenTotal = ratingsSeenTotal + 1
+          
+          local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+          overlayFrame:SetFrameStrata("FULLSCREEN")
+          overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
+          overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
+          local decodedLocationData = TdecodeMessageLite(msg)
+          local mapID = decodedLocationData.map_id
+          local posX, posY = strsplit(",", decodedLocationData["map_pos"], 2)
+          local karma = decodedLocationData.karma
+          local textureIcon = ""
+          if karma == "+" then
+            textureIcon = "Interface\\Icons\\Inv_misc_qirajicrystal_03"
+          else
+            textureIcon = "Interface\\Icons\\Inv_misc_qirajicrystal_02"
+          end
+          
+          overlayFrame.Texture = overlayFrame:CreateTexture(nil, "ARTWORK")
+          overlayFrame.Texture:SetAllPoints()
+          overlayFrame.Texture:SetTexture(textureIcon)
+
+          hbdp:AddWorldMapIconMap("TombstonesRatingPing", overlayFrame, tonumber(mapID), tonumber(posX), tonumber(posY), 3)
+          miniButton.icon = textureIcon
+          icon:Refresh("Tombstones")
+          C_Timer.After(7.0, function()
+              ratingsSeenCount = ratingsSeenCount - 1
+              hbdp:RemoveWorldMapIcon("TombstonesRatingPing", overlayFrame)
+              if overlayFrame ~= nil then
+                  overlayFrame:Hide()
+                  overlayFrame = nil 
+              end
+              if(ratingsSeenCount == 0) then
+                miniButton.icon = "Interface\\Icons\\Ability_fiegndead"
+                icon:Refresh("Tombstones")
+              end
+          end)
       end
   end
 end
 
 local function OnUpdateMovementHandler(self, elapsed)
-  if isPlayerMoving then
+  if isPlayerMoving and deathRecordsDB.visiting then
     FlashWhenNearTombstone()
   end
 end
@@ -2634,13 +2691,15 @@ function Tombstones:PLAYER_STOPPED_MOVING()
     movementTimer:Cancel()
     movementTimer = nil
   end
-  -- Movement monitoring ended
-  ActOnNearestTombstone()
+  if deathRecordsDB.visiting then
+    -- Movement monitoring ended
+    ActOnNearestTombstone()
+  end
 end
 
 function Tombstones:PLAYER_STARTED_MOVING()
   isPlayerMoving = true
-  if not movementTimer then
+  if not movementTimer and deathRecordsDB.visiting then
     movementTimer = C_Timer.NewTicker(movementUpdateInterval, OnUpdateMovementHandler)
   end
   -- Movement monitoring started
