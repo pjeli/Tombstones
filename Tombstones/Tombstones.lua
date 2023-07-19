@@ -152,6 +152,8 @@ local tombstoneFrame
 local dialogueBox
 local targetDangerFrame
 local targetDangerText
+local zoneDangerFrame
+local zoneDangerText
 local glowFrame
 local currentViewingMapID
 local subTooltip
@@ -161,7 +163,7 @@ local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
-  ["FACTION_ID"] = nil,
+  ["FACTION_ID"] = PLAYER_FACTION,
   ["LEVEL_THRESH"] = 1,
   ["HOUR_THRESH"] = 720,
   ["REALMS"] = true,
@@ -486,6 +488,9 @@ local function LoadDeathRecords()
         if (TOMB_FILTERS["LEVEL_THRESH"] <= 0) then
             TOMB_FILTERS["LEVEL_THRESH"] = 1
         end
+        if (TOMB_FILTERS["FACTION_ID"] ~= nil) then
+            TOMB_FILTERS["FACTION_ID"] = PLAYER_FACTION
+        end
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)
@@ -547,6 +552,27 @@ local function PruneDeathRecords()
 
     deathRecordsDB.deathRecords = prunedRecords
     return recordsToPrune
+end
+
+local function HideDangerFrames()
+    if (splashFrame ~= nil) then
+      splashFrame:Hide()
+      splashFrame = nil
+    end
+    if (targetDangerFrame ~= nil) then
+        targetDangerFrame:Hide()
+        targetDangerFrame = nil
+    end
+    if (targetDangerText ~= nil) then
+        targetDangerText = nil
+    end
+    if (zoneDangerFrame ~= nil) then
+        zoneDangerFrame:Hide()
+        zoneDangerFrame = nil
+    end
+    if (zoneDangerText ~= nil) then
+        zoneDangerText = nil
+    end
 end
 
 -- "force" should be used if the underlying DeathRecords have been altered
@@ -1157,6 +1183,39 @@ local function CreateTargetDangerFrame()
     targetDangerFrame.text = targetDangerText -- Assign the text object to the frame to keep a reference
 end
 
+local function CreateZoneDangerFrame()
+    zoneDangerFrame = CreateFrame("Frame", "ZoneDangerFrame", UIParent)
+    zoneDangerFrame:SetSize(100, 20)
+    local position = deathRecordsDB.zoneDangerFramePos
+    if (position ~= nil) then
+        zoneDangerFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", position.x, position.y)
+    else
+        zoneDangerFrame:SetPoint("CENTER", 0, 0)
+    end
+    zoneDangerFrame:SetMovable(true)
+    zoneDangerFrame:SetClampedToScreen(true)
+    zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked)
+    zoneDangerFrame:RegisterForDrag("LeftButton")
+    zoneDangerFrame:SetScript("OnDragStart", zoneDangerFrame.StartMoving)
+    zoneDangerFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Save the new position
+        local x, y = self:GetLeft(), self:GetTop()
+        deathRecordsDB.zoneDangerFramePos = { x = x, y = y }
+    end)
+
+    zoneDangerText = zoneDangerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    zoneDangerText:SetPoint("CENTER", 0, 0)
+    zoneDangerText:SetText("")
+
+    -- Create the background texture
+    local bgTexture = zoneDangerFrame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.5) -- Set the RGB values and alpha (0.5 for 50% transparency)
+
+    zoneDangerFrame.text = zoneDangerText -- Assign the text object to the frame to keep a reference
+end
+
 -- Event handler for UNIT_TARGET event
 local function UnitTargetChange()
     local target = "target"
@@ -1233,24 +1292,32 @@ local function GenerateMinimapIcon(marker)
 end
 
 local function FlashWhenNearTombstone()
-    if (deathRecordsDB.visiting == false or IsInInstance()) then
+    if ((deathRecordsDB.visiting == false and deathRecordsDB.showDanger == false) or IsInInstance()) then
         return
     end
 
-    -- Handle player death event
     local playerInstance = C_Map.GetBestMapForUnit("player")
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
     local playerX, playerY = playerPosition:GetXY()
+    local playerLevel = UnitLevel("player")
+    
+    local levelRange = MAP_TABLE[playerInstance]
+    local minLevel
+    local maxLevel
+    if levelRange then
+        minLevel = levelRange.minLevel
+        maxLevel = levelRange.maxLevel
+    end
 
     local closestMarker
     local closestDistance = math.huge
+    local proximityUnvisitedCount = 0
+    local proximityTotalCount = 0
 
-    local zoneMarkers = visitingZoneCache[playerInstance]
-    if (zoneMarkers == nil or #zoneMarkers == 0) then
-        return
-    end
+    local zoneMarkers = visitingZoneCache[playerInstance] or {}
+    local totalZoneMarkers = #zoneMarkers
 
-    -- Iterate through your death markers and calculate the distance from each marker to the player's position
+    -- Iterate through zone death markers and determine closest marker
     for index, marker in ipairs(zoneMarkers) do
         local markerX = marker.posX
         local markerY = marker.posY
@@ -1261,47 +1328,80 @@ local function FlashWhenNearTombstone()
         local allowed = IsMarkerAllowedByFilters(marker)
 
         -- Check if this marker is closer than the previous closest marker
-        if not marker.visited and allowed and distance < closestDistance then
-            closestMarker = marker
-            closestDistance = distance
+        if distance < 0.03 then
+            proximityTotalCount = proximityTotalCount + 1
+        end
+        if allowed then
+            if (distance < 0.015 and not marker.visited) then proximityUnvisitedCount = proximityUnvisitedCount + 1 end
+            if (not marker.visited and distance < closestDistance) then
+                    closestMarker = marker
+                    closestDistance = distance
+            end
         end
     end
-
-    -- Now you have the closest death marker to the player
-    if closestMarker then
-        printTrace("On move death marker: " .. tostring(closestDistance))
-        if (lastClosestMarker == nil) then
-            lastClosestMarker = closestMarker
-            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
-        elseif (lastClosestMarker ~= closestMarker) then
-            lastClosestMarker = closestMarker
-            printDebug("Swapping nearest minimap marker.")
-            hbdp:RemoveAllMinimapIcons("TombstonesMM")
-            hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+    
+    -- Only show Danger frame if within level range and enabled
+    if (deathRecordsDB.showDanger and minLevel ~= nil and maxLevel ~= nil and playerLevel <= maxLevel and playerLevel >= minLevel) then
+        local dangerPercentage = 0.0
+        if (totalZoneMarkers > 0) then
+            dangerPercentage = math.min((proximityTotalCount / totalZoneMarkers) * 100.0, 100.0)
         end
-
-        if closestDistance <= 0.0025 then
-            if (glowFrame == nil) then
-                -- Create a frame for the screen glow effect
-                glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
-                glowFrame:SetAllPoints(UIParent)
-                glowFrame:SetFrameStrata("BACKGROUND")
-
-                -- Create a texture for the glow effect
-                local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
-                glowTexture:SetAllPoints()
-                glowTexture:SetTexture("Interface\\FullScreenTextures\\OutOfControl")
-                glowTexture:SetBlendMode("ADD")
-                glowTexture:SetVertexColor(1, 1, 1, 0.5) -- Set the texture color to red (RGB values)
-                glowFrame:Show()
+        if (zoneDangerFrame == nil) then
+            CreateZoneDangerFrame()
+            zoneDangerText:SetText(string.format("%.2f%% Danger", dangerPercentage))
+        else
+            zoneDangerText:SetText(string.format("%.2f%% Danger", dangerPercentage))
+        end
+    else
+        if (zoneDangerFrame ~= nil) then
+            zoneDangerFrame:Hide()
+            zoneDangerFrame = nil
+        end
+    end    
+    
+    -- Only show Visiting Glow if visiting enabled
+    if (deathRecordsDB.visiting) then
+        -- Proximity flavor text
+        if(proximityUnvisitedCount >= 10 and (lastProximityWarning < (time() - 900))) then
+          lastProximityWarning = time()
+          DEFAULT_CHAT_FRAME:AddMessage("You feel the gaze of " .. tostring(proximityUnvisitedCount) .. " nearby unvisited spirits...", 1, 1, 0)
+        end
+        -- Now you have the closest death marker to the player
+        if closestMarker then
+            printTrace("On move death marker: " .. tostring(closestDistance))
+            if (lastClosestMarker == nil) then
+                lastClosestMarker = closestMarker
+                hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
+            elseif (lastClosestMarker ~= closestMarker) then
+                lastClosestMarker = closestMarker
+                printDebug("Swapping nearest minimap marker.")
+                hbdp:RemoveAllMinimapIcons("TombstonesMM")
+                hbdp:AddMinimapIconMap("TombstonesMM", GenerateMinimapIcon(closestMarker), closestMarker.mapID, closestMarker.posX, closestMarker.posY, false, true)
             end
-        elseif(glowFrame ~= nil) then
+
+            if closestDistance <= 0.0025 then
+                if (glowFrame == nil) then
+                    -- Create a frame for the screen glow effect
+                    glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
+                    glowFrame:SetAllPoints(UIParent)
+                    glowFrame:SetFrameStrata("BACKGROUND")
+
+                    -- Create a texture for the glow effect
+                    local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
+                    glowTexture:SetAllPoints()
+                    glowTexture:SetTexture("Interface\\FullScreenTextures\\OutOfControl")
+                    glowTexture:SetBlendMode("ADD")
+                    glowTexture:SetVertexColor(1, 1, 1, 0.5) -- Set the texture color to red (RGB values)
+                    glowFrame:Show()
+                end
+            elseif(glowFrame ~= nil) then
+                glowFrame:Hide()
+                glowFrame = nil
+            end
+        elseif (glowFrame ~= nil) then
             glowFrame:Hide()
             glowFrame = nil
         end
-    elseif (glowFrame ~= nil) then
-        glowFrame:Hide()
-        glowFrame = nil
     end
 end
 
@@ -1393,17 +1493,7 @@ local function GenerateTombstonesOptionsFrame()
             elseif (toggleName == "ZoneInfo") then
                 deathRecordsDB.showZoneSplash = false
                 deathRecordsDB.showDanger = false
-                if (splashFrame ~= nil) then
-                  splashFrame:Hide()
-                  splashFrame = nil
-                end
-                if (targetDangerFrame ~= nil) then
-                    targetDangerFrame:Hide()
-                    targetDangerFrame = nil
-                end
-                if (targetDangerText ~= nil) then
-                    targetDangerText = nil
-                end
+                HideDangerFrames()
             elseif (toggleName == "Rating") then
                 deathRecordsDB.rating = false
                 TombstonesLeaveChannel()
@@ -2179,7 +2269,7 @@ end
 
 -- Function to show the zone splash text
 local function ShowNearestTombstoneSplashText(marker)
-    if (deathRecordsDB.showZoneSplash == false or IsInInstance()) then
+    if (IsInInstance()) then
         return
     end
 
@@ -2276,10 +2366,10 @@ local function ActOnNearestTombstone()
 
     local closestMarker
     local closestDistance = math.huge
-    local proximityUnvisitedCount = 0
 
     local zoneMarkers = visitingZoneCache[playerInstance]
-    if (zoneMarkers == nil or #zoneMarkers == 0) then
+    local totalZoneMarkers = #zoneMarkers
+    if (zoneMarkers == nil or totalZoneMarkers == 0) then
         return
     end
 
@@ -2294,20 +2384,12 @@ local function ActOnNearestTombstone()
         local allowed = IsMarkerAllowedByFilters(marker)
 
         -- Check if this marker is closer than the previous closest marker
-        if distance < 0.015 then
-            if not marker.visited and allowed then
-                proximityUnvisitedCount = proximityUnvisitedCount + 1
-                if distance < closestDistance then
-                    closestMarker = marker
-                    closestDistance = distance
-                end
+        if allowed and not marker.visited then
+            if distance < closestDistance then
+                closestMarker = marker
+                closestDistance = distance
             end
         end
-    end
-
-    if (proximityUnvisitedCount >= 10 and (lastProximityWarning < (time() - 900))) then
-        lastProximityWarning = time()
-        DEFAULT_CHAT_FRAME:AddMessage("You feel the gaze of " .. tostring(proximityUnvisitedCount) .. " nearby unvisited spirits...", 1, 1, 0)
     end
 
     if closestMarker then
@@ -2433,6 +2515,97 @@ local function StressGen(numberOfMarkers)
 end
 
 
+--[[ Hyperlink Handlers ]]
+--
+local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
+  local newMsg = "";
+  local remaining = msg;
+  local done;
+  repeat
+    local start, finish, characterName, mapID, posX, posY = remaining:find("!Tombstones%[([^%s]+) (%d+) ([%d%.]+) ([%d%.]+)%]")
+    if(characterName) then
+      characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
+      newMsg = newMsg..remaining:sub(1, start-1);
+      newMsg = newMsg.."|cFFFF0000|Hgarrmission:tombstones:"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Tombstone]|h|r";
+      remaining = remaining:sub(finish + 1);
+    else
+      done = true;
+    end
+  until(done)
+  if newMsg ~= "" then
+      return false, newMsg, player, l, cs, t, flag, channelId, ...;
+  end
+end
+
+ChatFrame_AddMessageEventFilter("CHAT_MSG_SAY", filterFunc)
+
+function Tombstones:HyperlinkHandler(...)
+  local _, linkType = ...
+  local _, myIdentifier, mapID, posX, posY = strsplit(":", linkType)
+
+  if myIdentifier == "tombstones" then
+    print(mapID)
+    print(posX)
+    print(posY)
+  end
+end
+
+hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(...)
+    Tombstones:HyperlinkHandler(...)
+end);
+
+--hooksecurefunc("SetItemRef", function(link, text)
+--  if(link == "tombstones:tombstone") then
+--    print("z1")
+--    local _, _, characterName = text:find("|Htombstones:tombstone|h|cFF8800FF%[([^%s]+)%]|h");
+--        print(characterName)
+--    if(characterName) then
+--      characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
+--      print(characterName)
+--      if(IsShiftKeyDown()) then
+--        print("z2")
+--        local editbox = GetCurrentKeyBoardFocus();
+--        if(editbox) then
+--          print("z3")
+--          editbox:Insert("[Tombstones: "..characterName.."]");
+--        end
+--      else
+--        characterName = characterName:gsub("%.", "")
+--        print(characterName)
+--      end
+--    else
+--      ShowTooltip({
+--        {1, "Tombstones", 0.5, 0, 1},
+--        {1, L["Malformed Tombstones link"], 1, 0, 0}
+--      });
+--    end
+--  end
+--end);
+
+-- Show the proper tooltip for the spell if the link is a spell link.
+local function OnChatLinkClick(chatFrame, link, text, button)
+  print("q")
+	if link:find("tombstones:0:0:") == nil then 
+		prevClickedLink = "" 
+		return 
+	end
+	
+	if prevClickedLink == link .. text then
+		ItemRefTooltip:Hide()
+		prevClickedLink = ""
+		return
+	else
+		prevClickedLink = link .. text
+	end 
+	
+  ItemRefTooltip:SetOwner(chatFrame, "ANCHOR_PRESERVE")
+  ItemRefTooltip:AddLine("TOMBSTONE", 1, 0, 0)
+  ItemRefTooltip:AddLine("Try clicking again or send a bug report!", 1, 0, 0)
+  ItemRefTooltip:SetPadding(25, 0)
+  ItemRefTooltip:Show()
+end
+
+
 --[[ Slash Command Handler ]]
 --
 SLASH_TOMBSTONES1 = "/tombstones"
@@ -2540,19 +2713,15 @@ local function SlashCommandHandler(msg)
             UnitTargetChange()
         elseif argsArray[1] == "hide" then
             deathRecordsDB.showDanger = false
-            if (targetDangerFrame ~= nil) then
-                targetDangerFrame:Hide()
-                targetDangerFrame = nil
-            end
-            if (targetDangerText ~= nil) then
-                targetDangerText = nil
-            end
+            HideDangerFrames()
         elseif argsArray[1] == "lock" then
             deathRecordsDB.dangerFrameUnlocked = false
             if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+            if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
         elseif argsArray[1] == "unlock" then
             deathRecordsDB.dangerFrameUnlocked = true
             if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+            if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
         end
     elseif command == "filter" then
         local argsArray = {}
@@ -2709,7 +2878,7 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
 end
 
 local function OnUpdateMovementHandler(self, elapsed)
-  if isPlayerMoving and deathRecordsDB.visiting then
+  if isPlayerMoving and (deathRecordsDB.visiting or deathRecordsDB.showDanger) then
     FlashWhenNearTombstone()
   end
 end
@@ -2755,6 +2924,11 @@ function Tombstones:ADDON_LOADED(addonName)
         TdeathlogJoinChannel()
         TombstonesJoinChannel()
       end)
+    
+      -- There's a maximum of 10 different chat frames, we need to hook them all.
+			for i = 1, 10 do
+				_G["ChatFrame" .. i]:HookScript("OnHyperlinkClick", OnChatLinkClick)
+			end
 
       print("Tombstones loaded successfully!")
   end
