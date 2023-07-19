@@ -438,21 +438,22 @@ local function LoadDeathRecords()
         deathRecordsDB.minimapDB = {}
         deathRecordsDB.minimapDB.minimapPos = 204
         deathRecordsDB.minimapDB.hide = false
+        deathRecordsDB.rating = true
     end
     if (deathRecordsDB.showMarkers == nil) then
         deathRecordsDB.showMarkers = true
     end
     if (deathRecordsDB.visiting == nil) then
-       deathRecordsDB.visiting = true 
+        deathRecordsDB.visiting = true 
     end
     if (deathRecordsDB.showZoneSplash == nil) then
-       deathRecordsDB.showZoneSplash = true 
+        deathRecordsDB.showZoneSplash = true 
     end
     if (deathRecordsDB.showDanger == nil) then
-       deathRecordsDB.showDanger = true 
+        deathRecordsDB.showDanger = true 
     end
     if (deathRecordsDB.dangerFrameUnlocked == nil) then
-       deathRecordsDB.dangerFrameUnlocked = true 
+        deathRecordsDB.dangerFrameUnlocked = true 
     end
     if (deathRecordsDB.minimapDB == nil) then
         deathRecordsDB.minimapDB = {}
@@ -462,6 +463,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.minimapDB.hide == nil) then
         deathRecordsDB.minimapDB.hide = false
+    end
+    if (deathRecordsDB.rating == nil) then
+        deathRecordsDB.rating = true
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
@@ -940,7 +944,7 @@ local function UpdateWorldMapMarkers()
                                 tooltipKarmaBackgroundTexture = nil
                             end
                         -- Trigger karma tally broadcast; Marker must be from THIS Realm
-                        elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown()) then
+                        elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown() and deathRecordsDB.rating) then
                             if (marker.realm ~= REALM) then return end
                             local encodedRatingRequestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
                             local channel_num = GetChannelName(tombstones_channel)
@@ -951,7 +955,7 @@ local function UpdateWorldMapMarkers()
                             ratings[PLAYER_NAME] = marker.karma
                             C_Timer.NewTimer(TallyInterval, DisplayTally)
                         -- Postive karma rating
-                        elseif (button == "LeftButton" and IsControlKeyDown() and (marker.karma == nil or marker.karma == -1)) then
+                        elseif (button == "LeftButton" and IsControlKeyDown() and (marker.karma == nil or marker.karma == -1) and deathRecordsDB.rating) then
                             marker.karma = 1
                             scaleUpAnimation:Stop()
                             scaleUpAnimation:Play()
@@ -968,7 +972,7 @@ local function UpdateWorldMapMarkers()
                             CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
                             
                         -- Negative karma rating
-                        elseif (button == "LeftButton" and IsAltKeyDown() and (marker.karma == nil or marker.karma == 1)) then
+                        elseif (button == "LeftButton" and IsAltKeyDown() and (marker.karma == nil or marker.karma == 1) and deathRecordsDB.rating) then
                             marker.karma = -1
                             scaleDownAnimation:Stop()
                             scaleDownAnimation:Play()
@@ -1335,6 +1339,13 @@ local function GenerateTombstonesOptionsFrame()
     local toggle3Text = toggle3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     toggle3Text:SetPoint("LEFT", toggle3, "RIGHT", 5, 0)
     toggle3Text:SetText("Information about dangers in my zone.")
+    
+    local toggle4 = CreateFrame("CheckButton", "Rating", optionsFrame, "OptionsCheckButtonTemplate")
+    toggle4:SetPoint("TOPLEFT", 20, -120)
+    toggle4:SetChecked(deathRecordsDB.rating)
+    local toggle4Text = toggle4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    toggle4Text:SetPoint("LEFT", toggle4, "RIGHT", 5, 0)
+    toggle4Text:SetText("To participate in rating the dead.")
     -- TOGGLE OPTIONS
 
     -- Callback function for toggle button click event
@@ -1354,6 +1365,8 @@ local function GenerateTombstonesOptionsFrame()
                 deathRecordsDB.showZoneSplash = true
                 deathRecordsDB.showDanger = true
                 UnitTargetChange()
+            elseif (toggleName == "Rating") then
+                deathRecordsDB.rating = true
             end
         else
             -- Perform actions for unselected state
@@ -1379,6 +1392,8 @@ local function GenerateTombstonesOptionsFrame()
                 if (targetDangerText ~= nil) then
                     targetDangerText = nil
                 end
+            elseif (toggleName == "Rating") then
+                deathRecordsDB.rating = false
             end
         end
     end
@@ -1387,6 +1402,7 @@ local function GenerateTombstonesOptionsFrame()
     toggle1:SetScript("OnClick", ToggleOnClick)
     toggle2:SetScript("OnClick", ToggleOnClick)
     toggle3:SetScript("OnClick", ToggleOnClick)
+    toggle4:SetScript("OnClick", ToggleOnClick)
 
     local closeButton = CreateFrame("Button", "CloseButton", optionsFrame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -8, -8)
@@ -2630,7 +2646,7 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           printDebug("Receiving HC:DeathLog last_words for " .. player_name_short .. ".")
           TdeathlogReceiveLastWords(player_name_short, msg)
       end
-  elseif channel_name == tombstones_channel then
+  elseif channel_name == tombstones_channel and deathRecordsDB.rating then
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
       if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] then
           printDebug("Receiving TS:RatingRequest for " .. player_name_short .. ".")
