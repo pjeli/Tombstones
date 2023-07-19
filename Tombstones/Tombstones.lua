@@ -305,7 +305,7 @@ local function InitializeDeadlyCounts()
     end
 end
 
--- Has no 'F' detector. Prefer to have visit show F.
+-- Filters our Fs, Questie text, and the "Our brave.." statement down to actual words
 local function LastWordsSmartParser(last_words)
     if(last_words == nil or lastWords == "") then
         return nil
@@ -316,6 +316,7 @@ local function LastWordsSmartParser(last_words)
     if (startsWith(last_words, "{rt")) then allow = false end
     if (allow == true and endsWithLevel(last_words)) then allow = false end
     if (allow == true and endsWithResurrected(last_words)) then allow = false end
+    if (allow == true and fDetection(last_words)) then allow = false end
     if (allow == true and startsWith(last_words, "Our brave ") 
         and stringContains(last_words, "has died at level") 
         and not stringContains(last_words, "last words were")) then
@@ -328,14 +329,14 @@ local function LastWordsSmartParser(last_words)
             local quotedPart = fetchQuotedPart(last_words)
             if (allow == true and startsWith(quotedPart, "{rt")) then allow = false end
             if (allow == true and endsWithLevel(quotedPart)) then allow = false end
+            if (allow == true and fDetection(quotedPart)) then allow = false end
             if (allow == true and endsWithResurrected(quotedPart)) then allow = false end
             if (allow == true) then return quotedPart end
     end
     if (allow == true) then
         return last_words
-    else
-        return nil
     end
+    return nil
 end
 
 local function TdeathlogJoinChannel()
