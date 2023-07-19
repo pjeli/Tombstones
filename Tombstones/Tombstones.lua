@@ -382,7 +382,7 @@ local function TwhisperRatingForMarkerTo(msg, player_name_short)
                 break
             end
         end
-        if foundMarker ~= nil and foundMarker.karma ~= nil then
+        if foundMarker ~= nil and foundMarker.karma ~= nil and foundMarker.karma == 1 then
             local karmaScore = foundMarker.karma > 0 and "+" or "-"
             local replyMsg = TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] .. COMM_COMMAND_DELIM .. msg .. karmaScore
             CTL:SendAddonMessage("BULK", "TombstonesRating", replyMsg, "WHISPER", player_name_short)
@@ -399,7 +399,7 @@ end
 local function TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
     local liteDecodedPlayerData = TdecodeMessageLite(msg)
     local karmaScore = msg:sub(-1)
-    if (karmaScore ~= '+' and karmaScore ~= '-') then return end
+    if (karmaScore ~= '+') then return end
     if (tonumber(liteDecodedPlayerData["map_id"]) ~= expectingTallyReplyMapID) then return end
     ratings[player_name_short] = karmaScore == "+" and 1 or -1
 end
@@ -1022,9 +1022,9 @@ local function UpdateWorldMapMarkers()
                             end
                             tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
                             
-                            local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
-                            local channel_num = GetChannelName(tombstones_channel)
-                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
+--                            local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
+--                            local channel_num = GetChannelName(tombstones_channel)
+--                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
 
                         -- Else propogate the click down the WorldMap    
                         else
@@ -2840,9 +2840,9 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           ratingsSeenCount = ratingsSeenCount + 1
           ratingsSeenTotal = ratingsSeenTotal + 1
           
-          local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
-          overlayFrame:SetFrameStrata("FULLSCREEN")
-          overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
+          local overlayFrame = CreateFrame("Button", nil, WorldMapButton)
+          --overlayFrame:SetFrameStrata("FULLSCREEN")
+          overlayFrame:SetFrameLevel(10000 - ratingsSeenCount) -- Set a higher frame level to appear on top of the map
           overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
           local decodedLocationData = TdecodeMessageLite(msg)
           local mapID = decodedLocationData.map_id
@@ -2850,14 +2850,14 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           local karma = decodedLocationData.karma
           local textureIcon = ""
           if karma == "+" then
-            textureIcon = "Interface\\Icons\\Inv_misc_qirajicrystal_03"
-          else
-            textureIcon = "Interface\\Icons\\Inv_misc_qirajicrystal_02"
+            textureIcon = "Interface\\Icons\\inv_rosebouquet01"
+--          else
+--            textureIcon = "Interface\\Icons\\inv_rosebouquet01"
           end
           
-          overlayFrame.Texture = overlayFrame:CreateTexture(nil, "ARTWORK")
-          overlayFrame.Texture:SetAllPoints()
-          overlayFrame.Texture:SetTexture(textureIcon)
+          local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
+          overlayFrameTexture:SetAllPoints()
+          overlayFrameTexture:SetTexture(textureIcon)
 
           hbdp:AddWorldMapIconMap("TombstonesRatingPing", overlayFrame, tonumber(mapID), tonumber(posX), tonumber(posY), 3)
           miniButton.icon = textureIcon
