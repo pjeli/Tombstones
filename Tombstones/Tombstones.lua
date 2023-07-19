@@ -417,9 +417,20 @@ local function TombstonesJoinChannel()
                 ChatFrame_RemoveChannel(_G['ChatFrame'..i], tombstones_channel)
             end
         end
-
     else
         printDebug("Successfully joined Tombstones channel.")
+    end
+end
+
+local function TombstonesLeaveChannel()
+    local channel_num = GetChannelName(tombstones_channel)
+    if channel_num ~= 0 then
+        LeaveChannelByName(tombstones_channel)
+        for i = 1, 10 do
+            if _G['ChatFrame'..i] then
+                ChatFrame_RemoveChannel(_G['ChatFrame'..i], tombstones_channel)
+            end
+        end
     end
 end
 
@@ -1307,7 +1318,7 @@ local function GenerateTombstonesOptionsFrame()
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     titleText:SetPoint("TOP", optionsFrame, "TOP", 0, -10)
-    titleText:SetText("Tombstones Options")
+    titleText:SetText("|cFFCFCFCFTombstones Options|r")
 
     local bgTexture = optionsFrame:CreateTexture(nil, "BACKGROUND")
     bgTexture:SetAllPoints()
@@ -1367,6 +1378,7 @@ local function GenerateTombstonesOptionsFrame()
                 UnitTargetChange()
             elseif (toggleName == "Rating") then
                 deathRecordsDB.rating = true
+                TombstonesJoinChannel()
             end
         else
             -- Perform actions for unselected state
@@ -1394,6 +1406,7 @@ local function GenerateTombstonesOptionsFrame()
                 end
             elseif (toggleName == "Rating") then
                 deathRecordsDB.rating = false
+                TombstonesLeaveChannel()
             end
         end
     end
@@ -1409,7 +1422,7 @@ local function GenerateTombstonesOptionsFrame()
 
     local filtersText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     filtersText:SetPoint("TOP", optionsFrame, "TOP", 0, -160)
-    filtersText:SetText("Filters")
+    filtersText:SetText("|cFFCFCFCFFilters|r")
 
     local optionText2 = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     optionText2:SetPoint("TOP", filtersText, "TOPLEFT", -35, -30)
