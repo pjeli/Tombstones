@@ -2517,42 +2517,42 @@ end
 
 --[[ Hyperlink Handlers ]]
 --
-local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
-  local newMsg = "";
-  local remaining = msg;
-  local done;
-  repeat
-    local start, finish, characterName, mapID, posX, posY = remaining:find("!Tombstones%[([^%s]+) (%d+) ([%d%.]+) ([%d%.]+)%]")
-    if(characterName) then
-      characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
-      newMsg = newMsg..remaining:sub(1, start-1);
-      newMsg = newMsg.."|cFFFF0000|Hgarrmission:tombstones:"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Tombstone]|h|r";
-      remaining = remaining:sub(finish + 1);
-    else
-      done = true;
-    end
-  until(done)
-  if newMsg ~= "" then
-      return false, newMsg, player, l, cs, t, flag, channelId, ...;
-  end
-end
+--local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
+--  local newMsg = "";
+--  local remaining = msg;
+--  local done;
+--  repeat
+--    local start, finish, characterName, mapID, posX, posY = remaining:find("!Tombstones%[([^%s]+) (%d+) ([%d%.]+) ([%d%.]+)%]")
+--    if(characterName) then
+--      characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
+--      newMsg = newMsg..remaining:sub(1, start-1);
+--      newMsg = newMsg.."|cFFFF0000|Hgarrmission:tombstones:"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Tombstone]|h|r";
+--      remaining = remaining:sub(finish + 1);
+--    else
+--      done = true;
+--    end
+--  until(done)
+--  if newMsg ~= "" then
+--      return false, newMsg, player, l, cs, t, flag, channelId, ...;
+--  end
+--end
 
-ChatFrame_AddMessageEventFilter("CHAT_MSG_SAY", filterFunc)
+--ChatFrame_AddMessageEventFilter("CHAT_MSG_SAY", filterFunc)
 
-function Tombstones:HyperlinkHandler(...)
-  local _, linkType = ...
-  local _, myIdentifier, mapID, posX, posY = strsplit(":", linkType)
+--function Tombstones:HyperlinkHandler(...)
+--  local _, linkType = ...
+--  local _, myIdentifier, mapID, posX, posY = strsplit(":", linkType)
 
-  if myIdentifier == "tombstones" then
-    print(mapID)
-    print(posX)
-    print(posY)
-  end
-end
+--  if myIdentifier == "tombstones" then
+--    print(mapID)
+--    print(posX)
+--    print(posY)
+--  end
+--end
 
-hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(...)
-    Tombstones:HyperlinkHandler(...)
-end);
+--hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(...)
+--    Tombstones:HyperlinkHandler(...)
+--end);
 
 --hooksecurefunc("SetItemRef", function(link, text)
 --  if(link == "tombstones:tombstone") then
@@ -2583,27 +2583,27 @@ end);
 --end);
 
 -- Show the proper tooltip for the spell if the link is a spell link.
-local function OnChatLinkClick(chatFrame, link, text, button)
-  print("q")
-	if link:find("tombstones:0:0:") == nil then 
-		prevClickedLink = "" 
-		return 
-	end
+--local function OnChatLinkClick(chatFrame, link, text, button)
+--  print("q")
+--	if link:find("tombstones:0:0:") == nil then 
+--		prevClickedLink = "" 
+--		return 
+--	end
 	
-	if prevClickedLink == link .. text then
-		ItemRefTooltip:Hide()
-		prevClickedLink = ""
-		return
-	else
-		prevClickedLink = link .. text
-	end 
+--	if prevClickedLink == link .. text then
+--		ItemRefTooltip:Hide()
+--		prevClickedLink = ""
+--		return
+--	else
+--		prevClickedLink = link .. text
+--	end 
 	
-  ItemRefTooltip:SetOwner(chatFrame, "ANCHOR_PRESERVE")
-  ItemRefTooltip:AddLine("TOMBSTONE", 1, 0, 0)
-  ItemRefTooltip:AddLine("Try clicking again or send a bug report!", 1, 0, 0)
-  ItemRefTooltip:SetPadding(25, 0)
-  ItemRefTooltip:Show()
-end
+--  ItemRefTooltip:SetOwner(chatFrame, "ANCHOR_PRESERVE")
+--  ItemRefTooltip:AddLine("TOMBSTONE", 1, 0, 0)
+--  ItemRefTooltip:AddLine("Try clicking again or send a bug report!", 1, 0, 0)
+--  ItemRefTooltip:SetPadding(25, 0)
+--  ItemRefTooltip:Show()
+--end
 
 
 --[[ Slash Command Handler ]]
@@ -2926,9 +2926,9 @@ function Tombstones:ADDON_LOADED(addonName)
       end)
     
       -- There's a maximum of 10 different chat frames, we need to hook them all.
-			for i = 1, 10 do
-				_G["ChatFrame" .. i]:HookScript("OnHyperlinkClick", OnChatLinkClick)
-			end
+--      for i = 1, 10 do
+--        _G["ChatFrame" .. i]:HookScript("OnHyperlinkClick", OnChatLinkClick)
+--      end
 
       print("Tombstones loaded successfully!")
   end
