@@ -246,6 +246,34 @@ function printTrace(msg)
     end
 end
 
+local function extractBracketTextWithColor(str)
+    local start, finish, color, text = str:find("|c(%x+)|H.-|h%[(.-)%]|h|r")
+    if color and text then
+        local colorizedText = "|c" .. color .. "[" .. text .. "]|r"
+        local cleanedText = str:gsub("|H.-|h(.-)|h", function(match)
+            return match:match("|c(%x+)(.-)|r") or match:match("|c(%x+)(.-)") or match
+        end)
+        return colorizedText, cleanedText
+    elseif str:match("|c") then
+        local cleanedText = str:gsub("|H.-|h(.-)|h", function(match)
+            return match:match("|c(%x+)(.-)|r") or match:match("|c(%x+)(.-)") or match
+        end)
+        return nil, cleanedText
+    else
+        return nil, str
+    end
+end
+
+function encodeColorizedText(str)
+    local encodedText = str:gsub("|([cr])", "<%1>")  -- Special encoding for "|c" and "|r"
+    return encodedText
+end
+
+function decodeColorizedText(str)
+    local decodedText = str:gsub("<([cr])>", "|%1")  -- Special decoding for "|c" and "|r"
+    return decodedText
+end
+
 local function SaveDeathRecords()
     deathRecordsDB.TOMB_FILTERS = TOMB_FILTERS
     _G["deathRecordsDB"] = deathRecordsDB
@@ -633,7 +661,7 @@ local function IsMarkerAllowedByFilters(marker)
         -- Smart filter is now the default...
     end
     if (allow == true and filter_rating == true) then
-        if (marker.karma == nil) then allow = false end
+        if (marker.karma == nil or marker.karma < 0) then allow = false end
     end
     if (allow == true and filter_class ~= nil) then
         if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
@@ -967,12 +995,25 @@ local function UpdateWorldMapMarkers()
                     markerMapButton:SetScript("OnMouseDown", function(self, button)
                         -- Share Tombstone export
                         if (button == "LeftButton" and IsShiftKeyDown()) then
-                            local singleRecordTable = {}
-                            table.insert(singleRecordTable, marker)
-                            local serializedData = ls:Serialize(singleRecordTable)
-                            local compressedData = ld:CompressDeflate(serializedData)
-                            local encodedData = ld:EncodeForPrint(compressedData)
-                            CreateDataDisplayFrame(encodedData)
+                            local editbox = GetCurrentKeyBoardFocus();
+                            if(editbox) then
+                                -- Hyperlink export
+                                if (marker.last_words) then
+                                  local _, santizedLastWords = extractBracketTextWithColor(marker.last_words)
+                                  local encodedLastWords = encodeColorizedText(santizedLastWords)
+                                  ChatFrame1EditBox:Insert("!T["..marker.user.." "..marker.timestamp.." "..marker.level.." "..marker.class_id.." "..marker.race_id.." "..marker.source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \""..encodedLastWords.."\"]")
+                                else
+                                ChatFrame1EditBox:Insert("!T["..marker.user.." "..marker.timestamp.." "..marker.level.." "..marker.class_id.." "..marker.race_id.." "..marker.source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \"\"]")
+                                end
+                            else
+                                -- Open up export frame
+                                local singleRecordTable = {}
+                                table.insert(singleRecordTable, marker)
+                                local serializedData = ls:Serialize(singleRecordTable)
+                                local compressedData = ld:CompressDeflate(serializedData)
+                                local encodedData = ld:EncodeForPrint(compressedData)
+                                CreateDataDisplayFrame(encodedData)
+                            end
                         -- Reset Karma score
                         elseif (button == "RightButton" and IsShiftKeyDown()) then
                             marker.karma = nil
@@ -2351,11 +2392,6 @@ local function ShowNearestTombstoneSplashText(marker)
 end
 
 local function ActOnNearestTombstone()
-    if(glowFrame ~= nil) then
-        glowFrame:Hide()
-        glowFrame = nil
-    end
-
     if (deathRecordsDB.visiting == false or IsInInstance()) then
         return
     end
@@ -2518,93 +2554,108 @@ end
 
 --[[ Hyperlink Handlers ]]
 --
---local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
---  local newMsg = "";
---  local remaining = msg;
---  local done;
---  repeat
---    local start, finish, characterName, mapID, posX, posY = remaining:find("!Tombstones%[([^%s]+) (%d+) ([%d%.]+) ([%d%.]+)%]")
---    if(characterName) then
---      characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
---      newMsg = newMsg..remaining:sub(1, start-1);
---      newMsg = newMsg.."|cFFFF0000|Hgarrmission:tombstones:"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Tombstone]|h|r";
---      remaining = remaining:sub(finish + 1);
---    else
---      done = true;
---    end
---  until(done)
---  if newMsg ~= "" then
---      return false, newMsg, player, l, cs, t, flag, channelId, ...;
---  end
---end
+local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
+  local newMsg = "";
+  local remaining = msg;
+  local done;
+  repeat
+    local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = remaining:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (%b\"\")%]")
+    if(characterName) then
+      newMsg = newMsg..remaining:sub(1, start-1);
+      newMsg = newMsg.."|cff9d9d9d|Hgarrmission:tombstones:"..timestamp..":"..level..":"..classID..":"..raceID..":"..sourceID..":"..mapID..":"..posX..":"..posY..":"..last_words.."|h["..characterName.."'s Tombstone]|h|r";
+      remaining = remaining:sub(finish + 1);
+    else
+      done = true;
+    end
+  until(done)
+  if newMsg ~= "" then
+      return false, newMsg, player, l, cs, t, flag, channelId, ...;
+  end
+end
 
---ChatFrame_AddMessageEventFilter("CHAT_MSG_SAY", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_SAY", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_PARTY", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_PARTY_LEADER", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_RAID", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_RAID_LEADER", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_OFFICER", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT_LEADER", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_YELL", filterFunc)
 
---function Tombstones:HyperlinkHandler(...)
---  local _, linkType = ...
---  local _, myIdentifier, mapID, posX, posY = strsplit(":", linkType)
+hooksecurefunc("SetItemRef", function(link, text)
+    if(startsWith(link, "garrmission:tombstones")) then    
+        local _, _, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = text:find("|cff9d9d9d|Hgarrmission:tombstones:(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(%b\"\")|h%[([^%s]+)'s Tombstone%]|h|r");
+        local decoded_last_words = fetchQuotedPart(decodeColorizedText(last_words))
+        --Republish hyperlink logic
+        if(IsShiftKeyDown()) then
+            local editbox = GetCurrentKeyBoardFocus();
+            if(editbox) then
+                editbox:Insert("!T["..characterName.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." "..last_words.."]");
+            end
+        else
+            -- Do the magic
+            if not WorldMapFrame:IsVisible() then
+                ToggleWorldMap()
+            end
+            WorldMapFrame:SetMapID(tonumber(mapID))
+            --Create temporary map marker    
+            local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+            --overlayFrame:SetFrameStrata("FULLSCREEN")
+            --overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
+            overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
 
---  if myIdentifier == "tombstones" then
---    print(mapID)
---    print(posX)
---    print(posY)
---  end
---end
-
---hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(...)
---    Tombstones:HyperlinkHandler(...)
---end);
-
---hooksecurefunc("SetItemRef", function(link, text)
---  if(link == "tombstones:tombstone") then
---    print("z1")
---    local _, _, characterName = text:find("|Htombstones:tombstone|h|cFF8800FF%[([^%s]+)%]|h");
---        print(characterName)
---    if(characterName) then
---      characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
---      print(characterName)
---      if(IsShiftKeyDown()) then
---        print("z2")
---        local editbox = GetCurrentKeyBoardFocus();
---        if(editbox) then
---          print("z3")
---          editbox:Insert("[Tombstones: "..characterName.."]");
---        end
---      else
---        characterName = characterName:gsub("%.", "")
---        print(characterName)
---      end
---    else
---      ShowTooltip({
---        {1, "Tombstones", 0.5, 0, 1},
---        {1, L["Malformed Tombstones link"], 1, 0, 0}
---      });
---    end
---  end
---end);
-
--- Show the proper tooltip for the spell if the link is a spell link.
---local function OnChatLinkClick(chatFrame, link, text, button)
---  print("q")
---	if link:find("tombstones:0:0:") == nil then 
---		prevClickedLink = "" 
---		return 
---	end
-	
---	if prevClickedLink == link .. text then
---		ItemRefTooltip:Hide()
---		prevClickedLink = ""
---		return
---	else
---		prevClickedLink = link .. text
---	end 
-	
---  ItemRefTooltip:SetOwner(chatFrame, "ANCHOR_PRESERVE")
---  ItemRefTooltip:AddLine("TOMBSTONE", 1, 0, 0)
---  ItemRefTooltip:AddLine("Try clicking again or send a bug report!", 1, 0, 0)
---  ItemRefTooltip:SetPadding(25, 0)
---  ItemRefTooltip:Show()
---end
+            overlayFrame.Texture = overlayFrame:CreateTexture(nil, "ARTWORK")
+            overlayFrame.Texture:SetAllPoints()
+            overlayFrame.Texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
+            
+            -- Set a light tooltip for the hyperlinked Tombstone
+            overlayFrame:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                local class_str = classID and GetClassInfo(classID) or nil
+                if (level ~= nil and classID ~= nil and raceID ~= nil) then
+                    local race_info = C_CreatureInfo.GetRaceInfo(raceID) 
+                    GameTooltip:SetText(characterName .. " - " .. race_info.raceName .. " " .. class_str .." - " .. level)
+                elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
+                    GameTooltip:SetText(characterName .. " - " .. class_str .." - " .. level)
+                elseif (marker.level ~= nil and marker.class_id == nil) then
+                    GameTooltip:SetText(characterName .. " - ? - " .. level)
+                else
+                    GameTooltip:SetText(characterName .. " - ? - ?")
+                end
+                local date_str = date("%Y-%m-%d %H:%M:%S", timestamp)
+                GameTooltip:AddLine(date_str, .8, .8, .8, true)
+                if (sourceID ~= nil) then
+                    local source_id = id_to_npc[tonumber(sourceID)]
+                    local env_dmg = environment_damage[tonumber(sourceID)]
+                    if (source_id ~= nil) then 
+                        GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
+                    elseif (env_dmg ~= nil) then
+                        GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                    end
+                end
+                if (decoded_last_words ~= nil and decoded_last_words ~= "") then
+                   GameTooltip:AddLine("\""..decoded_last_words.."\"", 1, 1, 1)
+                end
+                GameTooltip:Show()
+            end)
+            overlayFrame:SetScript("OnLeave", function(self)
+                GameTooltip:Hide()
+            end)
+            hbdp:AddWorldMapIconMap("TombstonesHyperlink", overlayFrame, tonumber(mapID), tonumber(posX), tonumber(posY), 3)
+            C_Timer.After(10.0, function()
+                hbdp:RemoveWorldMapIcon("TombstonesHyperlink", overlayFrame)
+                if overlayFrame ~= nil then
+                  overlayFrame:Hide()
+                  overlayFrame = nil 
+                end
+            end)
+        end
+    end
+end);
 
 
 --[[ Slash Command Handler ]]
@@ -2890,10 +2941,12 @@ function Tombstones:PLAYER_STOPPED_MOVING()
     movementTimer:Cancel()
     movementTimer = nil
   end
-  if deathRecordsDB.visiting then
-    -- Movement monitoring ended
-    ActOnNearestTombstone()
+  if(glowFrame ~= nil) then
+    glowFrame:Hide()
+    glowFrame = nil
   end
+  -- Movement monitoring ended
+  ActOnNearestTombstone()
 end
 
 function Tombstones:PLAYER_STARTED_MOVING()
