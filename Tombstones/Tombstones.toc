@@ -18,5 +18,6 @@ libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
 libs\LibBase64-1.0\LibBase64-1.0.xml
 
 Tombstones.lua
+Engravings.lua
 id_to_npc_classic.lua
 npc_to_id_classic.lua
