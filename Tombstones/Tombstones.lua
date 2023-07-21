@@ -661,7 +661,7 @@ local function IsMarkerAllowedByFilters(marker)
         -- Smart filter is now the default...
     end
     if (allow == true and filter_rating == true) then
-        if (marker.karma == nil or marker.karma < 0) then allow = false end
+        if (marker.karma ~= nil and marker.karma < 0) then allow = false end
     end
     if (allow == true and filter_class ~= nil) then
         if (marker.class_id == nil or marker.class_id ~= filter_class) then allow = false end
@@ -1501,7 +1501,7 @@ local function GenerateTombstonesOptionsFrame()
     -- Create the main frame
     optionsFrame = CreateFrame("Frame", "MyFrame", UIParent)
     optionsFrame:SetFrameStrata("HIGH")
-    optionsFrame:SetSize(360, 370)
+    optionsFrame:SetSize(360, 390)
     optionsFrame:SetPoint("CENTER", 0, 80)
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1634,11 +1634,18 @@ local function GenerateTombstonesOptionsFrame()
     local realmsOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     realmsOptionText:SetPoint("LEFT", realmsOption, "RIGHT", 5, 0)
     realmsOptionText:SetText("Are from this realm.")
+    
+    local ratingOption = CreateFrame("CheckButton", "Rating", optionsFrame, "OptionsCheckButtonTemplate")
+    ratingOption:SetPoint("TOPLEFT", 20, -290)
+    ratingOption:SetChecked(TOMB_FILTERS["RATING"])
+    local ratingOptionText = ratingOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ratingOptionText:SetPoint("LEFT", ratingOption, "RIGHT", 5, 0)
+    ratingOptionText:SetText("Don't have bad karma.")
 
     local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
     hourSlider:SetWidth(180)
     hourSlider:SetHeight(20)
-    hourSlider:SetPoint("TOPLEFT", 20, -300)
+    hourSlider:SetPoint("TOPLEFT", 20, -320)
     hourSlider:SetOrientation("HORIZONTAL")
     hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
     hourSlider:SetValueStep(0.5) -- Set the step value for the slider
@@ -1672,7 +1679,7 @@ local function GenerateTombstonesOptionsFrame()
     local levelSlider = CreateFrame("Slider", "LevelSlider", optionsFrame, "OptionsSliderTemplate")
     levelSlider:SetWidth(180)
     levelSlider:SetHeight(20)
-    levelSlider:SetPoint("TOPLEFT", 20, -330)
+    levelSlider:SetPoint("TOPLEFT", 20, -350)
     levelSlider:SetOrientation("HORIZONTAL")
     levelSlider:SetMinMaxValues(1, 60) -- Set the minimum and maximum values for the slider
     levelSlider:SetValueStep(1) -- Set the step value for the slider
@@ -1718,6 +1725,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["CLASS_ID"] = PLAYER_CLASS
             elseif (toggleName == "Faction") then
                 TOMB_FILTERS["FACTION_ID"] = PLAYER_FACTION
+            elseif (toggleName == "Rating") then
+                TOMB_FILTERS["RATING"] = true
             end
         else
             -- Perform actions for unselected state
@@ -1729,6 +1738,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["CLASS_ID"] = nil
             elseif (toggleName == "Faction") then
                 TOMB_FILTERS["FACTION_ID"] = nil
+            elseif (toggleName == "Rating") then
+                TOMB_FILTERS["RATING"] = false
             end
         end
         ClearDeathMarkers(true)
@@ -1739,6 +1750,7 @@ local function GenerateTombstonesOptionsFrame()
     classOption:SetScript("OnClick", ToggleFilter)
     factionOption:SetScript("OnClick", ToggleFilter)
     realmsOption:SetScript("OnClick", ToggleFilter)
+    ratingOption:SetScript("OnClick", ToggleFilter)
 
     optionsFrame:SetMovable(true)
     optionsFrame:SetClampedToScreen(true)
