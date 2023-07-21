@@ -715,11 +715,7 @@ end
 local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
     if (mapID == nil and instID == nil) then
         -- No location info. Useless.
-        return
-    end
-
-    if (instID ~= nil) then
-        printDebug("Instance death recorded for " .. user .. ".")
+        return false, nil
     end
 
     local marker = { realm = REALM, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
@@ -730,21 +726,30 @@ local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level,
         IncrementDeadlyCounts(marker)
         deathRecordCount = deathRecordCount + 1
         printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
-    else
-        printDebug("Received a duplicate record. Ignoring.")
+        return true, marker
     end
+    printDebug("Received a duplicate record. Ignoring.")
+    return false, marker
 end
 
 local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words)
     if (mapID == nil and instID == nil) then
         -- No location info. Useless.
-       return
+       return false, nil
     end
 
     local marker = { realm = realm, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words }
-    table.insert(deathRecordsDB.deathRecords, marker)
-    IncrementDeadlyCounts(marker)
-    deathRecordCount = deathRecordCount + 1
+
+    local isDuplicate = IsNewRecordDuplicate(marker)
+    if (not isDuplicate) then 
+        table.insert(deathRecordsDB.deathRecords, marker)
+        IncrementDeadlyCounts(marker)
+        deathRecordCount = deathRecordCount + 1
+        printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+        return true, marker
+    end
+    printDebug("Received a duplicate record. Ignoring.")
+    return false, marker
 end
 
 -- Function to create a frame to display serialized data
@@ -1640,7 +1645,7 @@ local function GenerateTombstonesOptionsFrame()
     ratingOption:SetChecked(TOMB_FILTERS["RATING"])
     local ratingOptionText = ratingOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ratingOptionText:SetPoint("LEFT", ratingOption, "RIGHT", 5, 0)
-    ratingOptionText:SetText("Don't have bad karma.")
+    ratingOptionText:SetText("Don't have |cFFF00000bad|r karma.")
 
     local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
     hourSlider:SetWidth(180)
@@ -2179,38 +2184,53 @@ local function CreateDataImportFrame()
     importButton:SetText("Import")
     importButton:SetScript("OnClick", function()
         local encodedData = editBox:GetText()
-        printDebug("Input data size is: " .. tostring(string.len(encodedData)))
-        local decodedData = ld:DecodeForPrint(encodedData)
-        printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
-        local decompressedData = ld:DecompressDeflate(decodedData)
-        printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
-        local success, importedDeathRecords = ls:Deserialize(decompressedData)
-        -- Example: Print the received data to the chat frame
-        printDebug("Deserialization sucess: " .. tostring(success))
-        local numImportRecords = #importedDeathRecords
-        printDebug("Imported records size is: " .. tostring(numImportRecords))
-        cleanImportRecords = DedupeImportDeathRecords(importedDeathRecords)
-        local numNewRecords = #cleanImportRecords
-        printDebug("Deduped records size is: " .. tostring(numNewRecords))
-        for _, marker in ipairs(cleanImportRecords) do
-            ImportDeathMarker(marker.realm, marker.mapID, marker.instID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
+        local numImportRecords = 0
+        local numNewRecords = 0
+        local singleRecord = nil
+        if (startsWith(encodedData, "!T[")) then
+            local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = encodedData:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (%b\"\")%]")
+            local success, marker = ImportDeathMarker(REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), characterName, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words)
+            singleRecord = marker
+            numImportRecords = numImportRecords + 1
+            if (success) then
+                numNewRecords = numNewRecords + 1
+            end
+            print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+        else
+            printDebug("Input data size is: " .. tostring(string.len(encodedData)))
+            local decodedData = ld:DecodeForPrint(encodedData)
+            printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
+            local decompressedData = ld:DecompressDeflate(decodedData)
+            printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
+            local success, importedDeathRecords = ls:Deserialize(decompressedData)
+            -- Example: Print the received data to the chat frame
+            printDebug("Deserialization sucess: " .. tostring(success))
+            numImportRecords = #importedDeathRecords
+            printDebug("Imported records size is: " .. tostring(numImportRecords))
+            --cleanImportRecords = DedupeImportDeathRecords(importedDeathRecords)
+            printDebug("Deduped records size is: " .. tostring(numNewRecords))
+            if(numImportRecords == 1) then
+                singleRecord = importedDeathRecords[1]
+            end
+            for _, marker in ipairs(importedDeathRecords) do
+                local success, _ = ImportDeathMarker(marker.realm, marker.mapID, marker.instID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
+                if success then numNewRecords = numNewRecords + 1 end
+            end
+            ClearDeathMarkers(false) 
+            UpdateWorldMapMarkers()
+            print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
         end
-        ClearDeathMarkers(false)
-        UpdateWorldMapMarkers()
-        print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
-        if(numImportRecords == 1) then
+        if(singleRecord ~= nil) then
             if not WorldMapFrame:IsVisible() then
                 ToggleWorldMap()
             end
-            
             local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
             overlayFrame:SetFrameStrata("FULLSCREEN")
             overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
-            overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
-            local importedDeathRecord = importedDeathRecords[1]         
-            local mapID = importedDeathRecord.mapID
-            local posX = importedDeathRecord.posX
-            local posY = importedDeathRecord.posY
+            overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)   
+            local mapID = singleRecord.mapID
+            local posX = singleRecord.posX
+            local posY = singleRecord.posY
 
             WorldMapFrame:SetMapID(mapID)
             
@@ -2652,7 +2672,7 @@ hooksecurefunc("SetItemRef", function(link, text)
         if(IsShiftKeyDown()) then
             local editbox = GetCurrentKeyBoardFocus();
             if(editbox) then
-                editbox:Insert("!T["..characterName.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." "..last_words.."]");
+                editbox:Insert("!T["..characterName.." "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." "..last_words.."]");
             end
         else
             -- Do the magic
