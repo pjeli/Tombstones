@@ -199,6 +199,18 @@ function fetchQuotedPart(str)
     return nil  -- Quoted part not found
 end
 
+function addQuotationMarksIfNeeded(inputString)
+    if inputString:sub(1, 1) ~= '"' then
+        inputString = '"' .. inputString
+    end
+
+    if inputString:sub(-1) ~= '"' then
+        inputString = inputString .. '"'
+    end
+
+    return inputString
+end
+
 function endsWithLevel(str)
     return string.match(str, "has reached level %d?%d?!$") ~= nil
 end
@@ -700,7 +712,8 @@ local function IsNewRecordDuplicate(newRecord)
             existingTruncatedY == newTruncatedY and
             math.floor(existingRecord.timestamp / 3600) == math.floor(newRecord.timestamp / 3600) and
             existingRecord.user == newRecord.user and
-            existingRecord.level == newRecord.level then
+            existingRecord.level == newRecord.level and
+            existingRecord.realm == newRecord.realm then
             -- Ignore last words. 
             -- If last words arrive they will update our existing record instead of making a new record.
             isDuplicate = true
@@ -718,7 +731,7 @@ local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level,
         return false, nil
     end
 
-    local marker = { realm = REALM, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id }
+    local marker = { realm = REALM, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, source_id = source_id, class_id = class_id, race_id = race_id }
     
     local isDuplicate = IsNewRecordDuplicate(marker)
     if (not isDuplicate) then 
@@ -859,6 +872,8 @@ local function UpdateWorldMapMarkers()
         local currentRenderCycleCount = renderCycleCount
         local renderCount = 0
         local currentTime = time()
+        
+        local filter_realms = TOMB_FILTERS["REALMS"]
 
         local batchSize = 250
 
@@ -910,8 +925,8 @@ local function UpdateWorldMapMarkers()
                     end
 
                     local markerUsername = marker.user
-                    if (filtering and not filter_realms and marker.realm ~= REALM) then
-                        markerUsername = marker.user .. "@" .. marker.realm
+                    if (not filter_realms and marker.realm ~= REALM) then
+                        markerUsername = marker.user .. "-" .. marker.realm
                     end
 
                     -- Set the tooltip text to the name of the player who died
@@ -1000,24 +1015,28 @@ local function UpdateWorldMapMarkers()
                     markerMapButton:SetScript("OnMouseDown", function(self, button)
                         -- Share Tombstone export
                         if (button == "LeftButton" and IsShiftKeyDown()) then
+                            -- Form export data as hyperlink
+                            local exportData
+                            local source_id = marker.source_id or -1
+                            local race_id = marker.race_id or 0
+                            local class_id = marker.class_id or 0
+                            local level = marker.level or 0
+                            local user = marker.realm == REALM and marker.user or marker.user.."-"..marker.realm
+                            if (marker.last_words) then
+                              local _, santizedLastWords = extractBracketTextWithColor(marker.last_words)
+                              local encodedLastWords = encodeColorizedText(santizedLastWords)
+                              exportData = "!T["..user.." "..marker.timestamp.." "..level.." "..class_id.." "..race_id.." "..source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \""..encodedLastWords.."\"]"
+                            else
+                                exportData = "!T["..user.." "..marker.timestamp.." "..level.." "..class_id.." "..race_id.." "..source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \"\"]"
+                            end
+
                             local editbox = GetCurrentKeyBoardFocus();
                             if(editbox) then
                                 -- Hyperlink export
-                                if (marker.last_words) then
-                                  local _, santizedLastWords = extractBracketTextWithColor(marker.last_words)
-                                  local encodedLastWords = encodeColorizedText(santizedLastWords)
-                                  ChatFrame1EditBox:Insert("!T["..marker.user.." "..marker.timestamp.." "..marker.level.." "..marker.class_id.." "..marker.race_id.." "..marker.source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \""..encodedLastWords.."\"]")
-                                else
-                                ChatFrame1EditBox:Insert("!T["..marker.user.." "..marker.timestamp.." "..marker.level.." "..marker.class_id.." "..marker.race_id.." "..marker.source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \"\"]")
-                                end
+                                ChatFrame1EditBox:Insert(exportData)
                             else
                                 -- Open up export frame
-                                local singleRecordTable = {}
-                                table.insert(singleRecordTable, marker)
-                                local serializedData = ls:Serialize(singleRecordTable)
-                                local compressedData = ld:CompressDeflate(serializedData)
-                                local encodedData = ld:EncodeForPrint(compressedData)
-                                CreateDataDisplayFrame(encodedData)
+                                CreateDataDisplayFrame(exportData)
                             end
                         -- Reset Karma score
                         elseif (button == "RightButton" and IsShiftKeyDown()) then
@@ -2188,8 +2207,16 @@ local function CreateDataImportFrame()
         local numNewRecords = 0
         local singleRecord = nil
         if (startsWith(encodedData, "!T[")) then
-            local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = encodedData:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (%b\"\")%]")
-            local success, marker = ImportDeathMarker(REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), characterName, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words)
+            local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = encodedData:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (.*)%]")
+            local player_name_short, realm = string.split("-", characterName) 
+            classID = tonumber(classID) > 0 and classID or nil
+            raceID = tonumber(raceID) > 0 and raceID or nil
+            sourceID = tonumber(sourceID) == -1 and nil or sourceID
+            level = tonumber(level) == 0 and nil or level
+            print(last_words)
+            last_words = #last_words > 2 and fetchQuotedPart(last_words) or nil
+            print(last_words)
+            local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words)
             singleRecord = marker
             numImportRecords = numImportRecords + 1
             if (success) then
@@ -2637,7 +2664,7 @@ local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
   local remaining = msg;
   local done;
   repeat
-    local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = remaining:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (%b\"\")%]")
+    local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = remaining:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (.*)%]")
     if(characterName) then
       newMsg = newMsg..remaining:sub(1, start-1);
       newMsg = newMsg.."|cff9d9d9d|Hgarrmission:tombstones:"..timestamp..":"..level..":"..classID..":"..raceID..":"..sourceID..":"..mapID..":"..posX..":"..posY..":"..last_words.."|h["..characterName.."'s Tombstone]|h|r";
@@ -2666,8 +2693,12 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_YELL", filterFunc)
 
 hooksecurefunc("SetItemRef", function(link, text)
     if(startsWith(link, "garrmission:tombstones")) then    
-        local _, _, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = text:find("|cff9d9d9d|Hgarrmission:tombstones:(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(%b\"\")|h%[([^%s]+)'s Tombstone%]|h|r");
-        local decoded_last_words = fetchQuotedPart(decodeColorizedText(last_words))
+        local _, _, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = text:find("|cff9d9d9d|Hgarrmission:tombstones:(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(.*)|h%[([^%s]+)'s Tombstone%]|h|r");
+        level = tonumber(level)
+        raceID = tonumber(raceID)
+        classID = tonumber(classID)
+        sourceID = tonumber(sourceID)
+        local decoded_last_words = decodeColorizedText(last_words)
         --Republish hyperlink logic
         if(IsShiftKeyDown()) then
             local editbox = GetCurrentKeyBoardFocus();
@@ -2694,29 +2725,29 @@ hooksecurefunc("SetItemRef", function(link, text)
             overlayFrame:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
                 local class_str = classID and GetClassInfo(classID) or nil
-                if (level ~= nil and classID ~= nil and raceID ~= nil) then
+                if (level ~= nil and level > 0 and classID ~= nil and classID > 0 and raceID ~= nil and raceID > 0) then
                     local race_info = C_CreatureInfo.GetRaceInfo(raceID) 
                     GameTooltip:SetText(characterName .. " - " .. race_info.raceName .. " " .. class_str .." - " .. level)
-                elseif (marker.level ~= nil and marker.class_id ~= nil and race_info == nil) then
+                elseif (level ~= nil and level > 0 and classID ~= nil and classID > 0 and (raceID == nil or raceID == 0)) then
                     GameTooltip:SetText(characterName .. " - " .. class_str .." - " .. level)
-                elseif (marker.level ~= nil and marker.class_id == nil) then
+                elseif (level ~= nil and level > 0 and (classID == nil or classID == 0)) then
                     GameTooltip:SetText(characterName .. " - ? - " .. level)
                 else
                     GameTooltip:SetText(characterName .. " - ? - ?")
                 end
-                local date_str = date("%Y-%m-%d %H:%M:%S", timestamp)
+                local date_str = date("%Y-%m-%d %H:%M:%S", tonumber(timestamp))
                 GameTooltip:AddLine(date_str, .8, .8, .8, true)
                 if (sourceID ~= nil) then
-                    local source_id = id_to_npc[tonumber(sourceID)]
-                    local env_dmg = environment_damage[tonumber(sourceID)]
+                    local source_id = id_to_npc[sourceID]
+                    local env_dmg = environment_damage[sourceID]
                     if (source_id ~= nil) then 
                         GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
                     elseif (env_dmg ~= nil) then
                         GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
                     end
                 end
-                if (decoded_last_words ~= nil and decoded_last_words ~= "") then
-                   GameTooltip:AddLine("\""..decoded_last_words.."\"", 1, 1, 1)
+                if (decoded_last_words ~= nil and decoded_last_words ~= "\"\"") then
+                    GameTooltip:AddLine(addQuotationMarksIfNeeded(decoded_last_words), 1, 1, 1)
                 end
                 GameTooltip:Show()
             end)
