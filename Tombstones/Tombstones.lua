@@ -2844,13 +2844,20 @@ local function SlashCommandHandler(msg)
         end
         ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
-    else
-        -- Display command usage information
+    elseif command == "usage" then
+       -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT}]")
         print("Usage: /tombstones or /ts [filter (info | reset | last_words | rating | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
+    else
+        if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
+            optionsFrame:Hide()
+            optionsFrame = nil
+        else
+            GenerateTombstonesOptionsFrame()
+        end
     end
 end
 SlashCmdList["TOMBSTONES"] = SlashCommandHandler
