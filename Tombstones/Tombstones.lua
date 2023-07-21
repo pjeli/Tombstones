@@ -1192,6 +1192,52 @@ local function MakeWorldMapButton()
     end)
 end
 
+local function MakeInterfacePage()
+			local interPanel = CreateFrame("FRAME")
+			interPanel.name = "Tombstones"
+      
+      local titleText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      titleText:SetPoint("TOPLEFT", 10, -10)
+      local font, _, flags = titleText:GetFont()
+      titleText:SetFont(font, 18, flags)
+      titleText:SetText("Tombstones")
+      titleText:SetTextColor(0.5, 0.5, 0.5)
+
+      -- TOGGLE OPTIONS
+      local mmToggle = CreateFrame("CheckButton", "MMB_Show", interPanel, "OptionsCheckButtonTemplate")
+      mmToggle:SetPoint("TOPLEFT", 10, -40)
+      mmToggle:SetChecked(not deathRecordsDB.minimapDB["hide"])
+      local mmToggleText = mmToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      mmToggleText:SetPoint("LEFT", mmToggle, "RIGHT", 5, 0)
+      mmToggleText:SetText("Show Minimap button")
+      
+      local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
+      slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
+      
+      local function ToggleOnClick(self)
+          local isChecked = self:GetChecked()
+          local toggleName = self:GetName()
+          
+          if isChecked then
+              -- Perform actions for selected state
+              if (toggleName == "MMB_Show") then
+                  deathRecordsDB.minimapDB["hide"] = false
+                  icon:Show("Tombstones")
+              end
+          else
+              -- Perform actions for unselected state
+              if (toggleName == "MMB_Show") then
+                  deathRecordsDB.minimapDB["hide"] = true
+                  icon:Hide("Tombstones")
+              end
+          end
+      end
+      mmToggle:SetScript("OnClick", ToggleOnClick)
+
+			InterfaceOptions_AddCategory(interPanel)
+end
+
 local function CreateTargetDangerFrame()
     targetDangerFrame = CreateFrame("Frame", "TargetDangerFrame", UIParent)
     targetDangerFrame:SetSize(100, 20)
@@ -3000,6 +3046,7 @@ function Tombstones:PLAYER_LOGIN()
   LoadDeathRecords()
   MakeWorldMapButton()
   MakeMinimapButton()
+  MakeInterfacePage()
   
   self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
   self:RegisterEvent("PLAYER_TARGET_CHANGED")
