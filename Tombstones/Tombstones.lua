@@ -2857,6 +2857,7 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT_LEADER", filterFunc)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", filterFunc)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", filterFunc)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_YELL", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", filterFunc)
 
 hooksecurefunc("SetItemRef", function(link, text)
     if(startsWith(link, "garrmission:tombstones")) then    
