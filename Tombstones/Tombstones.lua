@@ -122,6 +122,9 @@ local environment_damage = {
   [-6] = "Lava",
   [-7] = "Slime",
 }
+-- DeathLog Variables
+local deathlog_death_queue = {}
+local deathlog_last_words_queue = {}
 
 -- Variables
 local deathRecordsDB
@@ -2768,9 +2771,10 @@ local function selfDeathAlertLastWords()
 	local player_data = TPlayerData(UnitName("player"), guildName, nil, nil, nil, UnitLevel("player"), nil, nil, nil, nil, nil)
 	local checksum = fletcher16(player_data)
 	local msg = checksum .. COMM_FIELD_DELIM .. lastWords .. COMM_FIELD_DELIM
-  local channel_num = GetChannelName(death_alerts_channel)
+  --local channel_num = GetChannelName(death_alerts_channel)
 
-	CTL:SendChatMessage("BULK", COMM_NAME, COMM_COMMANDS["LAST_WORDS"] .. COMM_COMMAND_DELIM .. msg, "CHANNEL", nil, channel_num)
+  table.insert(deathlog_last_words_queue, COMM_COMMANDS["LAST_WORDS"] .. COMM_COMMAND_DELIM .. msg)
+	--CTL:SendChatMessage("BULK", COMM_NAME, COMM_COMMANDS["LAST_WORDS"] .. COMM_COMMAND_DELIM .. msg, "CHANNEL", nil, channel_num)
 end
 
 function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
@@ -2789,7 +2793,6 @@ function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_
   }
 end
 
--- TODO need to add death source 
 local function selfDeathAlert(death_source_id)
 	local map = C_Map.GetBestMapForUnit("player")
 	local instance_id = nil
@@ -2815,9 +2818,48 @@ local function selfDeathAlert(death_source_id)
 
 	local msg = TencodeMessageSelfReport(UnitName("player"), guildName, source_id, race_id, class_id, UnitLevel("player"), instance_id, map, position)
 	if msg == nil then return end
-	local channel_num = GetChannelName(death_alerts_channel)
-  CTL:SendChatMessage("BULK", COMM_NAME, COMM_COMMANDS["BROADCAST_DEATH_PING"] .. COMM_COMMAND_DELIM .. msg, "CHANNEL", nil, channel_num)
+
+  table.insert(deathlog_death_queue, COMM_COMMANDS["BROADCAST_DEATH_PING"] .. COMM_COMMAND_DELIM .. msg)
 end
+
+
+--[[ Self Report Handling]]
+--
+local function TsendNextInQueue()
+	if #deathlog_death_queue > 0 then 
+		local dl_channel_num = GetChannelName(death_alerts_channel)
+		if dl_channel_num == 0 then
+		  TdeathlogJoinChannel()
+		  return
+		end
+    
+		local commMessage = deathlog_death_queue[1]
+		CTL:SendChatMessage("BULK", COMM_NAME, commMessage, "CHANNEL", nil, dl_channel_num)
+		table.remove(deathlog_death_queue, 1)
+		return
+	end
+
+	if #deathlog_last_words_queue > 0 then 
+		local dl_channel_num = GetChannelName(death_alerts_channel)
+		if dl_channel_num == 0 then
+		  TdeathlogJoinChannel()
+		  return
+		end
+
+		local commMessage = deathlog_last_words_queue[1]
+		CTL:SendChatMessage("BULK", COMM_NAME, commMessage, "CHANNEL", nil, dl_channel_num)
+		table.remove(deathlog_last_words_queue, 1)
+		return
+	end
+end
+-- Note: We can only send at most 1 message per click, otherwise we get a taint
+WorldFrame:HookScript("OnMouseDown", function(self, button)
+  TsendNextInQueue()
+end)
+-- This binds any key press to send, including hitting enter to type or esc to exit game
+local f  = CreateFrame("Frame", "Test", UIParent)
+f:SetScript("OnKeyDown", TsendNextInQueue)
+f:SetPropagateKeyboardInput(true)
 
 
 --[[ Hyperlink Handlers ]]
@@ -2975,7 +3017,7 @@ local function SlashCommandHandler(msg)
         StressGen(2000)
     elseif command == "dead" then
         if (not debug) then return end
-        selfDeathAlert(nil)
+        selfDeathAlert(lastDmgSourceID)
         selfDeathAlertLastWords()
     elseif command == "prune" then
         -- Clear all death records
