@@ -199,18 +199,6 @@ function fetchQuotedPart(str)
     return nil  -- Quoted part not found
 end
 
-function addQuotationMarksIfNeeded(inputString)
-    if inputString:sub(1, 1) ~= '"' then
-        inputString = '"' .. inputString
-    end
-
-    if inputString:sub(-1) ~= '"' then
-        inputString = inputString .. '"'
-    end
-
-    return inputString
-end
-
 function endsWithLevel(str)
     return string.match(str, "has reached level %d?%d?!$") ~= nil
 end
@@ -347,7 +335,7 @@ end
 
 -- Filters our Fs, Questie text, and the "Our brave.." statement down to actual words
 local function LastWordsSmartParser(last_words)
-    if(last_words == nil or lastWords == "") then
+    if(last_words == nil or last_words == "") then
         return nil
     end
 
@@ -1022,10 +1010,11 @@ local function UpdateWorldMapMarkers()
                             local class_id = marker.class_id or 0
                             local level = marker.level or 0
                             local user = marker.realm == REALM and marker.user or marker.user.."-"..marker.realm
+                            print(marker.last_words == "")
                             if (marker.last_words) then
-                              local _, santizedLastWords = extractBracketTextWithColor(marker.last_words)
-                              local encodedLastWords = encodeColorizedText(santizedLastWords)
-                              exportData = "!T["..user.." "..marker.timestamp.." "..level.." "..class_id.." "..race_id.." "..source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \""..encodedLastWords.."\"]"
+                                local _, santizedLastWords = extractBracketTextWithColor(marker.last_words)
+                                local encodedLastWords = encodeColorizedText(santizedLastWords)
+                                exportData = "!T["..user.." "..marker.timestamp.." "..level.." "..class_id.." "..race_id.." "..source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \""..encodedLastWords.."\"]"
                             else
                                 exportData = "!T["..user.." "..marker.timestamp.." "..level.." "..class_id.." "..race_id.." "..source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \"\"]"
                             end
@@ -2692,10 +2681,10 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_YELL", filterFunc)
 hooksecurefunc("SetItemRef", function(link, text)
     if(startsWith(link, "garrmission:tombstones")) then    
         local _, _, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = text:find("|cff9d9d9d|Hgarrmission:tombstones:(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(.*)|h%[([^%s]+)'s Tombstone%]|h|r");
-        level = tonumber(level)
-        raceID = tonumber(raceID)
-        classID = tonumber(classID)
-        sourceID = tonumber(sourceID)
+        classID = tonumber(classID) > 0 and tonumber(classID) or nil
+        raceID = tonumber(raceID) > 0 and tonumber(raceID) or nil
+        sourceID = tonumber(sourceID) == -1 and nil or tonumber(sourceID)
+        level = tonumber(level) == 0 and nil or tonumber(level)
         local decoded_last_words = decodeColorizedText(last_words)
         --Republish hyperlink logic
         if(IsShiftKeyDown()) then
@@ -2704,6 +2693,17 @@ hooksecurefunc("SetItemRef", function(link, text)
                 editbox:Insert("!T["..characterName.." "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." "..last_words.."]");
             end
         else
+            if(IsControlKeyDown()) then
+                local player_name_short, realm = string.split("-", characterName) 
+                decoded_last_words = #last_words > 2 and decoded_last_words or nil
+                local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, level, sourceID, classID, raceID, fetchQuotedPart(decoded_last_words))
+                local numImportRecords = 1
+                local numNewRecords = 0
+                if (success) then
+                    numNewRecords = numNewRecords + 1
+                end
+                print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+            end
             -- Do the magic
             if not WorldMapFrame:IsVisible() then
                 ToggleWorldMap()
@@ -2745,7 +2745,7 @@ hooksecurefunc("SetItemRef", function(link, text)
                     end
                 end
                 if (decoded_last_words ~= nil and decoded_last_words ~= "\"\"") then
-                    GameTooltip:AddLine(addQuotationMarksIfNeeded(decoded_last_words), 1, 1, 1)
+                    GameTooltip:AddLine(decoded_last_words, 1, 1, 1)
                 end
                 GameTooltip:Show()
             end)
