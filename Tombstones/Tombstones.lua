@@ -1010,7 +1010,6 @@ local function UpdateWorldMapMarkers()
                             local class_id = marker.class_id or 0
                             local level = marker.level or 0
                             local user = marker.realm == REALM and marker.user or marker.user.."-"..marker.realm
-                            print(marker.last_words == "")
                             if (marker.last_words) then
                                 local _, santizedLastWords = extractBracketTextWithColor(marker.last_words)
                                 local encodedLastWords = encodeColorizedText(santizedLastWords)
@@ -2275,6 +2274,34 @@ local function CreateDataImportFrame()
     frame:Show()
 end
 
+local function HighlightMarkersForPlayer(characterName)
+    local player_name_short, realm = string.split("-", characterName)
+    local markerHighlights = {}
+    
+    for i, marker in ipairs(deathRecordsDB.deathRecords) do
+        if (marker.user == player_name_short and (realm == nil or realm == marker.realm)) then
+            local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+            overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
+            overlayFrame.Texture = overlayFrame:CreateTexture(nil, "ARTWORK")
+            overlayFrame.Texture:SetAllPoints()
+            overlayFrame.Texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
+            table.insert(markerHighlights, overlayFrame)
+            hbdp:AddWorldMapIconMap("TombstonesHighlight", overlayFrame, marker.mapID, marker.posX, marker.posY, 3)
+        end
+    end
+
+    C_Timer.After(10.0, function()
+        for _, markerHighlight in ipairs(markerHighlights) do
+            hbdp:RemoveWorldMapIcon("TombstonesHighlight", markerHighlight)
+            if (markerHighlight ~= nil) then
+                markerHighlight:Hide()
+                markerHighlight = nil
+            end
+        end
+        markerHighlights = nil
+    end)
+end
+
 local function ConvertTimestampToLongForm(timestamp)
     local dateTable = date("*t", timestamp)
     local daySuffix = ""
@@ -2841,6 +2868,9 @@ local function SlashCommandHandler(msg)
         CreateDataDisplayFrame(encodedData)
     elseif command == "import" then
         CreateDataImportFrame()
+    elseif command == "highlight" then
+        local playerName = args
+        HighlightMarkersForPlayer(playerName)
     elseif command == "zone" then
         if args == "show" then
             deathRecordsDB.showZoneSplash = true
@@ -2953,7 +2983,7 @@ local function SlashCommandHandler(msg)
         UpdateWorldMapMarkers()
     elseif command == "usage" then
        -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT} | highlight {PLAYER}]")
         print("Usage: /tombstones or /ts [filter (info | reset | last_words | rating | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
@@ -3092,11 +3122,6 @@ function Tombstones:ADDON_LOADED(addonName)
         TdeathlogJoinChannel()
         TombstonesJoinChannel()
       end)
-    
-      -- There's a maximum of 10 different chat frames, we need to hook them all.
---      for i = 1, 10 do
---        _G["ChatFrame" .. i]:HookScript("OnHyperlinkClick", OnChatLinkClick)
---      end
 
       print("Tombstones loaded successfully!")
   end
