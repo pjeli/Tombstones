@@ -928,6 +928,7 @@ local function UpdateWorldMapMarkers()
                     markerMapButton:SetScript("OnEnter", function(self)
                         currentViewingMapMarker = marker
                         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                        if (GameTooltip.SetBackdrop) then GameTooltip:SetBackdrop(nil) end
                         local class_str = marker.class_id and GetClassInfo(marker.class_id) or nil
                         if (marker.level ~= nil and marker.class_id ~= nil and marker.race_id ~= nil) then
                             local race_info = C_CreatureInfo.GetRaceInfo(marker.race_id) 
@@ -953,17 +954,50 @@ local function UpdateWorldMapMarkers()
                         if (marker.last_words ~= nil) then
                            GameTooltip:AddLine("\""..marker.last_words.."\"", 1, 1, 1)
                         end
-                        GameTooltip:Show()
                         if (marker.karma ~= nil) then
-                            tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                            if tooltipKarmaBackgroundTexture then
+                                tooltipKarmaBackgroundTexture:Hide()
+                                tooltipKarmaBackgroundTexture:ClearAllPoints()
+                                tooltipKarmaBackgroundTexture = nil
+                            end
                             if(marker.karma > 0) then 
-                                tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25) 
+                                --GameTooltip:EnableDrawLayer("BACKGROUND")
+
+
+                                tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                                tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.8, 0.32, 0.25) 
+                                GameTooltip:EnableDrawLayer("BACKGROUND")
+                                GameTooltip:Show()
+--                                if(GameTooltip.GetBackdropColor ~= nil) then
+--                                    GameTooltip.GetBackdropColor = function(self) return 0.01, 0.5, 0.32, 0.25 end
+--                                end
                             else
+                                --GameTooltip:EnableDrawLayer("BACKGROUND")
+                                tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
                                 tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
+                                GameTooltip:EnableDrawLayer("BACKGROUND")
+                                GameTooltip:Show()
+--                                if(GameTooltip.GetBackdropColor ~= nil) then
+--                                    GameTooltip.GetBackdropColor = function(self) return 1, 0, 0, 0.25 end
+--                                end
                             end
                             tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
                             tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
+                        else
+                            --GameTooltip:DisableDrawLayer("BACKGROUND")
+                            tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
+                            tooltipKarmaBackgroundTexture:SetColorTexture(0, 0, 0, 0.25) 
+                            GameTooltip:EnableDrawLayer("BACKGROUND")
+                            GameTooltip:Show()
+--                            if tooltipKarmaBackgroundTexture then
+--                                tooltipKarmaBackgroundTexture:Hide()
+--                                tooltipKarmaBackgroundTexture:ClearAllPoints()
+--                                tooltipKarmaBackgroundTexture = nil
+--                            end
+--                            GameTooltip:Show()
                         end
+
+                        --GameTooltip:EnableDrawLayer("BACKGROUND")
                         if subTooltip then
                             subTooltip:Hide()
                             subTooltip:ClearAllPoints()
@@ -1037,9 +1071,11 @@ local function UpdateWorldMapMarkers()
                         elseif (button == "RightButton" and IsShiftKeyDown()) then
                             marker.karma = nil
                             if tooltipKarmaBackgroundTexture then
-                                tooltipKarmaBackgroundTexture:Hide()
-                                tooltipKarmaBackgroundTexture:ClearAllPoints()
-                                tooltipKarmaBackgroundTexture = nil
+                                tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                                tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
+                                tooltipKarmaBackgroundTexture:SetColorTexture(0, 0, 0, 0.25) 
+                                GameTooltip:EnableDrawLayer("BACKGROUND")
+                                GameTooltip:Show()
                             end
                         -- Trigger karma tally broadcast; Marker must be from THIS Realm
                         elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown() and deathRecordsDB.rating) then
@@ -1060,10 +1096,12 @@ local function UpdateWorldMapMarkers()
 
                             if(tooltipKarmaBackgroundTexture == nil) then
                                 tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
-                                tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
-                                tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                             end
-                            tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.5, 0.32, 0.25)    
+                            tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                            tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
+                            tooltipKarmaBackgroundTexture:SetColorTexture(0.01, 0.8, 0.32, 0.25)  
+                            GameTooltip:EnableDrawLayer("BACKGROUND")
+                            GameTooltip:Show()
                             
                             local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
                             local channel_num = GetChannelName(tombstones_channel)
@@ -1077,10 +1115,12 @@ local function UpdateWorldMapMarkers()
 
                             if(tooltipKarmaBackgroundTexture == nil) then
                                 tooltipKarmaBackgroundTexture = GameTooltip:CreateTexture(nil, "BACKGROUND")
-                                tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
-                                tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                             end
+                            tooltipKarmaBackgroundTexture:SetSize(GameTooltip:GetWidth() - 10, GameTooltip:GetHeight() - 10) 
+                            tooltipKarmaBackgroundTexture:SetPoint("CENTER", GameTooltip, "CENTER", 0, 0)
                             tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
+                            GameTooltip:EnableDrawLayer("BACKGROUND")
+                            GameTooltip:Show()
                             
 --                            local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
 --                            local channel_num = GetChannelName(tombstones_channel)
@@ -2844,8 +2884,6 @@ hooksecurefunc("SetItemRef", function(link, text)
             WorldMapFrame:SetMapID(tonumber(mapID))
             --Create temporary map marker    
             local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
-            --overlayFrame:SetFrameStrata("FULLSCREEN")
-            --overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
             overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
 
             overlayFrame.Texture = overlayFrame:CreateTexture(nil, "ARTWORK")
@@ -3146,8 +3184,6 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           ratingsSeenTotal = ratingsSeenTotal + 1
           
           local overlayFrame = CreateFrame("Button", nil, WorldMapButton)
-          --overlayFrame:SetFrameStrata("FULLSCREEN")
-          overlayFrame:SetFrameLevel(10000 - ratingsSeenCount) -- Set a higher frame level to appear on top of the map
           overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
           local decodedLocationData = TdecodeMessageLite(msg)
           local mapID = decodedLocationData.map_id
@@ -3307,14 +3343,15 @@ end
 function Tombstones:StartUp()
 	-- the entry point of our addon
 	-- called inside loading screen before player sees world, some api functions are not available yet.
+
 	-- event handling helper
-        self:SetScript("OnEvent", function(self, event, ...) 
-            self[event](self, ...)
-        end)
+	self:SetScript("OnEvent", function(self, event, ...)
+		self[event](self, ...)
+	end)
 	-- actually start loading the addon once player ui is loading
-        self:RegisterEvent("ADDON_LOADED")
-        self:RegisterEvent("PLAYER_LOGIN")
-        self:RegisterEvent("PLAYER_LOGOUT")
+  self:RegisterEvent("ADDON_LOADED")
+	self:RegisterEvent("PLAYER_LOGIN")
+	self:RegisterEvent("PLAYER_LOGOUT")
 end
 
 
