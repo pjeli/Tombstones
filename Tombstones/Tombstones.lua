@@ -4,6 +4,7 @@ local TS_COMM_NAME = "TSKarmaChannel"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
+local PLAYERGUID = UnitGUID("player")
 local classNameToID = {
     ["warrior"] = 1,
     ["paladin"] = 2,
@@ -159,6 +160,7 @@ local currentViewingMapID
 local subTooltip
 local tooltipKarmaBackgroundTexture
 local debugCount = 0
+local lastWords = nil
 local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
@@ -508,6 +510,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.rating == nil) then
         deathRecordsDB.rating = true
+    end
+    if (deathRecordsDB.selfReporting == nil) then
+        deathRecordsDB.selfReporting = false
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
@@ -1223,6 +1228,13 @@ local function MakeInterfacePage()
       mmToggleText:SetPoint("LEFT", mmToggle, "RIGHT", 5, 0)
       mmToggleText:SetText("Show Minimap button")
       
+      local selfReportToggle = CreateFrame("CheckButton", "SelfReport", interPanel, "OptionsCheckButtonTemplate")
+      selfReportToggle:SetPoint("TOPLEFT", 10, -60)
+      selfReportToggle:SetChecked(deathRecordsDB.selfReporting)
+      local selfReportToggleText = selfReportToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      selfReportToggleText:SetPoint("LEFT", selfReportToggle, "RIGHT", 5, 0)
+      selfReportToggleText:SetText("Self report death and last words")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
@@ -1236,16 +1248,22 @@ local function MakeInterfacePage()
               if (toggleName == "MMB_Show") then
                   deathRecordsDB.minimapDB["hide"] = false
                   icon:Show("Tombstones")
+              elseif (toggleName == "SelfReport") then
+                  deathRecordsDB.selfReporting = true
+                  print("Tombstones will now report your death and last words. Please support the Hardcore add-on and community.")
               end
           else
               -- Perform actions for unselected state
               if (toggleName == "MMB_Show") then
                   deathRecordsDB.minimapDB["hide"] = true
                   icon:Hide("Tombstones")
+              elseif (toggleName == "SelfReport") then
+                  deathRecordsDB.selfReporting = false
               end
           end
       end
       mmToggle:SetScript("OnClick", ToggleOnClick)
+      selfReportToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
@@ -1855,22 +1873,6 @@ function TdecodeMessage(msg)
   end
   local player_data = TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
   return player_data
-end
-
-function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
-  return {
-    ["name"] = name,
-    ["guild"] = guild,
-    ["source_id"] = source_id,
-    ["race_id"] = race_id,
-    ["class_id"] = class_id,
-    ["level"] = level,
-    ["instance_id"] = instance_id,
-    ["map_id"] = map_id,
-    ["map_pos"] = map_pos,
-    ["date"] = date,
-    ["last_words"] = last_words,
-  }
 end
 
 -- (name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words, realm)
@@ -2670,6 +2672,109 @@ local function StressGen(numberOfMarkers)
     end
 end
 
+local function encodeMessage(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos)
+  if name == nil then return end
+  -- if guild == nil then return end -- TODO 
+  if tonumber(source_id) == nil then return end
+  if tonumber(race_id) == nil then return end
+  if tonumber(level) == nil then return end
+
+  local loc_str = ""
+  if map_pos then
+    loc_str = string.format("%.4f,%.4f", map_pos.x, map_pos.y)
+  end
+  local comm_message = name .. COMM_FIELD_DELIM .. (guild or "") .. COMM_FIELD_DELIM .. source_id .. COMM_FIELD_DELIM .. race_id .. COMM_FIELD_DELIM .. class_id .. COMM_FIELD_DELIM .. level .. COMM_FIELD_DELIM .. (instance_id or "")  .. COMM_FIELD_DELIM .. (map_id or "") .. COMM_FIELD_DELIM .. loc_str .. COMM_FIELD_DELIM
+  return comm_message
+end
+
+local function SetRecentMsg(...)
+	local text, sn, LN, CN, p2, sF, zcI, cI, cB, unu, lI, senderGUID = ...
+	if PLAYERGUID == nil then
+		PLAYERGUID = UnitGUID("player")
+	end
+
+	if senderGUID == PLAYERGUID then
+		lastWords = text
+    printTrace("Last words set.")
+		return true
+	end
+	return false
+end
+
+local function fletcher16(_player_data)
+    local data = _player_data["name"] .. _player_data["guild"] .. _player_data["level"]
+    local sum1 = 0
+    local sum2 = 0
+    for index=1,#data do
+        sum1 = (sum1 + string.byte(string.sub(data,index,index))) % 255;
+        sum2 = (sum2 + sum1) % 255;
+    end
+    return _player_data["name"] .. "-" .. bit.bor(bit.lshift(sum2,8), sum1)
+end
+
+local function selfDeathAlertLastWords()
+	if lastWords == nil then return end
+	local _, _, race_id = UnitRace("player")
+	local _, _, class_id = UnitClass("player")
+	local guildName, guildRankName, guildRankIndex = GetGuildInfo("player");
+	if guildName == nil then guildName = "" end
+	local death_source = "-1"
+
+	local player_data = TPlayerData(UnitName("player"), guildName, nil, nil, nil, UnitLevel("player"), nil, nil, nil, nil, nil)
+	local checksum = fletcher16(player_data)
+	local msg = checksum .. COMM_FIELD_DELIM .. lastWords .. COMM_FIELD_DELIM
+  local channel_num = GetChannelName(death_alerts_channel)
+
+	CTL:SendChatMessage("BULK", COMM_NAME, COMM_COMMANDS["LAST_WORDS"] .. COMM_COMMAND_DELIM .. msg, "CHANNEL", nil, channel_num)
+end
+
+function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
+  return {
+    ["name"] = name,
+    ["guild"] = guild,
+    ["source_id"] = source_id,
+    ["race_id"] = race_id,
+    ["class_id"] = class_id,
+    ["level"] = level,
+    ["instance_id"] = instance_id,
+    ["map_id"] = map_id,
+    ["map_pos"] = map_pos,
+    ["date"] = date,
+    ["last_words"] = last_words,
+  }
+end
+
+-- TODO need to add death source 
+local function selfDeathAlert(death_source_str)
+	local map = C_Map.GetBestMapForUnit("player")
+	local instance_id = nil
+	local position = nil
+	if map then 
+		position = C_Map.GetPlayerMapPosition(map, "player")
+		local continentID, worldPosition = C_Map.GetWorldPosFromMapPos(map, position)
+	else
+	  local _, _, _, _, _, _, _, _instance_id, _, _ = GetInstanceInfo()
+	  instance_id = _instance_id
+	end
+
+	local guildName, guildRankName, guildRankIndex = GetGuildInfo("player");
+	local _, _, race_id = UnitRace("player")
+	local _, _, class_id = UnitClass("player")
+	local death_source = "-1"
+--	if DeathLog_Last_Attack_Source then
+--	  death_source = npc_to_id[death_source_str]
+--	end
+
+--	if DeathLog_Last_Attack_Source and environment_damage[death_source_str] then
+--		death_source = death_source_str
+--	end
+
+	local msg = encodeMessage(UnitName("player"), guildName, death_source, race_id, class_id, UnitLevel("player"), instance_id, map, position)
+	if msg == nil then return end
+	local channel_num = GetChannelName(death_alerts_channel)
+  CTL:SendChatMessage("BULK", COMM_NAME, COMM_COMMANDS["BROADCAST_DEATH_PING"] .. COMM_COMMAND_DELIM .. msg, "CHANNEL", nil, channel_num)
+end
+
 
 --[[ Hyperlink Handlers ]]
 --
@@ -2825,6 +2930,10 @@ local function SlashCommandHandler(msg)
     elseif command == "stress" then
         if (not debug) then return end
         StressGen(2000)
+    elseif command == "dead" then
+        if (not debug) then return end
+        selfDeathAlert(nil)
+        selfDeathAlertLastWords()
     elseif command == "prune" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_PRUNE_CONFIRMATION")
@@ -3043,12 +3152,7 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           local mapID = decodedLocationData.map_id
           local posX, posY = strsplit(",", decodedLocationData["map_pos"], 2)
           local karma = decodedLocationData.karma
-          local textureIcon = ""
-          if karma == "+" then
-            textureIcon = "Interface\\Icons\\inv_rosebouquet01"
---          else
---            textureIcon = "Interface\\Icons\\inv_rosebouquet01"
-          end
+          local textureIcon = "Interface\\Icons\\inv_rosebouquet01"
           
           local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
           overlayFrameTexture:SetAllPoints()
@@ -3109,6 +3213,29 @@ function Tombstones:ZONE_CHANGED_NEW_AREA()
   ShowZoneSplashText()
 end
 
+function Tombstones:PLAYER_DEAD()
+    if (deathRecordsDB.selfReporting == true) then
+        selfDeathAlert(nil)
+        selfDeathAlertLastWords()
+    end
+end
+
+function Tombstones:CHAT_MSG_SAY(...)
+  SetRecentMsg(...)
+end
+
+function Tombstones:CHAT_MSG_PARTY(...)
+  SetRecentMsg(...)
+end
+
+function Tombstones:CHAT_MSG_GUILD(...)
+  SetRecentMsg(...)
+end
+
+function Tombstones:CHAT_MSG_RAID(...)
+  SetRecentMsg(...)
+end
+
 function Tombstones:PLAYER_LOGOUT()
   -- Handle player logout event
   SaveDeathRecords()
@@ -3138,8 +3265,13 @@ function Tombstones:PLAYER_LOGIN()
   self:RegisterEvent("PLAYER_TARGET_CHANGED")
   self:RegisterEvent("PLAYER_STARTED_MOVING")
   self:RegisterEvent("PLAYER_STOPPED_MOVING")
+  self:RegisterEvent("PLAYER_DEAD")
   self:RegisterEvent("CHAT_MSG_CHANNEL")
 	self:RegisterEvent("CHAT_MSG_ADDON")
+  self:RegisterEvent("CHAT_MSG_PARTY")
+	self:RegisterEvent("CHAT_MSG_SAY")
+	self:RegisterEvent("CHAT_MSG_GUILD")
+  self:RegisterEvent("CHAT_MSG_RAID")
 end
 
 function Tombstones:StartUp()
