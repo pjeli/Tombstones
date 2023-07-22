@@ -2213,9 +2213,7 @@ local function CreateDataImportFrame()
             raceID = tonumber(raceID) > 0 and raceID or nil
             sourceID = tonumber(sourceID) == -1 and nil or sourceID
             level = tonumber(level) == 0 and nil or level
-            print(last_words)
             last_words = #last_words > 2 and fetchQuotedPart(last_words) or nil
-            print(last_words)
             local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words)
             singleRecord = marker
             numImportRecords = numImportRecords + 1
