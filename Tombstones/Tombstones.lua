@@ -50,7 +50,7 @@ local TS_COMM_COMMANDS = {
   ["WHISPER_TALLY_REPLY"] = "2",
 }
 local MAP_TABLE = {
--- Eastern Kingdoms
+--[[Eastern Kingdoms]]      [1415] = {minLevel = 1,     maxLevel = 60,},
 --[[Alterac Mountains]]     [1416] = {minLevel = 30,    maxLevel = 40,},
 --[[Arathi Highlands]]      [1417] = {minLevel = 30,    maxLevel = 40,},
 --[[Badlands]]              [1418] = {minLevel = 35,    maxLevel = 45,},
@@ -77,7 +77,7 @@ local MAP_TABLE = {
 --[[Western Plaguelands]]   [1422] = {minLevel = 51,    maxLevel = 58,},
 --[[Wetlands]]              [1437] = {minLevel = 20,    maxLevel = 30,},
 
--- Kalimdor
+--[[Kalimdor]]              [1414] = {minLevel = 1,     maxLevel = 60,},
 --[[Ashenvale]]             [1440] = {minLevel = 18,    maxLevel = 30,},
 --[[Azshara]]               [1447] = {minLevel = 45,    maxLevel = 55,},
 --[[Darkshore]]             [1439] = {minLevel = 10,    maxLevel = 20,},
