@@ -2376,7 +2376,6 @@ local function ConvertTimestampToLongForm(timestamp)
     end
 
     local minute = string.format("%02d", dateTable.min)
-    --local second = string.format("%02d", dateTable.sec)
 
     return string.format("%s%s%s, %d, at %d:%s%s",
         date("%B ", timestamp),
@@ -2771,10 +2770,8 @@ local function selfDeathAlertLastWords()
 	local player_data = TPlayerData(UnitName("player"), guildName, nil, nil, nil, UnitLevel("player"), nil, nil, nil, nil, nil)
 	local checksum = fletcher16(player_data)
 	local msg = checksum .. COMM_FIELD_DELIM .. lastWords .. COMM_FIELD_DELIM
-  --local channel_num = GetChannelName(death_alerts_channel)
 
   table.insert(deathlog_last_words_queue, COMM_COMMANDS["LAST_WORDS"] .. COMM_COMMAND_DELIM .. msg)
-	--CTL:SendChatMessage("BULK", COMM_NAME, COMM_COMMANDS["LAST_WORDS"] .. COMM_COMMAND_DELIM .. msg, "CHANNEL", nil, channel_num)
 end
 
 function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
