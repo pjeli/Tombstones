@@ -1830,6 +1830,13 @@ local function GenerateTombstonesOptionsFrame()
     optionsFrame:RegisterForDrag("LeftButton")
     optionsFrame:SetScript("OnDragStart", optionsFrame.StartMoving)
     optionsFrame:SetScript("OnDragStop", optionsFrame.StopMovingOrSizing)
+        -- Add script handler to handle ESCAPE key press
+    optionsFrame:SetScript("OnKeyDown", function(_, key)
+        if key == "ESCAPE" then
+            optionsFrame:Hide()
+            optionsFrame = nil
+        end
+    end)
 end
 
 local function MakeMinimapButton()
