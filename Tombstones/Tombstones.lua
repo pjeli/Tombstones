@@ -1874,14 +1874,18 @@ function TdeathlogReceiveLastWords(sender, data)
   local msg = values[2]
   local currentTimeHour = math.floor(time() / 3600)
 
-  -- Iterate over the death records
-  for index, record in ipairs(deathRecordsDB.deathRecords) do
-    if (record.user == sender and record.realm == REALM and record.last_words == nil) then
-        if (math.floor(record.timestamp / 3600) == currentTimeHour) then
-            record.last_words = LastWordsSmartParser(msg)
-            break
-        end
-    end
+  -- Get the number of death records
+  local numRecords = #deathRecordsDB.deathRecords
+
+  -- Iterate over the death records in reverse
+  for index = numRecords, 1, -1 do
+      local record = deathRecordsDB.deathRecords[index]
+      if (record.user == sender and record.realm == REALM and record.last_words == nil) then
+          if (math.floor(record.timestamp / 3600) == currentTimeHour) then
+              record.last_words = LastWordsSmartParser(msg)
+              break
+          end
+      end
   end
 end
 
