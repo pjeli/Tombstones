@@ -406,7 +406,7 @@ local function TwhisperRatingForMarkerTo(msg, player_name_short)
         local level = liteDecodedPlayerData["level"]
         local mapID = liteDecodedPlayerData["map_id"]
         local posX, posY = strsplit(",", liteDecodedPlayerData["map_pos"], 2)
-        local zoneMarkers = visitingZoneCache[mapID]
+        local zoneMarkers = visitingZoneCache[mapID] or {}
         local foundMarker = nil
         for _, marker in ipairs(zoneMarkers) do
             if (marker ~= nil and marker.user == user and marker.level == tonumber(level) and marker.posX == tonumber(posX) and marker.posY == tonumber(posY) and marker.realm == REALM) then
@@ -2527,8 +2527,8 @@ local function ActOnNearestTombstone()
     local closestMarker
     local closestDistance = math.huge
 
-    local zoneMarkers = visitingZoneCache[playerInstance]
-    local totalZoneMarkers = #zoneMarkers
+    local zoneMarkers = visitingZoneCache[playerInstance] or {}
+    local totalZoneMarkers = #zoneMarkers or 0
     if (zoneMarkers == nil or totalZoneMarkers == 0) then
         return
     end
@@ -3307,15 +3307,14 @@ end
 function Tombstones:StartUp()
 	-- the entry point of our addon
 	-- called inside loading screen before player sees world, some api functions are not available yet.
-
 	-- event handling helper
-	self:SetScript("OnEvent", function(self, event, ...)
-		self[event](self, ...)
-	end)
+        self:SetScript("OnEvent", function(self, event, ...) 
+            self[event](self, ...)
+        end)
 	-- actually start loading the addon once player ui is loading
-  self:RegisterEvent("ADDON_LOADED")
-	self:RegisterEvent("PLAYER_LOGIN")
-	self:RegisterEvent("PLAYER_LOGOUT")
+        self:RegisterEvent("ADDON_LOADED")
+        self:RegisterEvent("PLAYER_LOGIN")
+        self:RegisterEvent("PLAYER_LOGOUT")
 end
 
 
