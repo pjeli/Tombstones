@@ -193,6 +193,7 @@ local l64 = LibStub("LibBase64-1.0")
 local Tombstones = CreateFrame("Frame")
 
 function fetchQuotedPart(str)
+    if(str == nil) then return nil end
     local pattern = "\"(.-)\""
     local quotedPart = string.match(str, pattern)
     if quotedPart then
