@@ -14,6 +14,8 @@ libs\LibSerialize-1.1.3\lib.xml
 libs\LibCompress\lib.xml
 libs\LibDeflate\lib.xml
 libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+libs\LibDBIcon-1.0\LibDBIcon-1.0\lib.xml
 libs\HereBeDragons\HereBeDragons-2.0.lua
 libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
 libs\LibBase64-1.0\LibBase64-1.0.xml
