@@ -1568,10 +1568,13 @@ end
 local function GenerateTombstonesOptionsFrame()
     if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
         return
+    elseif (optionsFrame ~= nil and not optionsFrame:IsVisible()) then
+        optionsFrame:Show()
+        return
     end
 
     -- Create the main frame
-    optionsFrame = CreateFrame("Frame", "MyFrame", UIParent)
+    optionsFrame = CreateFrame("Frame", "TombstonesOptionsFrame", UIParent)
     optionsFrame:SetFrameStrata("HIGH")
     optionsFrame:SetSize(360, 390)
     optionsFrame:SetPoint("CENTER", 0, 80)
@@ -1830,13 +1833,7 @@ local function GenerateTombstonesOptionsFrame()
     optionsFrame:RegisterForDrag("LeftButton")
     optionsFrame:SetScript("OnDragStart", optionsFrame.StartMoving)
     optionsFrame:SetScript("OnDragStop", optionsFrame.StopMovingOrSizing)
-        -- Add script handler to handle ESCAPE key press
-    optionsFrame:SetScript("OnKeyDown", function(_, key)
-        if key == "ESCAPE" then
-            optionsFrame:Hide()
-            optionsFrame = nil
-        end
-    end)
+    table.insert(UISpecialFrames, "TombstonesOptionsFrame")
 end
 
 local function MakeMinimapButton()
@@ -1844,7 +1841,6 @@ local function MakeMinimapButton()
     local function MiniBtnClickFunc(btn)
         if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
             optionsFrame:Hide()
-            optionsFrame = nil
         else
             GenerateTombstonesOptionsFrame()
         end
@@ -3096,7 +3092,6 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["RATING"] = false
             if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
                 optionsFrame:Hide()
-                optionsFrame = nil
             end
         elseif argsArray[1] == "last_words" then
             TOMB_FILTERS["HAS_LAST_WORDS"] = true
@@ -3147,7 +3142,6 @@ local function SlashCommandHandler(msg)
     else
         if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
             optionsFrame:Hide()
-            optionsFrame = nil
         else
             GenerateTombstonesOptionsFrame()
         end
