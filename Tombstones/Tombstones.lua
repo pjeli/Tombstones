@@ -161,6 +161,7 @@ local subTooltip
 local tooltipKarmaBackgroundTexture
 local debugCount = 0
 local lastWords = nil
+local lastDmgSourceID = nil
 local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
   ["CLASS_ID"] = nil,
@@ -2673,7 +2674,7 @@ local function StressGen(numberOfMarkers)
     end
 end
 
-local function encodeMessage(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos)
+local function TencodeMessageSelfReport(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos)
   if name == nil then return end
   -- if guild == nil then return end -- TODO 
   if tonumber(source_id) == nil then return end
@@ -2746,7 +2747,7 @@ function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_
 end
 
 -- TODO need to add death source 
-local function selfDeathAlert(death_source_str)
+local function selfDeathAlert(death_source_id)
 	local map = C_Map.GetBestMapForUnit("player")
 	local instance_id = nil
 	local position = nil
@@ -2761,16 +2762,15 @@ local function selfDeathAlert(death_source_str)
 	local guildName, guildRankName, guildRankIndex = GetGuildInfo("player");
 	local _, _, race_id = UnitRace("player")
 	local _, _, class_id = UnitClass("player")
-	local death_source = "-1"
---	if DeathLog_Last_Attack_Source then
---	  death_source = npc_to_id[death_source_str]
---	end
+	local source_id = -1
+	if death_source_id then
+	  source_id = death_source_id
+	end
+	if source_id == -1 and death_source_id and environment_damage[death_source_id] then
+		source_id = death_source_id
+	end
 
---	if DeathLog_Last_Attack_Source and environment_damage[death_source_str] then
---		death_source = death_source_str
---	end
-
-	local msg = encodeMessage(UnitName("player"), guildName, death_source, race_id, class_id, UnitLevel("player"), instance_id, map, position)
+	local msg = TencodeMessageSelfReport(UnitName("player"), guildName, source_id, race_id, class_id, UnitLevel("player"), instance_id, map, position)
 	if msg == nil then return end
 	local channel_num = GetChannelName(death_alerts_channel)
   CTL:SendChatMessage("BULK", COMM_NAME, COMM_COMMANDS["BROADCAST_DEATH_PING"] .. COMM_COMMAND_DELIM .. msg, "CHANNEL", nil, channel_num)
@@ -3216,9 +3216,37 @@ end
 
 function Tombstones:PLAYER_DEAD()
     if (deathRecordsDB.selfReporting == true) then
-        selfDeathAlert(nil)
+        selfDeathAlert(lastDmgSourceID)
         selfDeathAlertLastWords()
     end
+end
+
+function Tombstones:COMBAT_LOG_EVENT_UNFILTERED(...)
+	local _, ev, _, _, source_name, _, _, target_guid, _, _, _, environmental_type, _, _, _, _, _ = CombatLogGetCurrentEventInfo()
+	if not (source_name == PLAYER_NAME) then
+		if not (source_name == nil) then
+			if string.find(ev, "DAMAGE") ~= nil then
+        lastDmgSourceID = npc_to_id[source_name]
+			end
+		end
+	end
+	if ev == "ENVIRONMENTAL_DAMAGE" then
+	  if target_guid == UnitGUID("player") then
+	    if environmental_type == "Drowning" then
+	      lastDmgSourceID = -2
+	    elseif environmental_type == "Falling" then
+	      lastDmgSourceID = -3
+	    elseif environmental_type == "Fatigue" then
+	      lastDmgSourceID = -4
+	    elseif environmental_type == "Fire" then
+	      lastDmgSourceID = -5
+	    elseif environmental_type == "Lava" then
+	      lastDmgSourceID = -6
+	    elseif environmental_type == "Slime" then
+	      lastDmgSourceID = -7
+	    end
+	  end
+	end
 end
 
 function Tombstones:CHAT_MSG_SAY(...)
@@ -3273,6 +3301,7 @@ function Tombstones:PLAYER_LOGIN()
 	self:RegisterEvent("CHAT_MSG_SAY")
 	self:RegisterEvent("CHAT_MSG_GUILD")
   self:RegisterEvent("CHAT_MSG_RAID")
+  self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 end
 
 function Tombstones:StartUp()
