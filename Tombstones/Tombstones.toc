@@ -21,6 +21,7 @@ libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
 libs\LibBase64-1.0\LibBase64-1.0.xml
 libs\ChatThrottleLib.lua
 
+Helpers.lua
 Tombstones.lua
 Engravings.lua
 id_to_npc_classic.lua
