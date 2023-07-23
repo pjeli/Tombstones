@@ -1,3 +1,5 @@
+local PLAYER_NAME, _ = UnitName("player")
+
 local templates = {
     "**** ahead",
     "Likely ****",
@@ -450,6 +452,11 @@ local conjunctions = {
 }
 
 local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
+    print(templateIndex)
+    print(categoryIndex)
+    print(wordIndex)
+    print(conjunctionIndex)
+  
     if (templateIndex == 0 or categoryIndex == 0 or wordIndex == 0) then
         return nil
     end
@@ -694,12 +701,86 @@ local function CreatePhaseGenerationInterface()
         local selectedConjWord = UIDropDownMenu_GetSelectedValue(conjWordDropdown)
 
         local phrase = generatePhrase(selectedTemplate, selectedWord, selectedConjunction, selectedConjTemplate, selectedConjWord)
-        print("Generated Phrase:", phrase)
-        print("Generated Indexes: @"..templateIndex.."#"..categoryIndex.."$"..wordIndex.."+".. conjunctionIndex .."&"..conjTemplateIndex.."^"..conjCategoryIndex.."*"..conjWordIndex)
+        printDebug("Generated Phrase:", phrase)
+        printDebug("Generated Indexes: @"..templateIndex.."#"..categoryIndex.."$"..wordIndex.."+".. conjunctionIndex .."&"..conjTemplateIndex.."^"..conjCategoryIndex.."*"..conjWordIndex)
+        
+        local mapID = C_Map.GetBestMapForUnit("player")
+        local playerPosition = C_Map.GetPlayerMapPosition(mapID, "player")
+        local posX, posY = playerPosition:GetXY()
+        posX = string.format("%.4f", posX)
+        posY = string.format("%.4f", posY)
+        
+        DEFAULT_CHAT_FRAME:AddMessage("!E["..PLAYER_NAME.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]", 1, 1, 1)
     end)
 
     frame:Show()
 end
+
+
+--[[ Hyperlink Handlers ]]
+--
+local function engravingsFilterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
+  local newMsg = "";
+  local remaining = msg;
+  local done;
+  repeat
+    local start, finish, characterName, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY = remaining:find("!E%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) ([%d%.]+) ([%d%.]+)%]")
+    if(characterName) then
+      newMsg = newMsg..remaining:sub(1, start-1);
+      newMsg = newMsg.."|cFFBF4500|Hgarrmission:engravings:"..templateIndex..":"..categoryIndex..":"..wordIndex..":"..conjunctionIndex..":"..conjTemplateIndex..":"..conjCategoryIndex..":"..conjWordIndex..":"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Engraving]|h|r";
+      remaining = remaining:sub(finish + 1);
+    else
+      done = true;
+    end
+  until(done)
+  if newMsg ~= "" then
+      return false, newMsg, player, l, cs, t, flag, channelId, ...;
+  end
+end
+
+ChatFrame_AddMessageEventFilter("CHAT_MSG_SAY", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_PARTY", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_PARTY_LEADER", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_RAID", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_RAID_LEADER", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_OFFICER", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT_LEADER", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_YELL", engravingsFilterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", engravingsFilterFunc)
+
+hooksecurefunc("SetItemRef", function(link, text)
+    if(startsWith(link, "garrmission:engravings")) then    
+        local start, finish, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY, characterName = text:find("|cFFBF4500|Hgarrmission:engravings:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):([%d%.]+):([%d%.]+)|h%[([^%s]+)'s Engraving%]|h|r");
+        templateIndex = tonumber(templateIndex) > 0 and tonumber(templateIndex) or 0
+        categoryIndex = tonumber(categoryIndex) > 0 and tonumber(categoryIndex) or 0
+        wordIndex = tonumber(wordIndex) > 0 and tonumber(wordIndex) or 0
+        conjunctionIndex = tonumber(conjunctionIndex) > 0 and tonumber(conjunctionIndex) or 0
+        conjTemplateIndex = tonumber(conjTemplateIndex) > 0 and tonumber(conjTemplateIndex) or 0
+        conjCategoryIndex = tonumber(conjCategoryIndex) > 0 and tonumber(conjCategoryIndex) or 0
+        conjWordIndex = tonumber(conjWordIndex) > 0 and tonumber(conjWordIndex) or 0
+        mapID = tonumber(mapID) == 0 and nil or tonumber(mapID)
+        posX = tonumber(posX) == 0 and nil or tonumber(posX)
+        posY = tonumber(posY) == 0 and nil or tonumber(posY)
+        --Republish hyperlink logic
+        if(IsShiftKeyDown()) then
+            local editbox = GetCurrentKeyBoardFocus();
+            if(editbox) then
+                editbox:Insert("!E["..characterName.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex.." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex.." "..mapID.." "..posX.." "..posY.."]");
+            end
+        else
+            if(IsControlKeyDown()) then
+                print("Engravings imported failed.")
+            end
+            -- Do the magic
+            local phrase = decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
+            DEFAULT_CHAT_FRAME:AddMessage(characterName.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
+        end
+    end
+end);
 
 
 --[[ Slash Command Handler ]]
@@ -710,16 +791,8 @@ SLASH_ENGRAVINGS2 = "/eng"
 local function SlashCommandHandler(msg)
     local command, args = strsplit(" ", msg, 2) -- Split the command and arguments
     -- Process the command and perform the desired actions
-    if command == "show" then
+    if command == "make" then
         CreatePhaseGenerationInterface()
-    elseif command == "decode" then
-        local argsArray = {}
-        if args then
-           for word in string.gmatch(args, "%S+") do
-               table.insert(argsArray, tonumber(word))
-           end
-        end
-        print(decodePhrase(argsArray[1], argsArray[2], argsArray[3], argsArray[4], argsArray[5], argsArray[6], argsArray[7]))
     end
 end
 SlashCmdList["ENGRAVINGS"] = SlashCommandHandler
