@@ -2824,6 +2824,7 @@ local function SlashCommandHandler(msg)
         end
         if argsArray[1] == "info" then
             print("Tombstones 'Last Words' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_LAST_WORDS"]))
+            print("Tombstones 'Known Death' filtering enabled: " .. tostring(TOMB_FILTERS["HAS_KNOWN_DEATH"]))
             print("Tombstones 'ClassID' filtering on: " .. tostring(TOMB_FILTERS["CLASS_ID"]))
             print("Tombstones 'RaceID' filtering on: " .. tostring(TOMB_FILTERS["RACE_ID"]))
             print("Tombstones 'Faction' filtering on: " .. tostring(TOMB_FILTERS["FACTION_ID"]))
@@ -2834,6 +2835,7 @@ local function SlashCommandHandler(msg)
             return
         elseif argsArray[1] == "reset" then
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
+            TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
             TOMB_FILTERS["CLASS_ID"] = nil
             TOMB_FILTERS["RACE_ID"] = nil
             TOMB_FILTERS["FACTION_ID"] = nil
@@ -2846,6 +2848,8 @@ local function SlashCommandHandler(msg)
             end
         elseif argsArray[1] == "last_words" then
             TOMB_FILTERS["HAS_LAST_WORDS"] = true
+        elseif argsArray[1] == "known_death" then
+            TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
         elseif argsArray[1] == "rating" then
             TOMB_FILTERS["RATING"] = true
         elseif argsArray[1] == "realms" then
@@ -2886,7 +2890,7 @@ local function SlashCommandHandler(msg)
     elseif command == "usage" then
        -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT} | highlight {PLAYER}]")
-        print("Usage: /tombstones or /ts [filter (info | reset | last_words | rating | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
+        print("Usage: /tombstones or /ts [filter (info | reset | last_words | known_death | rating | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
