@@ -5,7 +5,7 @@
 
 ## Version: 1.0
 ## Author: pjeli
-## SavedVariables: deathRecordsDB
+## SavedVariables: deathRecordsDB, engravingsDB
 
 ## X-Curse-Project-ID: 884241
 
