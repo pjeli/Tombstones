@@ -168,6 +168,7 @@ local lastWords = nil
 local lastDmgSourceID = nil
 local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
+  ["HAS_KNOWN_DEATH"] = true,
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
   ["FACTION_ID"] = PLAYER_FACTION,
@@ -445,6 +446,9 @@ local function LoadDeathRecords()
         if (TOMB_FILTERS["FACTION_ID"] ~= nil) then
             TOMB_FILTERS["FACTION_ID"] = PLAYER_FACTION
         end
+        if (TOMB_FILTERS["HAS_KNOWN_DEATH"] == nil) then
+            TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
+        end
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)
@@ -574,6 +578,7 @@ local function IsMarkerAllowedByFilters(marker)
     -- Fetch filtering parameters
     local filter_realms = TOMB_FILTERS["REALMS"]
     local filter_has_words = TOMB_FILTERS["HAS_LAST_WORDS"]
+    local filter_has_death = TOMB_FILTERS["HAS_KNOWN_DEATH"]
     local filter_class = TOMB_FILTERS["CLASS_ID"]
     local filter_race = TOMB_FILTERS["RACE_ID"]
     local filter_faction = TOMB_FILTERS["FACTION_ID"]
@@ -584,6 +589,9 @@ local function IsMarkerAllowedByFilters(marker)
     if (allow == true and filter_has_words == true) then
         if (marker.last_words == nil) then allow = false end
         -- Smart filter is now the default...
+    end
+    if (allow == true and filter_has_death == true) then
+        if (marker.source_id == nil or marker.source_id == -1) then allow = false end
     end
     if (allow == true and filter_rating == true) then
         if (marker.karma ~= nil and marker.karma < 0) then allow = false end
@@ -1454,7 +1462,7 @@ local function GenerateTombstonesOptionsFrame()
     -- Create the main frame
     optionsFrame = CreateFrame("Frame", "TombstonesOptionsFrame", UIParent)
     optionsFrame:SetFrameStrata("HIGH")
-    optionsFrame:SetSize(360, 390)
+    optionsFrame:SetSize(360, 410)
     optionsFrame:SetPoint("CENTER", 0, 80)
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1567,29 +1575,36 @@ local function GenerateTombstonesOptionsFrame()
     lastWordsOptionText:SetPoint("LEFT", lastWordsOption, "RIGHT", 5, 0)
     lastWordsOptionText:SetText("Have last words.")
     
+    local knownDeathOption = CreateFrame("CheckButton", "HasKnownDeath", optionsFrame, "OptionsCheckButtonTemplate")
+    knownDeathOption:SetPoint("TOPLEFT", 20, -230)
+    knownDeathOption:SetChecked(TOMB_FILTERS["HAS_KNOWN_DEATH"])
+    local knownDeathOptionText = knownDeathOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    knownDeathOptionText:SetPoint("LEFT", knownDeathOption, "RIGHT", 5, 0)
+    knownDeathOptionText:SetText("Have known means of death.")
+    
     local classOption = CreateFrame("CheckButton", "Class", optionsFrame, "OptionsCheckButtonTemplate")
-    classOption:SetPoint("TOPLEFT", 20, -230)
+    classOption:SetPoint("TOPLEFT", 20, -250)
     classOption:SetChecked(TOMB_FILTERS["CLASS_ID"] ~= nil)
     local classOptionText = classOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     classOptionText:SetPoint("LEFT", classOption, "RIGHT", 5, 0)
     classOptionText:SetText("Are same class as me.")
     
     local factionOption = CreateFrame("CheckButton", "Faction", optionsFrame, "OptionsCheckButtonTemplate")
-    factionOption:SetPoint("TOPLEFT", 20, -250)
+    factionOption:SetPoint("TOPLEFT", 20, -270)
     factionOption:SetChecked(TOMB_FILTERS["FACTION_ID"] ~= nil)
     local factionOptionText = factionOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     factionOptionText:SetPoint("LEFT", factionOption, "RIGHT", 5, 0)
     factionOptionText:SetText("Are same faction as me.")
 
     local realmsOption = CreateFrame("CheckButton", "Realms", optionsFrame, "OptionsCheckButtonTemplate")
-    realmsOption:SetPoint("TOPLEFT", 20, -270)
+    realmsOption:SetPoint("TOPLEFT", 20, -290)
     realmsOption:SetChecked(TOMB_FILTERS["REALMS"])
     local realmsOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     realmsOptionText:SetPoint("LEFT", realmsOption, "RIGHT", 5, 0)
     realmsOptionText:SetText("Are from this realm.")
     
     local ratingOption = CreateFrame("CheckButton", "Rating", optionsFrame, "OptionsCheckButtonTemplate")
-    ratingOption:SetPoint("TOPLEFT", 20, -290)
+    ratingOption:SetPoint("TOPLEFT", 20, -310)
     ratingOption:SetChecked(TOMB_FILTERS["RATING"])
     local ratingOptionText = ratingOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ratingOptionText:SetPoint("LEFT", ratingOption, "RIGHT", 5, 0)
@@ -1598,7 +1613,7 @@ local function GenerateTombstonesOptionsFrame()
     local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
     hourSlider:SetWidth(180)
     hourSlider:SetHeight(20)
-    hourSlider:SetPoint("TOPLEFT", 20, -320)
+    hourSlider:SetPoint("TOPLEFT", 20, -340)
     hourSlider:SetOrientation("HORIZONTAL")
     hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
     hourSlider:SetValueStep(0.5) -- Set the step value for the slider
@@ -1632,7 +1647,7 @@ local function GenerateTombstonesOptionsFrame()
     local levelSlider = CreateFrame("Slider", "LevelSlider", optionsFrame, "OptionsSliderTemplate")
     levelSlider:SetWidth(180)
     levelSlider:SetHeight(20)
-    levelSlider:SetPoint("TOPLEFT", 20, -350)
+    levelSlider:SetPoint("TOPLEFT", 20, -370)
     levelSlider:SetOrientation("HORIZONTAL")
     levelSlider:SetMinMaxValues(1, 60) -- Set the minimum and maximum values for the slider
     levelSlider:SetValueStep(1) -- Set the step value for the slider
@@ -1672,6 +1687,8 @@ local function GenerateTombstonesOptionsFrame()
             -- Perform actions for selected state
             if (toggleName == "HasLastWords") then
                 TOMB_FILTERS["HAS_LAST_WORDS"] = true
+            elseif (toggleName == "HasKnownDeath") then
+                TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
             elseif (toggleName == "Realms") then
                 TOMB_FILTERS["REALMS"] = true
             elseif (toggleName == "Class") then
@@ -1685,6 +1702,8 @@ local function GenerateTombstonesOptionsFrame()
             -- Perform actions for unselected state
             if (toggleName == "HasLastWords") then
                 TOMB_FILTERS["HAS_LAST_WORDS"] = false
+            elseif (toggleName == "HasKnownDeath") then
+                TOMB_FILTERS["HAS_KNOWN_DEATH"] = false
             elseif (toggleName == "Realms") then
                 TOMB_FILTERS["REALMS"] = false
             elseif (toggleName == "Class") then
@@ -1700,6 +1719,7 @@ local function GenerateTombstonesOptionsFrame()
     end
 
     lastWordsOption:SetScript("OnClick", ToggleFilter)
+    knownDeathOption:SetScript("OnClick", ToggleFilter)
     classOption:SetScript("OnClick", ToggleFilter)
     factionOption:SetScript("OnClick", ToggleFilter)
     realmsOption:SetScript("OnClick", ToggleFilter)
