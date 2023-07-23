@@ -1017,6 +1017,8 @@ local function UpdateWorldMapMarkers()
                             end
                         -- Trigger karma tally broadcast; Marker must be from THIS Realm
                         elseif (button == "LeftButton" and IsControlKeyDown() and IsAltKeyDown() and deathRecordsDB.rating) then
+                            
+                            -- Marker must be from this realm to perform tally; pointless otherwise.
                             if (marker.realm ~= REALM) then return end
                             local encodedRatingRequestMsg = TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
                             local channel_num = GetChannelName(tombstones_channel)
@@ -1026,6 +1028,7 @@ local function UpdateWorldMapMarkers()
                             expectingTallyReplyMapMarker = marker
                             ratings[PLAYER_NAME] = marker.karma
                             C_Timer.NewTimer(TallyInterval, DisplayTally)
+
                         -- Postive karma rating
                         elseif (button == "LeftButton" and IsControlKeyDown() and (marker.karma == nil or marker.karma == -1) and deathRecordsDB.rating) then
                             marker.karma = 1
@@ -1041,10 +1044,13 @@ local function UpdateWorldMapMarkers()
                             GameTooltip:EnableDrawLayer("BACKGROUND")
                             GameTooltip:Show()
                             
-                            local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
-                            local channel_num = GetChannelName(tombstones_channel)
-                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
-                            
+                            -- Marker must be from this realm to receive flowers; pointless otherwise.
+                            if (marker.realm ~= nil and marker.realm == REALM) then
+                              local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
+                              local channel_num = GetChannelName(tombstones_channel)
+                              CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
+                            end
+
                         -- Negative karma rating
                         elseif (button == "LeftButton" and IsAltKeyDown() and (marker.karma == nil or marker.karma == 1) and deathRecordsDB.rating) then
                             marker.karma = -1
