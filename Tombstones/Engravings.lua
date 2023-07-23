@@ -1,7 +1,13 @@
 -- Constants
-local EN_COMM_NAME = "EngravingsSay"
 local PLAYER_NAME, _ = UnitName("player")
+local REALM = GetRealmName()
 local CTL = _G.ChatThrottleLib
+local EN_COMM_NAME = "TombstonesEngravings"
+local EN_COMM_COMMANDS = {
+  ["BROADCAST_ENGRAVING_PING"] = "6",
+}
+local COMM_COMMAND_DELIM = "$"
+local COMM_FIELD_DELIM = "~"
 local templates = {
     "**** ahead",
     "Likely ****",
@@ -448,19 +454,89 @@ local conjunctions = {
     "all the more",
     ",",
 }
+local tombstones_channel = "tsbroadcastchannel"
+local tombstones_channel_pw = "tsbroadcastchannelpw"
 
 -- Variables
+local engravingsDB
+local phraseFrame
+local engravingsRecordCount = 0
+local debug = false
 local iconSize = 12
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
 
-local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex) 
-    if (templateIndex == 0 or categoryIndex == 0 or wordIndex == 0) then
-        return nil
+-- Main Frame
+local Engravings = CreateFrame("Frame")
+
+function printDebug(msg)
+    if debug then
+        print(msg)
+    end
+end
+
+local function SaveEngravingRecords()
+    _G["engravingsDB"] = engravingsDB
+end
+
+local function LoadEngravingRecords()
+    engravingsDB = _G["engravingsDB"]
+    if not engravingsDB then
+        engravingsDB = {}
+        engravingsDB.version = ADDON_SAVED_VARIABLES_VERSION
+        engravingsDB.engravingRecords = {}
+    end
+end
+
+local function ClearEngravingRecords()
+    engravingsDB.version = ADDON_SAVED_VARIABLES_VERSION
+    engravingsDB.engravingRecords = {}
+    engravingsRecordCount = 0
+    _G["engravingsDB"] = engravingsDB
+end
+
+-- Define the confirmation dialog
+StaticPopupDialogs["ENGRAVINGS_CLEAR_CONFIRMATION"] = {
+    text = "Are you sure you want to delete all your engravings?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function()
+        ClearEngravingRecords()
+        print("Engravings have been cleared.")
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- Add engraving marker function
+local function AddEngravingMarker(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+    if (mapID == nil or posX == nil or posY == nil or templ_index == 0 or user == nil) then
+        -- No location info. Useless.
+        return
     end
 
+    local engraving = { realm = REALM, mapID = mapID, posX = posX, posY = posY, timestamp = time(), user = user , templ_index = templ_index, cat_index = cat_index, word_index = word_index, conj_index = conj_index, conj_templ_index = conj_templ_index, conj_cat_index = conj_cat_index, conj_word_index = conj_word_index }
+
+    table.insert(engravingsDB.engravingRecords, engraving)
+    engravingsRecordCount = engravingsRecordCount + 1
+    printDebug("Engraving marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+end
+
+local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex) 
+    if (templateIndex == 0) then
+        return ""
+    end
+    
     local phrase = templates[templateIndex]
+    
+    if(categoryIndex == 0 or wordIndex == 0) then
+        phrase, _ = phrase:gsub("(%*%*%*%*)", "")
+        return phrase
+    end
+    
     phrase, _ = phrase:gsub("(%*%*%*%*)", wordsTable[categoryIndex][wordIndex])
     
     if (conjunctionIndex == 0) then
@@ -476,6 +552,45 @@ local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunction
     local conjPhrase = templates[conjTemplateIndex]
     conjPhrase, _ = conjPhrase:gsub("(%*%*%*%*)", wordsTable[conjCategoryIndex][conjWordIndex])
     return phrase.." "..conjPhrase
+end
+
+-- (name, map_id, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+function EencodeMessage(name, map_id, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+  local loc_str = string.format("%.4f,%.4f", posX, posY)
+  local comm_message = name .. COMM_FIELD_DELIM .. (map_id or "") .. COMM_FIELD_DELIM .. (loc_str or "") .. COMM_FIELD_DELIM .. (templ_index or 0) .. COMM_FIELD_DELIM .. 
+  (cat_index or 0) .. COMM_FIELD_DELIM .. (word_index or 0) .. COMM_FIELD_DELIM ..  (conj_index or 0) .. COMM_FIELD_DELIM .. (conj_templ_index or 0) .. COMM_FIELD_DELIM .. 
+  (conj_cat_index or 0) .. COMM_FIELD_DELIM .. (conj_word_index or 0) .. COMM_FIELD_DELIM
+  return comm_message
+end
+
+function EencodeMessageFromEngraving(engraving)
+  return EencodeMessage(engraving.user, engraving.map_id, engraving.posX, engraving.posY, engraving.templ_index, engraving.cat_index, engraving.word_index, engraving.conj_index, engraving.conj_templ_index, engraving.conj_cat_index, engraving.conj_word_index)
+end
+
+-- (name, map_id, map_pos, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+function EdecodeMessage(msg)
+  local values = {}
+  for w in msg:gmatch("(.-)~") do table.insert(values, w) end
+  if #values ~= 10 then
+    -- Return something that causes the calling function to return on the isValidEntry check
+    return nil
+  end
+  local name = values[1]
+  local map_id = tonumber(values[2])
+  local map_pos = values[3]
+  local templ_index = tonumber(values[4])
+  local cat_index = tonumber(values[5])
+  local word_index = tonumber(values[6])
+  local conj_index = tonumber(values[7])
+  local conj_templ_index = tonumber(values[8])
+  local conj_cat_index = tonumber(values[9])
+  local conj_word_index = tonumber(values[10])
+  
+  if (name == nil or map_id == nil or map_pos == nil or templ_index == nil) then
+    return nil
+  end
+  local engraving_loc_ping_data = ELocationPing(name, map_id, map_pos, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+  return engraving_loc_ping_data
 end
 
 local function generatePhrase(selectedTemplate, selectedWords, selectedConjunction, selectedConjTemplate, selectedConjWord)
@@ -501,24 +616,31 @@ local function generatePhrase(selectedTemplate, selectedWords, selectedConjuncti
     return phrase.." "..conjPhrase
 end
 
-local function CreatePhaseGenerationInterface()
-    local frame = CreateFrame("Frame", "TombstonesPhraseGenerator", UIParent)--, "UIPanelDialogTemplate")
-    frame:SetSize(300, 400)
-    frame:SetPoint("CENTER")
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+local function CreatePhraseGenerationInterface()
+    if (phraseFrame ~= nil and phraseFrame:IsVisible()) then
+        return
+    elseif (phraseFrame ~= nil and not phraseFrame:IsVisible()) then
+        phraseFrame:Show()
+        return
+    end
+  
+    phraseFrame = CreateFrame("Frame", "EngravingsPhraseGenerator", UIParent)--, "UIPanelDialogTemplate")
+    phraseFrame:SetSize(300, 400)
+    phraseFrame:SetPoint("CENTER")
+    phraseFrame:SetMovable(true)
+    phraseFrame:EnableMouse(true)
+    phraseFrame:RegisterForDrag("LeftButton")
+    phraseFrame:SetScript("OnDragStart", phraseFrame.StartMoving)
+    phraseFrame:SetScript("OnDragStop", phraseFrame.StopMovingOrSizing)
     
-    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
+    local bgTexture = phraseFrame:CreateTexture(nil, "BACKGROUND")
     bgTexture:SetAllPoints()
     bgTexture:SetColorTexture(0, 0, 0, 0.75)
     
-    local closeButton = CreateFrame("Button", "CloseButton", frame, "UIPanelCloseButton")
+    local closeButton = CreateFrame("Button", "CloseButton", phraseFrame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -8, -8)
 
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local title = phraseFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("TOP", 0, -15)
     title:SetText("Make Engraving Phrase")
     
@@ -530,7 +652,7 @@ local function CreatePhaseGenerationInterface()
     local conjCategoryIndex = 0
     local conjWordIndex = 0
 
-    local templateDropdown = CreateFrame("Frame", nil, frame, "UIDropDownMenuTemplate")
+    local templateDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     templateDropdown:SetPoint("TOPLEFT", 20, -50)
     UIDropDownMenu_SetWidth(templateDropdown, 150)
     UIDropDownMenu_Initialize(templateDropdown, function(self, level, menuList)
@@ -547,11 +669,11 @@ local function CreatePhaseGenerationInterface()
     end)
     UIDropDownMenu_SetText(templateDropdown, "Select Template")
 
-    local categoryDropdown = CreateFrame("Frame", nil, frame, "UIDropDownMenuTemplate")
+    local categoryDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     categoryDropdown:SetPoint("TOPLEFT", templateDropdown, "BOTTOMLEFT", 0, -10)
     UIDropDownMenu_SetWidth(categoryDropdown, 150)
 
-    local wordDropdown = CreateFrame("Frame", nil, frame, "UIDropDownMenuTemplate")
+    local wordDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     wordDropdown:SetPoint("TOPLEFT", categoryDropdown, "BOTTOMLEFT", 40, -5)
     UIDropDownMenu_SetWidth(wordDropdown, 150)
     
@@ -593,7 +715,7 @@ local function CreatePhaseGenerationInterface()
     UIDropDownMenu_Initialize(categoryDropdown, InitializeCategoryDropdown)
     UIDropDownMenu_SetText(categoryDropdown, "Select Category")
 
-    local conjunctionDropdown = CreateFrame("Frame", nil, frame, "UIDropDownMenuTemplate")
+    local conjunctionDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     conjunctionDropdown:SetPoint("TOPLEFT", categoryDropdown, "BOTTOMLEFT", 0, -50)
     UIDropDownMenu_SetWidth(conjunctionDropdown, 150)
     UIDropDownMenu_Initialize(conjunctionDropdown, function(self, level, menuList)
@@ -626,7 +748,7 @@ local function CreatePhaseGenerationInterface()
     UIDropDownMenu_Initialize(conjunctionDropdown, InitializeConjectionDropdown)
     UIDropDownMenu_SetText(conjunctionDropdown, "Select Conjunction")
   
-    local conjTemplateDropdown = CreateFrame("Frame", nil, frame, "UIDropDownMenuTemplate")
+    local conjTemplateDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     conjTemplateDropdown:SetPoint("TOPLEFT", conjunctionDropdown, "BOTTOMLEFT", 0, -10)
     UIDropDownMenu_SetWidth(conjTemplateDropdown, 150)
     UIDropDownMenu_Initialize(conjTemplateDropdown, function(self, level, menuList)
@@ -643,11 +765,11 @@ local function CreatePhaseGenerationInterface()
     end)
     UIDropDownMenu_SetText(conjTemplateDropdown, "Select Template")
 
-    local conjCategoryDropdown = CreateFrame("Frame", nil, frame, "UIDropDownMenuTemplate")
+    local conjCategoryDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     conjCategoryDropdown:SetPoint("TOPLEFT", conjTemplateDropdown, "BOTTOMLEFT", 0, -10)
     UIDropDownMenu_SetWidth(conjCategoryDropdown, 150)
 
-    local conjWordDropdown = CreateFrame("Frame", nil, frame, "UIDropDownMenuTemplate")
+    local conjWordDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     conjWordDropdown:SetPoint("TOPLEFT", conjCategoryDropdown, "BOTTOMLEFT", 40, -5)
     UIDropDownMenu_SetWidth(conjWordDropdown, 150)
      
@@ -689,7 +811,7 @@ local function CreatePhaseGenerationInterface()
     UIDropDownMenu_Initialize(conjCategoryDropdown, InitializeConjCategoryDropdown)
     UIDropDownMenu_SetText(conjCategoryDropdown, "Select Category")
 
-    local generateButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+    local generateButton = CreateFrame("Button", nil, phraseFrame, "GameMenuButtonTemplate")
     generateButton:SetPoint("BOTTOM", 0, 20)
     generateButton:SetText("Leave Engraving")
     generateButton:SetScript("OnClick", function()
@@ -700,7 +822,7 @@ local function CreatePhaseGenerationInterface()
         local selectedConjWord = UIDropDownMenu_GetSelectedValue(conjWordDropdown)
 
         local phrase = generatePhrase(selectedTemplate, selectedWord, selectedConjunction, selectedConjTemplate, selectedConjWord)
-        printDebug("Generated Phrase:", phrase)
+        printDebug("Generated Phrase: ", phrase)
         printDebug("Generated Indexes: @"..templateIndex.."#"..categoryIndex.."$"..wordIndex.."+".. conjunctionIndex .."&"..conjTemplateIndex.."^"..conjCategoryIndex.."*"..conjWordIndex)
         
         local mapID = C_Map.GetBestMapForUnit("player")
@@ -709,12 +831,17 @@ local function CreatePhaseGenerationInterface()
         posX = string.format("%.4f", posX)
         posY = string.format("%.4f", posY)
         
-        local engravingMsg = "!E["..PLAYER_NAME.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
-        local msg = "I have left an engraving here: "..engravingMsg
-        CTL:SendChatMessage("BULK", EN_COMM_NAME, msg, "SAY", nil)
+        local engravingLink = "!E["..PLAYER_NAME.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
+        local say_msg = "I have left an engraving here: "..engravingLink
+        CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
+        
+        --(name, map_id, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+        local channel_msg = EencodeMessage(PLAYER_NAME, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)   
+        local channel_num = GetChannelName(tombstones_channel)
+        CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_PING"] .. COMM_COMMAND_DELIM .. channel_msg, "CHANNEL", nil, channel_num)
     end)
 
-    frame:Show()
+    table.insert(UISpecialFrames, "EngravingsPhraseGenerator")
 end
 
 
@@ -806,6 +933,26 @@ hooksecurefunc("SetItemRef", function(link, text)
     end
 end);
 
+local function TombstonesJoinChannel()
+    C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME)
+    local channel_num = GetChannelName(tombstones_channel)
+    if channel_num == 0 then
+        JoinChannelByName(tombstones_channel, tombstones_channel_pw)
+        local channel_num = GetChannelName(tombstones_channel)
+            if channel_num == 0 then
+            print("Failed to join Tombstones channel.")
+        else
+            printDebug("Successfully joined Tombstones channel.")
+        end
+        for i = 1, 10 do
+            if _G['ChatFrame'..i] then
+                ChatFrame_RemoveChannel(_G['ChatFrame'..i], tombstones_channel)
+            end
+        end
+    else
+        printDebug("Successfully joined Tombstones channel.")
+    end
+end
 
 --[[ Slash Command Handler ]]
 --
@@ -816,7 +963,86 @@ local function SlashCommandHandler(msg)
     local command, args = strsplit(" ", msg, 2) -- Split the command and arguments
     -- Process the command and perform the desired actions
     if command == "make" then
-        CreatePhaseGenerationInterface()
+        CreatePhraseGenerationInterface()
+    elseif command == "debug" then
+        debug = not debug
+        print("TS:Engravings debug mode is: ".. tostring(debug))
+    elseif command == "clear" then
+        -- Clear all death records
+        StaticPopup_Show("ENGRAVINGS_CLEAR_CONFIRMATION")
+    elseif command == "info" then
+        print("Engravings has " .. #engravingsDB.engravingRecords.. " records in total.")
+        print("Engravings saw " .. engravingsRecordCount .. " records this session.")
     end
 end
 SlashCmdList["ENGRAVINGS"] = SlashCommandHandler
+
+--[[ Initialize Event Handlers ]]
+--
+local function OnUpdateMovementHandler(self, elapsed)
+  -- TODO
+end
+
+function Engravings:PLAYER_STOPPED_MOVING()
+  -- TODO
+end
+
+function Engravings:PLAYER_STARTED_MOVING()
+  -- TODO
+end
+
+function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name_long)
+  local _, channel_name = string.split(" ", channel_name_long)
+  local player_name_short, _ = string.split("-", sender_name_long)
+  if channel_name == tombstones_channel then
+      local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
+      if command == EN_COMM_COMMANDS["BROADCAST_ENGRAVING_PING"] then
+          printDebug("Receiving TS:EngravingPing from " .. player_name_short .. ".")
+          --(name, map_id, map_pos, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+          local engravingLocPing = EdecodeMessage(msg)
+          if (engravingLocPing ~= nil) then
+              --(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+              local posX, posY = strsplit(",", engravingLocPing["map_pos"], 2)
+              AddEngravingMarker(engravingLocPing.name, tonumber(engravingLocPing.map_id), tonumber(posX), tonumber(posY), tonumber(engravingLocPing.templ_index), tonumber(engravingLocPing.cat_index), tonumber(engravingLocPing.word_index), tonumber(engravingLocPing.conj_index), tonumber(engravingLocPing.conj_templ_index),  tonumber(engravingLocPing.conj_cat_index), tonumber(engravingLocPing.conj_word_index))
+          end
+      end
+  end
+end
+
+function Engravings:PLAYER_LOGOUT()
+  -- TODO
+  SaveEngravingRecords()
+end
+
+function Engravings:PLAYER_LOGIN()
+  -- called during load screen
+  --  MakeMinimapButton()
+  --  MakeInterfacePage()
+  LoadEngravingRecords()
+
+  self:RegisterEvent("PLAYER_STARTED_MOVING")
+  self:RegisterEvent("PLAYER_STOPPED_MOVING")
+  self:RegisterEvent("CHAT_MSG_CHANNEL")
+end
+
+function Engravings:ADDON_LOADED()
+  -- TODO
+end
+
+function Engravings:StartUp()
+	-- the entry point of our addon
+	-- called inside loading screen before player sees world, some api functions are not available yet.
+
+	-- event handling helper
+	self:SetScript("OnEvent", function(self, event, ...)
+		self[event](self, ...)
+	end)
+	-- actually start loading the addon once player ui is loading
+  self:RegisterEvent("ADDON_LOADED")
+	self:RegisterEvent("PLAYER_LOGIN")
+	self:RegisterEvent("PLAYER_LOGOUT")
+end
+
+--[[ Start Addon ]]
+--
+Engravings:StartUp()
