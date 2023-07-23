@@ -148,6 +148,7 @@ local isPlayerMoving = false
 local movementUpdateInterval = 0.5 -- Update interval in seconds
 local movementTimer = nil
 local lastProximityWarning = 0
+local lastFlowersWarning = 0
 local lastClosestMarker
 local optionsFrame
 local mapButton
@@ -195,91 +196,6 @@ local l64 = LibStub("LibBase64-1.0")
 
 -- Main Frame
 local Tombstones = CreateFrame("Frame")
-
-function fetchQuotedPart(str)
-    if(str == nil) then return nil end
-    local pattern = "\"(.-)\""
-    local quotedPart = string.match(str, pattern)
-    if quotedPart then
-        return quotedPart
-    end
-    return nil  -- Quoted part not found
-end
-
-function endsWithLevel(str)
-    return string.match(str, "has reached level %d?%d?!$") ~= nil
-end
-
-function endsWithResurrected(str)
-    return string.find(str, "^%w+ has resurrected!$") ~= nil
-end
-
-function startsWith(str, prefix)
-    return string.sub(str, 1, string.len(prefix)) == prefix
-end
-
-function stringContains(text, pattern)
-    return string.find(text, pattern) ~= nil
-end
-
-function fDetection(str)
-    return str:match("^%s*[Ff]%s*$") ~= nil
-end
-
-function roundNearestHalf(value)
-    return math.floor(value * 2 + 0.5) / 2
-end
-
-function round(value)
-  return math.floor(value + 0.5)
-end
-
-function GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, markerY, markerInstance)
-    local deltaX = markerX - playerX
-    local deltaY = markerY - playerY
-    local distance = math.sqrt(deltaX * deltaX + deltaY * deltaY)
-    return distance
-end
-
-function printDebug(msg)
-    if debug then
-        print(msg)
-    end
-end
-
-function printTrace(msg)
-    if trace then
-        print(msg)
-    end
-end
-
-local function extractBracketTextWithColor(str)
-    local start, finish, color, text = str:find("|c(%x+)|H.-|h%[(.-)%]|h|r")
-    if color and text then
-        local colorizedText = "|c" .. color .. "[" .. text .. "]|r"
-        local cleanedText = str:gsub("|H.-|h(.-)|h", function(match)
-            return match:match("|c(%x+)(.-)|r") or match:match("|c(%x+)(.-)") or match
-        end)
-        return colorizedText, cleanedText
-    elseif str:match("|c") then
-        local cleanedText = str:gsub("|H.-|h(.-)|h", function(match)
-            return match:match("|c(%x+)(.-)|r") or match:match("|c(%x+)(.-)") or match
-        end)
-        return nil, cleanedText
-    else
-        return nil, str
-    end
-end
-
-function encodeColorizedText(str)
-    local encodedText = str:gsub("|([cr])", "<%1>")  -- Special encoding for "|c" and "|r"
-    return encodedText
-end
-
-function decodeColorizedText(str)
-    local decodedText = str:gsub("<([cr])>", "|%1")  -- Special decoding for "|c" and "|r"
-    return decodedText
-end
 
 local function SaveDeathRecords()
     deathRecordsDB.TOMB_FILTERS = TOMB_FILTERS
@@ -393,26 +309,25 @@ local function TdeathlogJoinChannel()
                 end
             end
         else
-                print("Successfully joined deathlog channel via Tombstones.")
+            print("Successfully joined deathlog channel via Tombstones.")
         end
     end
 end
 
 local function TwhisperRatingForMarkerTo(msg, player_name_short)
     if (player_name_short == PLAYER_NAME) then
-        printDebug("Ignoring rating ping for self.")
+        printDebug("Ignoring rating tally request from self.")
         return 
     end
     local liteDecodedPlayerData = TdecodeMessageLite(msg)
-    if(liteDecodedPlayerData["name"] ~= "MalformedData") then
+    if (liteDecodedPlayerData["name"] ~= nil and liteDecodedPlayerData["name"] ~= "MalformedData") then
         local user = liteDecodedPlayerData["name"]
-        local level = liteDecodedPlayerData["level"]
         local mapID = liteDecodedPlayerData["map_id"]
         local posX, posY = strsplit(",", liteDecodedPlayerData["map_pos"], 2)
         local zoneMarkers = visitingZoneCache[mapID] or {}
         local foundMarker = nil
         for _, marker in ipairs(zoneMarkers) do
-            if (marker ~= nil and marker.user == user and marker.level == tonumber(level) and marker.posX == tonumber(posX) and marker.posY == tonumber(posY) and marker.realm == REALM) then
+            if (marker ~= nil and marker.user == user and marker.posX == tonumber(posX) and marker.posY == tonumber(posY) and marker.realm == REALM) then
                 foundMarker = marker
                 break
             end
@@ -1194,7 +1109,7 @@ StaticPopupDialogs["TOMBSTONES_PRUNE_CONFIRMATION"] = {
     button1 = "Yes",
     button2 = "No",
     OnAccept = function()
-        prunedRecordCount = PruneDeathRecords()
+        local prunedRecordCount = PruneDeathRecords()
         InitializeDeadlyCounts()
         ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
@@ -1377,46 +1292,6 @@ local function CreateZoneDangerFrame()
     bgTexture:SetColorTexture(0, 0, 0, 0.5) -- Set the RGB values and alpha (0.5 for 50% transparency)
 
     zoneDangerFrame.text = zoneDangerText -- Assign the text object to the frame to keep a reference
-end
-
--- Event handler for UNIT_TARGET event
-local function UnitTargetChange()
-    local target = "target"
-    if (not UnitExists("target") and targetDangerFrame ~= nil) then
-        targetDangerFrame:Hide()
-    end
-    local targetName = UnitName(target)
-    local source_id = npc_to_id[targetName]
-    local friendly = UnitIsFriend("player", target)
-
-    local playerLevel = UnitLevel("player")
-    local targetLevel = UnitLevel("target")
-
-    -- Check if the target is an enemy NPC
-    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
-        local sourceDeathCount = deadlyNPCs[source_id] or 0
-        local currentMapID = C_Map.GetBestMapForUnit("player")
-        local deathMarkersTotal = deadlyZones[currentMapID] or 0
-        local dangerPercentage = 0.0
-        if (deathMarkersTotal > 0) then
-            dangerPercentage = math.min((sourceDeathCount / deathMarkersTotal) * 100.0, 100.0)
-        end
-
-        if (targetDangerFrame == nil) then
-            CreateTargetDangerFrame()
-            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
-        else
-            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
-        end
-
-        targetDangerFrame:Show()
-        printDebug(string.format("Tombstones has detected enemy danger at: %.2f%%.", dangerPercentage))
-    else
-        if (targetDangerFrame ~= nil) then
-            targetDangerText:SetText("")
-            targetDangerFrame:Hide()
-        end
-    end
 end
 
 local function GenerateMinimapIcon(marker)
@@ -1936,144 +1811,30 @@ function TencodeMessageFull(marker)
   return comm_message
 end
 
--- (map_id, map_pos, karma)
+-- (name, map_id, map_pos, karma)
 function TencodeMessageLite(marker)
   local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
   local karmaScore = marker.karma > 0 and "+" or "-"
-  local comm_message = (marker.mapID or "") .. COMM_FIELD_DELIM .. loc_str .. COMM_FIELD_DELIM .. karmaScore .. COMM_FIELD_DELIM
+  local comm_message = marker.user .. COMM_FIELD_DELIM .. marker.mapID .. COMM_FIELD_DELIM .. loc_str .. COMM_FIELD_DELIM .. karmaScore .. COMM_FIELD_DELIM
   return comm_message
 end
 
 function TdecodeMessageLite(msg)
   local values = {}
   for w in msg:gmatch("(.-)~") do table.insert(values, w) end
-  if #values ~= 3 then
+  if #values ~= 4 then
     -- Return something that causes the calling function to return on the isValidEntry check
-    local malformed_player_data = TPlayerData( "MalformedData", nil, nil, nil,nil,nil,nil,nil,nil,nil,nil,nil )
-    return malformed_player_data
-  end
-  local map_id = tonumber(values[1])
-  local map_pos = values[2]
-  local karma = values[3]
-  if (map_id == nil or map_pos == nil or karma == nil) then
     return nil
   end
-  local location_ping_data = TLocationPing(map_id, map_pos, karma)
+  local user = values[1]
+  local map_id = tonumber(values[2])
+  local map_pos = values[3]
+  local karma = values[4]
+  if (user == nil or map_id == nil or map_pos == nil or karma == nil) then
+    return nil
+  end
+  local location_ping_data = TLocationPing(user, map_id, map_pos, karma)
   return location_ping_data
-end
-
-function TLocationPing(map_id, map_pos, karma)
-  return {
-    ["map_id"] = map_id,
-    ["map_pos"] = map_pos,
-    ["karma"] = karma,
-  }
-end
-
--- Function to show the zone splash text
-function ShowZoneSplashText()
-    if (deathRecordsDB.showZoneSplash == false or IsInInstance()) then
-        return
-    end
-
-    if (splashFrame ~= nil) then
-      splashFrame:Hide()
-      splashFrame = nil
-    end
-
-    local zoneName = GetRealZoneText()
-    local currentMapID = C_Map.GetBestMapForUnit("player")
-    
-    local levelRange = MAP_TABLE[currentMapID]
-    local minLevel
-    local maxLevel
-    if levelRange then
-        minLevel = levelRange.minLevel
-        maxLevel = levelRange.maxLevel
-    end
-
-    local deathMarkersInZone = deadlyZones[currentMapID] or 0
-    local deathLvlSumInZone = deadlyZoneLvlSums[currentMapID] or 0
-    local deathMarkersTotal = #deathRecordsDB.deathRecords
-    local deathPercentage = 0.0
-    local deathZoneLvlAvg = 0.0
-    if (deathMarkersTotal > 0) then
-        deathPercentage = (deathMarkersInZone / #deathRecordsDB.deathRecords) * 100.0
-    end
-    if (deathMarkersInZone > 0) then
-        deathZoneLvlAvg = math.floor((deathLvlSumInZone / deathMarkersInZone) + 0.5)
-    end
-
-    -- Create and display the splash text frame
-    splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
-    splashFrame:SetSize(400, 200)
-    splashFrame:SetPoint("CENTER", 0, 0.28 * UIParent:GetHeight())
-
-    -- Add a texture
-    splashFrame.texture = splashFrame:CreateTexture(nil, "BACKGROUND")
-    splashFrame.texture:SetAllPoints(true)
-
-    -- Set-up flavor text and regular info
-    splashFrame.flavorText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    splashFrame.flavorText:SetPoint("CENTER", 0, 105)
-    splashFrame.infoText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-
-    local playerLevel = UnitLevel("player")
-    -- Default flavor text
-    local splashFlavorText = ""
-    local splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
-    splashFrame.infoText:SetPoint("CENTER", 0, 120)
-    splashFrame.flavorText:SetTextColor(1, 1, 1) -- Default white
-    splashFrame.infoText:SetTextColor(1, 1, 1) -- White
-    if (minLevel == nil or maxLevel == nil) then
-        splashFlavorText = "This place seems safe..."
-        splashFrame.flavorText:SetTextColor(0, 1, 0) -- Green
-    elseif (playerLevel < minLevel) then
-        splashFlavorText = "This place is dangerous!"
-        splashFrame.flavorText:SetTextColor(1, 0, 0) -- Red
-        if(deathZoneLvlAvg > 0) then
-            splashInfoText = string.format("There are %d tombstones here.\nThe average death is at level %d.", deathMarkersInZone, deathZoneLvlAvg)
-            splashFrame.infoText:SetPoint("CENTER", 0, 126)
-        end
-    elseif (playerLevel >= minLevel and playerLevel <= maxLevel) then
-        splashFlavorText = "This place is teeming with adventure."
-        splashFrame.flavorText:SetTextColor(1, 1, 0) -- Yellow
-        if(deathZoneLvlAvg > 0) then
-            splashInfoText = string.format("There are %d tombstones here.\n%.2f%% chance of death.\nThe average death is at level %d.", deathMarkersInZone, deathPercentage, deathZoneLvlAvg)
-            splashFrame.infoText:SetPoint("CENTER", 0, 132)
-        end
-    elseif (playerLevel > maxLevel) then
-        -- Do nothing
-    end
-    splashFrame.infoText:SetText(splashInfoText)
-    splashFrame.flavorText:SetText(splashFlavorText)
-
-    -- Apply fade-out animation to the splash frame
-    splashFrame.fadeOut = splashFrame:CreateAnimationGroup()
-    local fadeIn = splashFrame.fadeOut:CreateAnimation("Alpha")
-    fadeIn:SetDuration(.5) -- Adjust the delay duration as desired
-    fadeIn:SetFromAlpha(0)
-    fadeIn:SetToAlpha(1)
-    fadeIn:SetOrder(1)
-    local delay = splashFrame.fadeOut:CreateAnimation("Alpha")
-    delay:SetDuration(2.5) -- Adjust the delay duration as desired
-    delay:SetFromAlpha(1)
-    delay:SetToAlpha(1)
-    delay:SetOrder(2)
-    local fadeOut = splashFrame.fadeOut:CreateAnimation("Alpha")
-    fadeOut:SetDuration(.5) -- Adjust the fade duration as desired
-    fadeOut:SetFromAlpha(1)
-    fadeOut:SetToAlpha(0)
-    fadeOut:SetOrder(3)
-    splashFrame.fadeOut:SetScript("OnFinished", function(self)
-        if (splashFrame ~= nil) then
-            splashFrame:Hide()
-            splashFrame = nil
-        end
-    end)
-
-    splashFrame:Show()
-    splashFrame.fadeOut:Play()
 end
 
 local function IsImportRecordDuplicate(importedRecord)
@@ -2354,63 +2115,6 @@ local function HighlightMarkersForPlayer(characterName)
         end
         markerHighlights = nil
     end)
-end
-
-local function ConvertTimestampToLongForm(timestamp)
-    local dateTable = date("*t", timestamp)
-    local daySuffix = ""
-    local day = dateTable.day
-    if day == 1 or day == 21 or day == 31 then
-        daySuffix = "st"
-    elseif day == 2 or day == 22 then
-        daySuffix = "nd"
-    elseif day == 3 or day == 23 then
-        daySuffix = "rd"
-    else
-        daySuffix = "th"
-    end
-
-    local hour = dateTable.hour
-    local period = "am"
-    if hour >= 12 then
-        period = "pm"
-        if hour > 12 then
-            hour = hour - 12
-        end
-    end
-
-    local minute = string.format("%02d", dateTable.min)
-
-    return string.format("%s%s%s, %d, at %d:%s%s",
-        date("%B ", timestamp),
-        day, daySuffix,
-        dateTable.year,
-        hour, minute,
-        period
-    )
-end
-
--- Function to insert line breaks for word-wrapping
-local function InsertLineBreaks(text)
-    local maxWidth = 22
-    local wrappedText = ""
-    local line = ""
-
-    for word in string.gmatch(text, "%S+") do
-        local testLine = line .. word
-
-        if #testLine > 0 and #testLine > maxWidth then
-            wrappedText = wrappedText .. line .. "\n"
-            line = word .. " "
-        else
-            line = testLine .. " "
-        end
-    end
-
-    wrappedText = wrappedText .. line
-    wrappedText = string.sub(wrappedText, 1, -2) -- Remove the last character
-
-    return wrappedText
 end
 
 local function ShowLastWordsDialogueBox(marker)
@@ -2776,22 +2480,6 @@ local function selfDeathAlertLastWords()
 	local msg = checksum .. COMM_FIELD_DELIM .. lastWords .. COMM_FIELD_DELIM
 
   table.insert(deathlog_last_words_queue, COMM_COMMANDS["LAST_WORDS"] .. COMM_COMMAND_DELIM .. msg)
-end
-
-function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
-  return {
-    ["name"] = name,
-    ["guild"] = guild,
-    ["source_id"] = source_id,
-    ["race_id"] = race_id,
-    ["class_id"] = class_id,
-    ["level"] = level,
-    ["instance_id"] = instance_id,
-    ["map_id"] = map_id,
-    ["map_pos"] = map_pos,
-    ["date"] = date,
-    ["last_words"] = last_words,
-  }
 end
 
 local function selfDeathAlert(death_source_id)
@@ -3225,12 +2913,12 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
       end
       if command == TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] then
           printDebug("Receiving TS:RatingPing from " .. player_name_short .. ".")
-          ratingsSeenCount = ratingsSeenCount + 1
-          ratingsSeenTotal = ratingsSeenTotal + 1
           
           local overlayFrame = CreateFrame("Button", nil, WorldMapButton)
           overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
           local decodedLocationData = TdecodeMessageLite(msg)
+          if (decodedLocationData == nil) then return end
+          
           local mapID = decodedLocationData.map_id
           local posX, posY = strsplit(",", decodedLocationData["map_pos"], 2)
           local karma = decodedLocationData.karma
@@ -3240,9 +2928,13 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           overlayFrameTexture:SetAllPoints()
           overlayFrameTexture:SetTexture(textureIcon)
 
+          ratingsSeenCount = ratingsSeenCount + 1
+          ratingsSeenTotal = ratingsSeenTotal + 1
+          
           hbdp:AddWorldMapIconMap("TombstonesRatingPing", overlayFrame, tonumber(mapID), tonumber(posX), tonumber(posY), 3)
           miniButton.icon = textureIcon
           icon:Refresh("Tombstones")
+          
           C_Timer.After(7.0, function()
               ratingsSeenCount = ratingsSeenCount - 1
               hbdp:RemoveWorldMapIcon("TombstonesRatingPing", overlayFrame)
@@ -3255,6 +2947,13 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
                 icon:Refresh("Tombstones")
               end
           end)
+          if (decodedLocationData.name ~= nil and PLAYER_NAME == decodedLocationData.name) then
+              -- Notification can only be seen once two minutes avoid spam.
+              if (lastFlowersWarning < (time() - 120)) then 
+                  lastFlowersWarning = time()
+                  DEFAULT_CHAT_FRAME:AddMessage("You received flowers at your gravesite from "..player_name_short..".", 1, 1, 0)
+              end
+          end
       end
   end
 end
@@ -3287,8 +2986,153 @@ function Tombstones:PLAYER_STARTED_MOVING()
   -- Movement monitoring started
 end
 
+-- Event handler for PLAYER_TARGET_CHANGED event
+local function UnitTargetChange()
+    local target = "target"
+    if (not UnitExists("target") and targetDangerFrame ~= nil) then
+        targetDangerFrame:Hide()
+    end
+    local targetName = UnitName(target)
+    local source_id = npc_to_id[targetName]
+    local friendly = UnitIsFriend("player", target)
+
+    local playerLevel = UnitLevel("player")
+    local targetLevel = UnitLevel("target")
+
+    -- Check if the target is an enemy NPC
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
+        local sourceDeathCount = deadlyNPCs[source_id] or 0
+        local currentMapID = C_Map.GetBestMapForUnit("player")
+        local deathMarkersTotal = deadlyZones[currentMapID] or 0
+        local dangerPercentage = 0.0
+        if (deathMarkersTotal > 0) then
+            dangerPercentage = math.min((sourceDeathCount / deathMarkersTotal) * 100.0, 100.0)
+        end
+
+        if (targetDangerFrame == nil) then
+            CreateTargetDangerFrame()
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        else
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        end
+
+        targetDangerFrame:Show()
+    else
+        if (targetDangerFrame ~= nil) then
+            targetDangerText:SetText("")
+            targetDangerFrame:Hide()
+        end
+    end
+end
+
 function Tombstones:PLAYER_TARGET_CHANGED()
   UnitTargetChange()
+end
+
+-- Event handler for ZONE_CHANGED_NEW_AREA event
+local function ShowZoneSplashText()
+    if (deathRecordsDB.showZoneSplash == false or IsInInstance()) then
+        return
+    end
+
+    if (splashFrame ~= nil) then
+      splashFrame:Hide()
+      splashFrame = nil
+    end
+
+    local zoneName = GetRealZoneText()
+    local currentMapID = C_Map.GetBestMapForUnit("player")
+    
+    local levelRange = MAP_TABLE[currentMapID]
+    local minLevel
+    local maxLevel
+    if levelRange then
+        minLevel = levelRange.minLevel
+        maxLevel = levelRange.maxLevel
+    end
+
+    local deathMarkersInZone = deadlyZones[currentMapID] or 0
+    local deathLvlSumInZone = deadlyZoneLvlSums[currentMapID] or 0
+    local deathMarkersTotal = #deathRecordsDB.deathRecords
+    local deathPercentage = 0.0
+    local deathZoneLvlAvg = 0.0
+    if (deathMarkersTotal > 0) then
+        deathPercentage = (deathMarkersInZone / #deathRecordsDB.deathRecords) * 100.0
+    end
+    if (deathMarkersInZone > 0) then
+        deathZoneLvlAvg = math.floor((deathLvlSumInZone / deathMarkersInZone) + 0.5)
+    end
+
+    -- Create and display the splash text frame
+    splashFrame = CreateFrame("Frame", "SplashFrame", UIParent)
+    splashFrame:SetSize(400, 200)
+    splashFrame:SetPoint("CENTER", 0, 0.28 * UIParent:GetHeight())
+
+    -- Add a texture
+    splashFrame.texture = splashFrame:CreateTexture(nil, "BACKGROUND")
+    splashFrame.texture:SetAllPoints(true)
+
+    -- Set-up flavor text and regular info
+    splashFrame.flavorText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    splashFrame.flavorText:SetPoint("CENTER", 0, 105)
+    splashFrame.infoText = splashFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+
+    local playerLevel = UnitLevel("player")
+    -- Default flavor text
+    local splashFlavorText = ""
+    local splashInfoText = string.format("There are %d tombstones here.", deathMarkersInZone)
+    splashFrame.infoText:SetPoint("CENTER", 0, 120)
+    splashFrame.flavorText:SetTextColor(1, 1, 1) -- Default white
+    splashFrame.infoText:SetTextColor(1, 1, 1) -- White
+    if (minLevel == nil or maxLevel == nil) then
+        splashFlavorText = "This place seems safe..."
+        splashFrame.flavorText:SetTextColor(0, 1, 0) -- Green
+    elseif (playerLevel < minLevel) then
+        splashFlavorText = "This place is dangerous!"
+        splashFrame.flavorText:SetTextColor(1, 0, 0) -- Red
+        if(deathZoneLvlAvg > 0) then
+            splashInfoText = string.format("There are %d tombstones here.\nThe average death is at level %d.", deathMarkersInZone, deathZoneLvlAvg)
+            splashFrame.infoText:SetPoint("CENTER", 0, 126)
+        end
+    elseif (playerLevel >= minLevel and playerLevel <= maxLevel) then
+        splashFlavorText = "This place is teeming with adventure."
+        splashFrame.flavorText:SetTextColor(1, 1, 0) -- Yellow
+        if(deathZoneLvlAvg > 0) then
+            splashInfoText = string.format("There are %d tombstones here.\n%.2f%% chance of death.\nThe average death is at level %d.", deathMarkersInZone, deathPercentage, deathZoneLvlAvg)
+            splashFrame.infoText:SetPoint("CENTER", 0, 132)
+        end
+    elseif (playerLevel > maxLevel) then
+        -- Do nothing
+    end
+    splashFrame.infoText:SetText(splashInfoText)
+    splashFrame.flavorText:SetText(splashFlavorText)
+
+    -- Apply fade-out animation to the splash frame
+    splashFrame.fadeOut = splashFrame:CreateAnimationGroup()
+    local fadeIn = splashFrame.fadeOut:CreateAnimation("Alpha")
+    fadeIn:SetDuration(.5) -- Adjust the delay duration as desired
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetOrder(1)
+    local delay = splashFrame.fadeOut:CreateAnimation("Alpha")
+    delay:SetDuration(2.5) -- Adjust the delay duration as desired
+    delay:SetFromAlpha(1)
+    delay:SetToAlpha(1)
+    delay:SetOrder(2)
+    local fadeOut = splashFrame.fadeOut:CreateAnimation("Alpha")
+    fadeOut:SetDuration(.5) -- Adjust the fade duration as desired
+    fadeOut:SetFromAlpha(1)
+    fadeOut:SetToAlpha(0)
+    fadeOut:SetOrder(3)
+    splashFrame.fadeOut:SetScript("OnFinished", function(self)
+        if (splashFrame ~= nil) then
+            splashFrame:Hide()
+            splashFrame = nil
+        end
+    end)
+
+    splashFrame:Show()
+    splashFrame.fadeOut:Play()
 end
 
 function Tombstones:ZONE_CHANGED_NEW_AREA()
