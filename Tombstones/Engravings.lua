@@ -463,6 +463,11 @@ local phraseFrame
 local engravingsRecordCount = 0
 local debug = false
 local iconSize = 12
+local isPlayerMoving = false
+local movementUpdateInterval = 0.5 -- Update interval in seconds
+local movementTimer = nil
+local lastClosestEngraving
+local glowFrame
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -893,6 +898,28 @@ local function MakeInterfacePage()
 			InterfaceOptions_AddCategory(interPanel)
 end
 
+local function ReadOutNearestEngraving(engraving)
+    -- engraving = { realm , mapID, posX , posY, timestamp, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
+    local engravingLink = "!E["..engraving.user.." "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
+    local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..engraving.user.."'s Engraving]|h|r"
+    --local say_msg = "You found an engraving on the ground: "..engravingHyperLink
+    --CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
+    --SendChatMessage(say_msg, "SAY")
+    
+    local phrase = decodePhrase(engraving.templ_index, engraving.cat_index, engraving.word_index, engraving.conj_index, engraving.conj_templ_index, engraving.conj_cat_index, engraving.conj_word_index)
+    DEFAULT_CHAT_FRAME:AddMessage("You found an engraving on the ground: "..engravingHyperLink, 1, 1, 0)
+    PlaySound(1194)
+    
+    C_Timer.After(0.8, function()
+        DEFAULT_CHAT_FRAME:AddMessage(engraving.user.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
+    end)
+    
+
+--    
+--        CTL:SendChatMessage("BULK", EN_COMM_NAME, "It reads: \""..phrase.."\".", "SAY", nil)
+--    end)
+end
+
 
 --[[ Hyperlink Handlers ]]
 --
@@ -950,11 +977,15 @@ hooksecurefunc("SetItemRef", function(link, text)
             end
         else
             if(IsControlKeyDown()) then
-                print("Engravings imported failed.")
+                local player_name_short, realm = string.split("-", characterName)
+                --AddEngravingMarker(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+                AddEngravingMarker(player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
+                print("Tombstones imported in an Engraving.")
+                --print("Engraving imported failed.")
             end
             -- Do the magic
-            local phrase = decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
-            DEFAULT_CHAT_FRAME:AddMessage(characterName.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
+            --local phrase = decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
+            --DEFAULT_CHAT_FRAME:AddMessage(characterName.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
             
             if not WorldMapFrame:IsVisible() then
                 ToggleWorldMap()
@@ -981,6 +1012,145 @@ hooksecurefunc("SetItemRef", function(link, text)
         end
     end
 end);
+
+local function ActOnNearestEngraving()
+    if (engravingsDB.participating == false or IsInInstance()) then
+        return
+    end
+    
+    -- Handle player death event
+    local playerInstance = C_Map.GetBestMapForUnit("player")
+    local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
+    local playerX, playerY = playerPosition:GetXY()
+
+    local closestEngraving
+    local closestDistance = math.huge
+
+    local zoneMarkers = engravingsDB.engravingRecords or {}
+    local totalZoneMarkers = #zoneMarkers
+    if (zoneMarkers == nil or totalZoneMarkers == 0) then
+        return
+    end
+
+    -- Iterate through the zone death markers and calculate the distance from each marker to the player's position
+    for index, engraving in ipairs(zoneMarkers) do
+        -- Calculate the distance between the player and the marker
+        local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, engraving.posX, engraving.posY, engraving.mapID)
+
+        -- Check if this marker is closer than the previous closest marker
+        if not engraving.visited then
+            if distance < closestDistance then
+                closestEngraving = engraving
+                closestDistance = distance
+            end
+        end
+    end
+
+    if closestEngraving then
+        printDebug("Closest engraving: " .. tostring(closestEngraving.user))
+        printDebug("Closest engraving: " .. tostring(closestDistance))
+        if closestDistance <= 0.0025 then
+            -- Perform any desired logic with the closest death marker
+            ReadOutNearestEngraving(closestEngraving)
+            closestEngraving.visited = true
+            hbdp:RemoveAllMinimapIcons("EngravingsMM")
+        end
+    end
+end
+
+local function GenerateMinimapIcon(engraving)
+    local iconFrame = CreateFrame("Frame", "NearestEngravingMM", Minimap)
+    iconFrame:SetSize(12, 12)
+    local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
+    iconTexture:SetAllPoints()
+    iconTexture:SetTexture("Interface\\Icons\\Inv_misc_rune_04")
+
+    iconTexture:SetVertexColor(1, 1, 1, 0.75)
+    iconFrame:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("|cFFBF4500Engraving|r", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    iconFrame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    return iconFrame
+end
+
+local function FlashWhenNearEngraving()
+    if (engravingsDB.partipating == false or IsInInstance()) then
+        return
+    end
+
+    local playerInstance = C_Map.GetBestMapForUnit("player")
+    local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
+    local playerX, playerY = playerPosition:GetXY()
+
+    local closestEngraving
+    local closestDistance = math.huge
+
+    local zoneMarkers = engravingsDB.engravingRecords or {}
+    local totalZoneMarkers = #zoneMarkers
+
+    -- Iterate through zone death markers and determine closest marker
+    for index, engraving in ipairs(zoneMarkers) do
+        local engravingPosX = engraving.posX
+        local engravingPosY = engraving.posY
+        local engravingMapID = engraving.mapID
+
+        -- Calculate the distance between the player and the marker
+        local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, engravingPosX, engravingPosY, engravingMapID)
+
+        -- Check if this marker is closer than the previous closest marker
+        if (not engraving.visited and distance < closestDistance) then
+                closestEngraving = engraving
+                closestDistance = distance
+        end
+    end
+    -- Now you have the closest death marker to the player
+    if closestEngraving then
+        printDebug("On move engraving: " .. tostring(closestDistance))
+        if (lastClosestEngraving == nil) then
+            lastClosestEngraving = closestEngraving
+            hbdp:AddMinimapIconMap("EngravingsMM", GenerateMinimapIcon(closestEngraving), closestEngraving.mapID, closestEngraving.posX, closestEngraving.posY, false, true)
+        elseif (lastClosestEngraving ~= closestEngraving) then
+            lastClosestEngraving = closestEngraving
+            printDebug("Swapping nearest engraving minimap marker.")
+            hbdp:RemoveAllMinimapIcons("EngravingsMM")
+            hbdp:AddMinimapIconMap("EngravingsMM", GenerateMinimapIcon(closestEngraving), closestEngraving.mapID, closestEngraving.posX, closestEngraving.posY, false, true)
+        end
+
+        if closestDistance <= 0.0025 then
+            if (glowFrame == nil) then
+                -- Create a frame for the screen glow effect
+                glowFrame = CreateFrame("Frame", "ScreenGlowFrame", UIParent)
+                glowFrame:SetAllPoints(UIParent)
+                glowFrame:SetFrameStrata("BACKGROUND")
+
+                -- Create a texture for the glow effect
+                local glowTexture = glowFrame:CreateTexture(nil, "BACKGROUND")
+                glowTexture:SetAllPoints()
+                glowTexture:SetTexture("Interface\\FullScreenTextures\\LowHealth")
+                glowTexture:SetBlendMode("ADD")
+                glowTexture:SetVertexColor(1, 0.5, 0, 0.5) -- Orange?
+                glowFrame:Show()
+            end
+        elseif(glowFrame ~= nil) then
+            glowFrame:Hide()
+            glowFrame = nil
+        end
+    elseif (glowFrame ~= nil) then
+        glowFrame:Hide()
+        glowFrame = nil
+    end
+end
+
+local function UnvisitAllEngravings()
+    local totalRecords = #engravingsDB.engravingRecords
+    for i = 1, totalRecords do
+        engravingsDB.engravingRecords[i].visited = nil
+    end
+end
 
 local function TombstonesJoinChannel()
     C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME)
@@ -1015,10 +1185,13 @@ local function SlashCommandHandler(msg)
         CreatePhraseGenerationInterface()
     elseif command == "debug" then
         debug = not debug
-        print("TS:Engravings debug mode is: ".. tostring(debug))
+        print("Engravings debug mode is: ".. tostring(debug))
     elseif command == "clear" then
         -- Clear all death records
         StaticPopup_Show("ENGRAVINGS_CLEAR_CONFIRMATION")
+    elseif command == "unvisit" then
+        if (not debug) then return end
+        UnvisitAllEngravings()
     elseif command == "info" then
         print("Engravings has " .. #engravingsDB.engravingRecords.. " records in total.")
         print("Engravings saw " .. engravingsRecordCount .. " records this session.")
@@ -1028,18 +1201,35 @@ local function SlashCommandHandler(msg)
 end
 SlashCmdList["ENGRAVINGS"] = SlashCommandHandler
 
+
 --[[ Initialize Event Handlers ]]
 --
 local function OnUpdateMovementHandler(self, elapsed)
-  -- TODO
+  if (isPlayerMoving and engravingsDB.participating) then
+    FlashWhenNearEngraving()
+  end
 end
 
 function Engravings:PLAYER_STOPPED_MOVING()
-  -- TODO
+  isPlayerMoving = false
+  if movementTimer then
+    movementTimer:Cancel()
+    movementTimer = nil
+  end
+  if(glowFrame ~= nil) then
+    glowFrame:Hide()
+    glowFrame = nil
+  end
+  -- Movement monitoring ended
+  ActOnNearestEngraving()
 end
 
 function Engravings:PLAYER_STARTED_MOVING()
-  -- TODO
+  isPlayerMoving = true
+  if not movementTimer and engravingsDB.participating then
+    movementTimer = C_Timer.NewTicker(movementUpdateInterval, OnUpdateMovementHandler)
+  end
+  -- Movement monitoring started
 end
 
 function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name_long)
