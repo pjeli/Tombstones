@@ -486,6 +486,7 @@ local function LoadEngravingRecords()
         engravingsDB = {}
         engravingsDB.version = ADDON_SAVED_VARIABLES_VERSION
         engravingsDB.engravingRecords = {}
+        engravingsDB.participating = false
     end
 end
 
@@ -625,8 +626,9 @@ local function CreatePhraseGenerationInterface()
     end
   
     phraseFrame = CreateFrame("Frame", "EngravingsPhraseGenerator", UIParent)--, "UIPanelDialogTemplate")
-    phraseFrame:SetSize(300, 400)
+    phraseFrame:SetSize(280, 390)
     phraseFrame:SetPoint("CENTER")
+    phraseFrame:SetFrameStrata("HIGH")
     phraseFrame:SetMovable(true)
     phraseFrame:EnableMouse(true)
     phraseFrame:RegisterForDrag("LeftButton")
@@ -836,12 +838,59 @@ local function CreatePhraseGenerationInterface()
         CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
         
         --(name, map_id, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
-        local channel_msg = EencodeMessage(PLAYER_NAME, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)   
-        local channel_num = GetChannelName(tombstones_channel)
-        CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_PING"] .. COMM_COMMAND_DELIM .. channel_msg, "CHANNEL", nil, channel_num)
+        if (engravingsDB.participating) then
+            local channel_msg = EencodeMessage(PLAYER_NAME, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)   
+            local channel_num = GetChannelName(tombstones_channel)
+            CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_PING"] .. COMM_COMMAND_DELIM .. channel_msg, "CHANNEL", nil, channel_num)
+        end
     end)
 
     table.insert(UISpecialFrames, "EngravingsPhraseGenerator")
+end
+
+local function MakeInterfacePage()
+			local interPanel = CreateFrame("FRAME", "EngravingsInterfaceOptions", UIParent)
+			interPanel.name = "Engravings"
+      interPanel.parent = "Tombstones"
+      
+      local titleText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      titleText:SetPoint("TOPLEFT", 10, -10)
+      local font, _, flags = titleText:GetFont()
+      titleText:SetFont(font, 18, flags)
+      titleText:SetText("Tombstones: |cFFBF4500Engravings|r |cFFFFFFFF(BETA)|r")
+      titleText:SetTextColor(0.5, 0.5, 0.5)
+      
+      -- TOGGLE OPTIONS
+      local participateToggle = CreateFrame("CheckButton", "Participate", interPanel, "OptionsCheckButtonTemplate")
+      participateToggle:SetPoint("TOPLEFT", 10, -40)
+      participateToggle:SetChecked(engravingsDB.participating)
+      local participateToggleText = participateToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      participateToggleText:SetPoint("LEFT", participateToggle, "RIGHT", 5, 0)
+      participateToggleText:SetText("Participate")
+      
+      local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
+      slashHelpText:SetText("/eng usage for slash command options.")
+      
+      local function ToggleOnClick(self)
+          local isChecked = self:GetChecked()
+          local toggleName = self:GetName()
+          
+          if isChecked then
+              -- Perform actions for selected state
+              if (toggleName == "Participate") then
+                  engravingsDB.participating = true
+              end
+          else
+              -- Perform actions for unselected state
+              if (toggleName == "Participate") then
+                  engravingsDB.participating = false
+              end
+          end
+      end
+      participateToggle:SetScript("OnClick", ToggleOnClick)
+
+			InterfaceOptions_AddCategory(interPanel)
 end
 
 
@@ -911,8 +960,8 @@ hooksecurefunc("SetItemRef", function(link, text)
                 ToggleWorldMap()
             end
             local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
-            overlayFrame:SetFrameStrata("FULLSCREEN")
-            overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
+            --overlayFrame:SetFrameStrata("FULLSCREEN")
+            --overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
             overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
 
             WorldMapFrame:SetMapID(mapID)
@@ -921,13 +970,13 @@ hooksecurefunc("SetItemRef", function(link, text)
             overlayFrame.Texture:SetAllPoints()
             overlayFrame.Texture:SetTexture("Interface\\Icons\\Inv_misc_rune_04")
 
-            hbdp:AddWorldMapIconMap("TombstonesImport", overlayFrame, mapID, posX, posY)
-            C_Timer.After(3.0, function()
-              hbdp:RemoveWorldMapIcon("TombstonesImport", overlayFrame)
-              if overlayFrame ~= nil then
-                overlayFrame:Hide()
-                overlayFrame = nil 
-              end
+            hbdp:AddWorldMapIconMap("EngravingPing", overlayFrame, mapID, posX, posY, 3)
+            C_Timer.After(8.0, function()
+                hbdp:RemoveWorldMapIcon("EngravingPing", overlayFrame)
+                if overlayFrame ~= nil then
+                  overlayFrame:Hide()
+                  overlayFrame = nil 
+                end
             end)
         end
     end
@@ -973,6 +1022,8 @@ local function SlashCommandHandler(msg)
     elseif command == "info" then
         print("Engravings has " .. #engravingsDB.engravingRecords.. " records in total.")
         print("Engravings saw " .. engravingsRecordCount .. " records this session.")
+    elseif command == "usage" then
+        print("Usage: /engravings or /eng [info | make | clear]")
     end
 end
 SlashCmdList["ENGRAVINGS"] = SlashCommandHandler
@@ -992,6 +1043,7 @@ function Engravings:PLAYER_STARTED_MOVING()
 end
 
 function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name_long)
+  if (not engravingsDB.participating) then return end
   local _, channel_name = string.split(" ", channel_name_long)
   local player_name_short, _ = string.split("-", sender_name_long)
   if channel_name == tombstones_channel then
@@ -1017,8 +1069,8 @@ end
 function Engravings:PLAYER_LOGIN()
   -- called during load screen
   --  MakeMinimapButton()
-  --  MakeInterfacePage()
   LoadEngravingRecords()
+  MakeInterfacePage()
 
   self:RegisterEvent("PLAYER_STARTED_MOVING")
   self:RegisterEvent("PLAYER_STOPPED_MOVING")
