@@ -3172,6 +3172,10 @@ function Tombstones:ZONE_CHANGED_NEW_AREA()
 end
 
 function Tombstones:PLAYER_DEAD()
+    if _G["deathlogJoinChannel"] ~= nil then
+        -- Refuse self report, even if enabled, if Hardcore add-on is present
+        return
+    end
     if (deathRecordsDB.selfReporting == true) then
         selfDeathAlert(lastDmgSourceID)
         selfDeathAlertLastWords()
