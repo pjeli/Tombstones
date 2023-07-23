@@ -1,6 +1,6 @@
 -- Constants
 local ADDON_NAME = "Tombstones"
-local TS_COMM_NAME = "TSKarmaChannel"
+local TS_COMM_NAME = "TombstonesRating"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
@@ -336,7 +336,7 @@ local function TwhisperRatingForMarkerTo(msg, player_name_short)
         if foundMarker ~= nil and foundMarker.karma ~= nil and foundMarker.karma == 1 then
             local karmaScore = foundMarker.karma > 0 and "+" or "-"
             local replyMsg = TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] .. COMM_COMMAND_DELIM .. msg .. karmaScore
-            CTL:SendAddonMessage("BULK", "TombstonesRating", replyMsg, "WHISPER", player_name_short)
+            CTL:SendAddonMessage("BULK", TS_COMM_NAME, replyMsg, "WHISPER", player_name_short)
             printDebug("Sent rating ping for " .. liteDecodedPlayerData["name"] .. ".")
             return
         else
@@ -356,7 +356,7 @@ local function TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
 end
 
 local function TombstonesJoinChannel()
-    C_ChatInfo.RegisterAddonMessagePrefix("TombstonesRating")
+    C_ChatInfo.RegisterAddonMessagePrefix(TS_COMM_NAME)
     local channel_num = GetChannelName(tombstones_channel)
     if channel_num == 0 then
         JoinChannelByName(tombstones_channel, tombstones_channel_pw)
@@ -1047,10 +1047,6 @@ local function UpdateWorldMapMarkers()
                             tooltipKarmaBackgroundTexture:SetColorTexture(1, 0, 0, 0.25) 
                             GameTooltip:EnableDrawLayer("BACKGROUND")
                             GameTooltip:Show()
-                            
---                            local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
---                            local channel_num = GetChannelName(tombstones_channel)
---                            CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
 
                         -- Else propogate the click down the WorldMap    
                         else
@@ -2911,7 +2907,7 @@ function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   local player_name_short, _ = string.split("-", sender_name_long)
   local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
   -- TALLY RESPONSE HANDLING
-  if (command == TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] and expectingTallyReply and prefix == "TombstonesRating" and channel == "WHISPER") then
+  if (command == TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] and expectingTallyReply and prefix == TS_COMM_NAME and channel == "WHISPER") then
       TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
   end
 end
