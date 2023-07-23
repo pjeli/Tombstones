@@ -198,6 +198,18 @@ local l64 = LibStub("LibBase64-1.0")
 -- Main Frame
 local Tombstones = CreateFrame("Frame")
 
+function printDebug(msg)
+    if debug then
+        print(msg)
+    end
+end
+
+function printTrace(msg)
+    if trace then
+        print(msg)
+    end
+end
+
 local function SaveDeathRecords()
     deathRecordsDB.TOMB_FILTERS = TOMB_FILTERS
     _G["deathRecordsDB"] = deathRecordsDB
