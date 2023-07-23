@@ -43,18 +43,6 @@ function GetDistanceBetweenPositions(playerX, playerY, playerInstance, markerX, 
     return distance
 end
 
-function printDebug(msg)
-    if debug then
-        print(msg)
-    end
-end
-
-function printTrace(msg)
-    if trace then
-        print(msg)
-    end
-end
-
 function encodeColorizedText(str)
     local encodedText = str:gsub("|([cr])", "<%1>")  -- Special encoding for "|c" and "|r"
     return encodedText
@@ -81,6 +69,21 @@ function extractBracketTextWithColor(str)
     else
         return nil, str
     end
+end
+
+function ELocationPing(name, map_id, map_pos, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+  return {
+    ["name"] = name,
+    ["map_id"] = map_id,
+    ["map_pos"] = map_pos,
+    ["templ_index"] = templ_index,
+    ["cat_index"] = cat_index,
+    ["word_index"] = word_index,
+    ["conj_index"] = conj_index,
+    ["conj_templ_index"] = conj_templ_index,
+    ["conj_cat_index"] = conj_cat_index,
+    ["conj_word_index"] = conj_word_index,
+  }
 end
 
 function TPlayerData(name, guild, source_id, race_id, class_id, level, instance_id, map_id, map_pos, date, last_words)
