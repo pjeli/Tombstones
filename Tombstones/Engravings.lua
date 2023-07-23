@@ -1,5 +1,7 @@
+-- Constants
+local EN_COMM_NAME = "EngravingsSay"
 local PLAYER_NAME, _ = UnitName("player")
-
+local CTL = _G.ChatThrottleLib
 local templates = {
     "**** ahead",
     "Likely ****",
@@ -26,7 +28,6 @@ local templates = {
     "Let there be ****",
     "****..."
 }
-
 local categoryTable = {
   "Enemies",
   "People",
@@ -41,8 +42,6 @@ local categoryTable = {
   "Concepts",
   "Phrases",
 }
-
-
 local wordsTable = {
     [1] = {
         "enemy",
@@ -437,7 +436,6 @@ local wordsTable = {
         "are you ready?",
     },
 }
-
 local conjunctions = {
     "and then",
     "or",
@@ -451,12 +449,13 @@ local conjunctions = {
     ",",
 }
 
-local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
-    print(templateIndex)
-    print(categoryIndex)
-    print(wordIndex)
-    print(conjunctionIndex)
-  
+-- Variables
+local iconSize = 12
+
+-- Libraries
+local hbdp = LibStub("HereBeDragons-Pins-2.0")
+
+local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex) 
     if (templateIndex == 0 or categoryIndex == 0 or wordIndex == 0) then
         return nil
     end
@@ -710,7 +709,9 @@ local function CreatePhaseGenerationInterface()
         posX = string.format("%.4f", posX)
         posY = string.format("%.4f", posY)
         
-        DEFAULT_CHAT_FRAME:AddMessage("!E["..PLAYER_NAME.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]", 1, 1, 1)
+        local engravingMsg = "!E["..PLAYER_NAME.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
+        local msg = "I have left an engraving here: "..engravingMsg
+        CTL:SendChatMessage("BULK", EN_COMM_NAME, msg, "SAY", nil)
     end)
 
     frame:Show()
@@ -778,6 +779,29 @@ hooksecurefunc("SetItemRef", function(link, text)
             -- Do the magic
             local phrase = decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
             DEFAULT_CHAT_FRAME:AddMessage(characterName.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
+            
+            if not WorldMapFrame:IsVisible() then
+                ToggleWorldMap()
+            end
+            local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+            overlayFrame:SetFrameStrata("FULLSCREEN")
+            overlayFrame:SetFrameLevel(3) -- Set a higher frame level to appear on top of the map
+            overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
+
+            WorldMapFrame:SetMapID(mapID)
+            
+            overlayFrame.Texture = overlayFrame:CreateTexture(nil, "ARTWORK")
+            overlayFrame.Texture:SetAllPoints()
+            overlayFrame.Texture:SetTexture("Interface\\Icons\\Inv_misc_rune_04")
+
+            hbdp:AddWorldMapIconMap("TombstonesImport", overlayFrame, mapID, posX, posY)
+            C_Timer.After(3.0, function()
+              hbdp:RemoveWorldMapIcon("TombstonesImport", overlayFrame)
+              if overlayFrame ~= nil then
+                overlayFrame:Hide()
+                overlayFrame = nil 
+              end
+            end)
         end
     end
 end);
