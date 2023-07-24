@@ -79,10 +79,11 @@ function generateEncodedHyperlink(characterName, guild, timestamp, level, classI
     raceID = raceID or 0
     classID = classID or 0
     level = level or 0
+    guild = guild or ""
     if (last_words) then
         local _, santizedLastWords = extractBracketTextWithColor(last_words)
         local encodedLastWords = encodeColorizedText(santizedLastWords)
-        return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." \""..encodedLastWords.."\"]"
+        return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." "..encodedLastWords.."]"
     end
     return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." \"\"]"
 end
@@ -94,13 +95,13 @@ end
 
 -- start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words
 function parseEncodedHyperlink(encodedData)
-    local start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = encodedData:find("!T%[([^%s]+) \"%s*([^%]\"]+)\" (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (.*)%]")
+    local start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = encodedData:find("!T%[([^%s]+) \"%s*([^%]\"]*)\" (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (.*)%]")
     return start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words
 end
 
 -- start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, 
 function parseHyperlink(hyperlink)
-  local start, finish, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = hyperlink:find("|cff9d9d9d|Hgarrmission:tombstones:([^:]+):(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(.*)|h%[([^%s]+)'s Tombstone%]|h|r");
+  local start, finish, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = hyperlink:find("|cff9d9d9d|Hgarrmission:tombstones:([^:]*):(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(.*)|h%[([^%s]+)'s Tombstone%]|h|r");
   return start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words
 end
 
