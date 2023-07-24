@@ -2607,7 +2607,7 @@ hooksecurefunc("SetItemRef", function(link, text)
         if(IsShiftKeyDown()) then
             local editbox = GetCurrentKeyBoardFocus();
             if(editbox) then
-                local encodedData = generateEncodedHyperlink(characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words)
+                local encodedData = generateEncodedHyperlink(characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, fetchQuotedPart(last_words))
                 editbox:Insert(encodedData);
             end
         else
