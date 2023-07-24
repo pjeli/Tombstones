@@ -657,15 +657,14 @@ local function IsNewRecordDuplicate(newRecord)
     return isDuplicate
 end
 
--- Add death marker function
-local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id)
+local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words, guild)
     if (mapID == nil and instID == nil) then
         -- No location info. Useless.
-        return false, nil
+       return false, nil
     end
 
-    local marker = { realm = REALM, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, source_id = source_id, class_id = class_id, race_id = race_id }
-    
+    local marker = { realm = realm, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words, guild = guild }
+
     local isDuplicate = IsNewRecordDuplicate(marker)
     if (not isDuplicate) then 
         table.insert(deathRecordsDB.deathRecords, marker)
@@ -678,24 +677,9 @@ local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level,
     return false, marker
 end
 
-local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words)
-    if (mapID == nil and instID == nil) then
-        -- No location info. Useless.
-       return false, nil
-    end
-
-    local marker = { realm = realm, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words }
-
-    local isDuplicate = IsNewRecordDuplicate(marker)
-    if (not isDuplicate) then 
-        table.insert(deathRecordsDB.deathRecords, marker)
-        IncrementDeadlyCounts(marker)
-        deathRecordCount = deathRecordCount + 1
-        printDebug("Death marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
-        return true, marker
-    end
-    printDebug("Received a duplicate record. Ignoring.")
-    return false, marker
+-- Add death marker function
+local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, guild)
+    return ImportDeathMarker(REALM, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, nil, guild)
 end
 
 -- Function to create a frame to display serialized data
@@ -870,6 +854,9 @@ local function UpdateWorldMapMarkers()
                         else
                             GameTooltip:SetText(markerUsername .. " - ? - ?")
                         end
+                        if (marker.guild ~= nil) then
+                            GameTooltip:AddLine(marker.guild, 0, 1, 0, true)
+                        end
                         local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
                         GameTooltip:AddLine(date_str, .8, .8, .8, true)
                         if (marker.source_id ~= nil) then
@@ -975,20 +962,7 @@ local function UpdateWorldMapMarkers()
                         -- Share Tombstone export
                         if (button == "LeftButton" and IsShiftKeyDown()) then
                             -- Form export data as hyperlink
-                            local exportData
-                            local source_id = marker.source_id or -1
-                            local race_id = marker.race_id or 0
-                            local class_id = marker.class_id or 0
-                            local level = marker.level or 0
-                            local user = marker.realm == REALM and marker.user or marker.user.."-"..marker.realm
-                            if (marker.last_words) then
-                                local _, santizedLastWords = extractBracketTextWithColor(marker.last_words)
-                                local encodedLastWords = encodeColorizedText(santizedLastWords)
-                                exportData = "!T["..user.." "..marker.timestamp.." "..level.." "..class_id.." "..race_id.." "..source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \""..encodedLastWords.."\"]"
-                            else
-                                exportData = "!T["..user.." "..marker.timestamp.." "..level.." "..class_id.." "..race_id.." "..source_id.." "..marker.mapID.." "..marker.posX.." "..marker.posY.." \"\"]"
-                            end
-
+                            local exportData = generateEncodedHyperlinkFromMarker(marker)
                             local editbox = GetCurrentKeyBoardFocus();
                             if(editbox) then
                                 -- Hyperlink export
@@ -1797,7 +1771,7 @@ function TdeathlogReceiveChannelMessage(sender, data)
   if sender ~= decoded_player_data["name"] then return end
   local x, y = strsplit(",", decoded_player_data["map_pos"],2)
 
-  AddDeathMarker(tonumber(decoded_player_data["map_id"]), decoded_player_data["instance_id"], tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]))
+  AddDeathMarker(tonumber(decoded_player_data["map_id"]), decoded_player_data["instance_id"], tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]), decoded_player_data["guild"])
 end
 
 function TdecodeMessage(msg)
@@ -2036,14 +2010,14 @@ local function CreateDataImportFrame()
         local numNewRecords = 0
         local singleRecord = nil
         if (startsWith(encodedData, "!T[")) then
-            local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = encodedData:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (.*)%]")
-            local player_name_short, realm = string.split("-", characterName) 
+            local start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = parseEncodedHyperlink(encodedData)
+            local player_name_short, realm = string.split("-", characterName)
             classID = tonumber(classID) > 0 and classID or nil
             raceID = tonumber(raceID) > 0 and raceID or nil
             sourceID = tonumber(sourceID) == -1 and nil or sourceID
             level = tonumber(level) == 0 and nil or level
             last_words = #last_words > 2 and fetchQuotedPart(last_words) or nil
-            local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words)
+            local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words, guild)
             singleRecord = marker
             numImportRecords = numImportRecords + 1
             if (success) then
@@ -2237,10 +2211,18 @@ local function ShowNearestTombstoneSplashText(marker)
     local timeOfDeathLong = ConvertTimestampToLongForm(marker.timestamp)
     local lastWords = marker.last_words
     local heroText
-    if(marker.realm == REALM) then
-        heroText = marker.user .. ", a " .. class_str .. " of " .. race_info .. " origins, perished here at level " .. level .. "."
+    if (marker.realm == REALM) then
+        if marker.guild then 
+            heroText = marker.user .. ", a " ..race_info.. " "..class_str .. " from " .. marker.guild .. ", perished here at level " .. level .. "."
+        else 
+            heroText = marker.user .. ", a " ..race_info.. " "..class_str .. ", perished here at level " .. level .. "."
+        end
     else
-        heroText = marker.user .. ", a " .. class_str .. " of " .. race_info .. " origins from " .. marker.realm .. ", perished here at level " .. level .. "."
+        if marker.guild then 
+            heroText = marker.user .. ", a " ..race_info.. " "..class_str .. " from " .. marker.guild .. " of the realm " .. marker.realm ..", perished here at level " .. level .. "."
+        else
+            heroText = marker.user .. ", a " ..race_info.. " "..class_str .. " of the realm " .. marker.realm .. ", perished here at level " .. level .. "."
+        end
     end
 
     local timeText = "They fell on " .. timeOfDeathLong .. "."
@@ -2259,7 +2241,7 @@ local function ShowNearestTombstoneSplashText(marker)
     -- PLAY THE HERO TEXT
     tombstoneFrame.infoText = tombstoneFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     tombstoneFrame.infoText:SetPoint("CENTER", 0, 120)
-    tombstoneFrame.infoText:SetText(heroText.."\n"..fallenText.."\n"..timeText)
+    tombstoneFrame.infoText:SetText(heroText.."\n"..timeText.."\n"..fallenText)
 
     -- Apply fade-out animation to the splash frame
     tombstoneFrame.heroFade = tombstoneFrame:CreateAnimationGroup()
@@ -2584,10 +2566,10 @@ local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
   local remaining = msg;
   local done;
   repeat
-    local start, finish, characterName, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = remaining:find("!T%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (.*)%]")
+    local start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = parseEncodedHyperlink(remaining)
     if(characterName) then
       newMsg = newMsg..remaining:sub(1, start-1);
-      newMsg = newMsg.."|cff9d9d9d|Hgarrmission:tombstones:"..timestamp..":"..level..":"..classID..":"..raceID..":"..sourceID..":"..mapID..":"..posX..":"..posY..":"..last_words.."|h["..characterName.."'s Tombstone]|h|r";
+      newMsg = newMsg.."|cff9d9d9d|Hgarrmission:tombstones:"..guild..":"..timestamp..":"..level..":"..classID..":"..raceID..":"..sourceID..":"..mapID..":"..posX..":"..posY..":"..last_words.."|h["..characterName.."'s Tombstone]|h|r";
       remaining = remaining:sub(finish + 1);
     else
       done = true;
@@ -2614,7 +2596,7 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", filterFunc)
 
 hooksecurefunc("SetItemRef", function(link, text)
     if(startsWith(link, "garrmission:tombstones")) then    
-        local _, _, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = text:find("|cff9d9d9d|Hgarrmission:tombstones:(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(.*)|h%[([^%s]+)'s Tombstone%]|h|r");
+        local _, _, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = parseHyperlink(text)
         classID = tonumber(classID) > 0 and tonumber(classID) or nil
         raceID = tonumber(raceID) > 0 and tonumber(raceID) or nil
         sourceID = tonumber(sourceID) == -1 and nil or tonumber(sourceID)
@@ -2624,13 +2606,14 @@ hooksecurefunc("SetItemRef", function(link, text)
         if(IsShiftKeyDown()) then
             local editbox = GetCurrentKeyBoardFocus();
             if(editbox) then
-                editbox:Insert("!T["..characterName.." "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." "..last_words.."]");
+                local encodedData = generateEncodedHyperlink(characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words)
+                editbox:Insert(encodedData);
             end
         else
             if(IsControlKeyDown()) then
                 local player_name_short, realm = string.split("-", characterName) 
                 decoded_last_words = #last_words > 2 and decoded_last_words or nil
-                local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, level, sourceID, classID, raceID, fetchQuotedPart(decoded_last_words))
+                local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, level, sourceID, classID, raceID, fetchQuotedPart(decoded_last_words), guild)
                 local numImportRecords = 1
                 local numNewRecords = 0
                 if (success) then
@@ -2664,6 +2647,9 @@ hooksecurefunc("SetItemRef", function(link, text)
                     GameTooltip:SetText(characterName .. " - ? - " .. level)
                 else
                     GameTooltip:SetText(characterName .. " - ? - ?")
+                end
+                if (guild ~= nil) then
+                    GameTooltip:AddLine(guild, 0, 1, 0, true)
                 end
                 local date_str = date("%Y-%m-%d %H:%M:%S", tonumber(timestamp))
                 GameTooltip:AddLine(date_str, .8, .8, .8, true)
