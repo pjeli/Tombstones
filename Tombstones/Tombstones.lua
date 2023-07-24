@@ -2017,6 +2017,7 @@ local function CreateDataImportFrame()
             sourceID = tonumber(sourceID) == -1 and nil or sourceID
             level = tonumber(level) == 0 and nil or level
             last_words = #last_words > 2 and fetchQuotedPart(last_words) or nil
+            guild = #guild > 2 and fetchQuotedPart(guild) or nil
             local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words, guild)
             singleRecord = marker
             numImportRecords = numImportRecords + 1
