@@ -899,9 +899,15 @@ local function MakeInterfacePage()
 end
 
 local function ReadOutNearestEngraving(engraving)
+    
+    local user = engraving.user
+    if(engraving.realm ~= REALM) then
+       user = user.."-"..engraving.realm
+    end
+    
     -- engraving = { realm , mapID, posX , posY, timestamp, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
-    local engravingLink = "!E["..engraving.user.." "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
-    local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..engraving.user.."'s Engraving]|h|r"
+    local engravingLink = "!E["..user.." "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
+    local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..user.."'s Engraving]|h|r"
     --local say_msg = "You found an engraving on the ground: "..engravingHyperLink
     --CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
     --SendChatMessage(say_msg, "SAY")
@@ -911,7 +917,7 @@ local function ReadOutNearestEngraving(engraving)
     PlaySound(1194)
     
     C_Timer.After(0.8, function()
-        DEFAULT_CHAT_FRAME:AddMessage(engraving.user.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
+        DEFAULT_CHAT_FRAME:AddMessage(user.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
     end)
     
 
