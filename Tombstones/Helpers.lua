@@ -83,7 +83,7 @@ function generateEncodedHyperlink(characterName, guild, timestamp, level, classI
     if (last_words) then
         local _, santizedLastWords = extractBracketTextWithColor(last_words)
         local encodedLastWords = encodeColorizedText(santizedLastWords)
-        return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." "..encodedLastWords.."]"
+        return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." \""..encodedLastWords.."\"]"
     end
     return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." \"\"]"
 end
