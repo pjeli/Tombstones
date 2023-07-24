@@ -829,15 +829,7 @@ local function UpdateWorldMapMarkers()
                     markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
                     markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
                     markerMapButton.texture:SetAllPoints(true)
-                    if (marker.level == nil) then
-                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
-                    elseif (marker.level <= 30) then
-                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
-                    elseif (marker.level <= 59) then
-                        markerMapButton.texture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
-                    else
-                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
-                    end
+                    markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
 
                     if (marker.visited == true and markerMapButton.checkmarkTexture == nil) then
                         -- Create the checkmark texture
@@ -1192,7 +1184,7 @@ local function MakeWorldMapButton()
 end
 
 local function MakeInterfacePage()
-			local interPanel = CreateFrame("FRAME")
+			local interPanel = CreateFrame("FRAME", "TombstonesInterfaceOptions", UIParent)
 			interPanel.name = "Tombstones"
       
       local titleText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
