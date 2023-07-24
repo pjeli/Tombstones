@@ -1,3 +1,5 @@
+local REALM = GetRealmName()
+
 function fetchQuotedPart(str)
     if(str == nil) then return nil end
     local pattern = "\"(.-)\""
@@ -69,6 +71,37 @@ function extractBracketTextWithColor(str)
     else
         return nil, str
     end
+end
+
+-- characterName might have REALM info in it
+function generateEncodedHyperlink(characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words)
+    sourceID = sourceID or -1
+    raceID = raceID or 0
+    classID = classID or 0
+    level = level or 0
+    if (last_words) then
+        local _, santizedLastWords = extractBracketTextWithColor(last_words)
+        local encodedLastWords = encodeColorizedText(santizedLastWords)
+        return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." \""..encodedLastWords.."\"]"
+    end
+    return "!T["..characterName.." \""..guild.."\" "..timestamp.." "..level.." "..classID.." "..raceID.." "..sourceID.." "..mapID.." "..posX.." "..posY.." \"\"]"
+end
+
+function generateEncodedHyperlinkFromMarker(marker)
+    local user = marker.realm == REALM and marker.user or marker.user.."-"..marker.realm
+    return generateEncodedHyperlink(user, marker.guild, marker.timestamp, marker.level, marker.class_id, marker.race_id, marker.source_id, marker.mapID, marker.posX, marker.posY, marker.last_words)
+end
+
+-- start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words
+function parseEncodedHyperlink(encodedData)
+    local start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words = encodedData:find("!T%[([^%s]+) \"%s*([^%]\"]+)\" (%d+) (%d+) (%d+) (%d+) (-?%d+) (%d+) ([%d%.]+) ([%d%.]+) (.*)%]")
+    return start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words
+end
+
+-- start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, 
+function parseHyperlink(hyperlink)
+  local start, finish, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words, characterName = hyperlink:find("|cff9d9d9d|Hgarrmission:tombstones:([^:]+):(%d+):(%d+):(%d+):(%d+):(-?%d+):(%d+):([%d%.]+):([%d%.]+):(.*)|h%[([^%s]+)'s Tombstone%]|h|r");
+  return start, finish, characterName, guild, timestamp, level, classID, raceID, sourceID, mapID, posX, posY, last_words
 end
 
 function ELocationPing(name, map_id, map_pos, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
