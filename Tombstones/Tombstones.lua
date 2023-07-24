@@ -855,7 +855,7 @@ local function UpdateWorldMapMarkers()
                             GameTooltip:SetText(markerUsername .. " - ? - ?")
                         end
                         if (marker.guild ~= nil) then
-                            GameTooltip:AddLine(marker.guild, 0, 1, 0, true)
+                            GameTooltip:AddLine("<"..marker.guild..">", 0, 1, 0, true)
                         end
                         local date_str = date("%Y-%m-%d %H:%M:%S", marker.timestamp)
                         GameTooltip:AddLine(date_str, .8, .8, .8, true)
@@ -2650,7 +2650,7 @@ hooksecurefunc("SetItemRef", function(link, text)
                     GameTooltip:SetText(characterName .. " - ? - ?")
                 end
                 if (guild ~= nil) then
-                    GameTooltip:AddLine(guild, 0, 1, 0, true)
+                    GameTooltip:AddLine("<"..guild..">", 0, 1, 0, true)
                 end
                 local date_str = date("%Y-%m-%d %H:%M:%S", tonumber(timestamp))
                 GameTooltip:AddLine(date_str, .8, .8, .8, true)
