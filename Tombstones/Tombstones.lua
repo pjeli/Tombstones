@@ -1834,7 +1834,7 @@ end
 -- (name, map_id, map_pos, karma)
 function TencodeMessageLite(marker)
   local loc_str = string.format("%.4f,%.4f", marker.posX, marker.posY)
-  local karmaScore = marker.karma > 0 and "+" or "-"
+  local karmaScore = (marker.karma ~= nil and marker.karma > 0) and "+" or "-"
   local comm_message = marker.user .. COMM_FIELD_DELIM .. marker.mapID .. COMM_FIELD_DELIM .. loc_str .. COMM_FIELD_DELIM .. karmaScore .. COMM_FIELD_DELIM
   return comm_message
 end
