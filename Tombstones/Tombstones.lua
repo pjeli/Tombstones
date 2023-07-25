@@ -176,6 +176,7 @@ local TOMB_FILTERS = {
   ["HOUR_THRESH"] = 720,
   ["REALMS"] = true,
   ["RATING"] = false,
+  ["GUILD"] = 0,
 }
 
 -- Message/Karma Variables
@@ -461,6 +462,9 @@ local function LoadDeathRecords()
         if (TOMB_FILTERS["HAS_KNOWN_DEATH"] == nil) then
             TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
         end
+        if (TOMB_FILTERS["GUILD"] == nil) then
+            TOMB_FILTERS["GUILD"] = 0
+        end
     end
     for _, marker in ipairs(deathRecordsDB.deathRecords) do
         IncrementDeadlyCounts(marker)
@@ -597,6 +601,7 @@ local function IsMarkerAllowedByFilters(marker)
     local filter_level = TOMB_FILTERS["LEVEL_THRESH"] 
     local filter_hour = TOMB_FILTERS["HOUR_THRESH"]
     local filter_rating = TOMB_FILTERS["RATING"]
+    local filter_guild = TOMB_FILTERS["GUILD"]
 
     if (allow == true and filter_has_words == true) then
         if (marker.last_words == nil) then allow = false end
@@ -622,6 +627,9 @@ local function IsMarkerAllowedByFilters(marker)
     end
     if (allow == true and filter_hour > 0) then
         if (marker.timestamp ~= nil and marker.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
+    end
+    if (allow == true and filter_guild ~= 0) then
+        if (marker.guild == nil or marker.guild == "") then allow = false end
     end
     if (allow == true and filter_realms and marker.realm ~= REALM) then allow = false end
     return allow
@@ -1442,7 +1450,7 @@ local function GenerateTombstonesOptionsFrame()
     -- Create the main frame
     optionsFrame = CreateFrame("Frame", "TombstonesOptionsFrame", UIParent)
     optionsFrame:SetFrameStrata("HIGH")
-    optionsFrame:SetSize(360, 410)
+    optionsFrame:SetSize(360, 430)
     optionsFrame:SetPoint("CENTER", 0, 80)
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1562,29 +1570,36 @@ local function GenerateTombstonesOptionsFrame()
     knownDeathOptionText:SetPoint("LEFT", knownDeathOption, "RIGHT", 5, 0)
     knownDeathOptionText:SetText("Have known means of death.")
     
+    local guildOption = CreateFrame("CheckButton", "Guild", optionsFrame, "OptionsCheckButtonTemplate")
+    guildOption:SetPoint("TOPLEFT", 20, -250)
+    guildOption:SetChecked(TOMB_FILTERS["GUILD"] ~= 0)
+    local guildOptionText = guildOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    guildOptionText:SetPoint("LEFT", guildOption, "RIGHT", 5, 0)
+    guildOptionText:SetText("Are in a guild.")
+    
     local classOption = CreateFrame("CheckButton", "Class", optionsFrame, "OptionsCheckButtonTemplate")
-    classOption:SetPoint("TOPLEFT", 20, -250)
+    classOption:SetPoint("TOPLEFT", 20, -270)
     classOption:SetChecked(TOMB_FILTERS["CLASS_ID"] ~= nil)
     local classOptionText = classOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     classOptionText:SetPoint("LEFT", classOption, "RIGHT", 5, 0)
     classOptionText:SetText("Are same class as me.")
     
     local factionOption = CreateFrame("CheckButton", "Faction", optionsFrame, "OptionsCheckButtonTemplate")
-    factionOption:SetPoint("TOPLEFT", 20, -270)
+    factionOption:SetPoint("TOPLEFT", 20, -290)
     factionOption:SetChecked(TOMB_FILTERS["FACTION_ID"] ~= nil)
     local factionOptionText = factionOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     factionOptionText:SetPoint("LEFT", factionOption, "RIGHT", 5, 0)
     factionOptionText:SetText("Are same faction as me.")
 
     local realmsOption = CreateFrame("CheckButton", "Realms", optionsFrame, "OptionsCheckButtonTemplate")
-    realmsOption:SetPoint("TOPLEFT", 20, -290)
+    realmsOption:SetPoint("TOPLEFT", 20, -310)
     realmsOption:SetChecked(TOMB_FILTERS["REALMS"])
     local realmsOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     realmsOptionText:SetPoint("LEFT", realmsOption, "RIGHT", 5, 0)
     realmsOptionText:SetText("Are from this realm.")
     
     local ratingOption = CreateFrame("CheckButton", "Rating", optionsFrame, "OptionsCheckButtonTemplate")
-    ratingOption:SetPoint("TOPLEFT", 20, -310)
+    ratingOption:SetPoint("TOPLEFT", 20, -330)
     ratingOption:SetChecked(TOMB_FILTERS["RATING"])
     local ratingOptionText = ratingOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ratingOptionText:SetPoint("LEFT", ratingOption, "RIGHT", 5, 0)
@@ -1593,7 +1608,7 @@ local function GenerateTombstonesOptionsFrame()
     local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
     hourSlider:SetWidth(180)
     hourSlider:SetHeight(20)
-    hourSlider:SetPoint("TOPLEFT", 20, -340)
+    hourSlider:SetPoint("TOPLEFT", 20, -360)
     hourSlider:SetOrientation("HORIZONTAL")
     hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
     hourSlider:SetValueStep(0.5) -- Set the step value for the slider
@@ -1627,7 +1642,7 @@ local function GenerateTombstonesOptionsFrame()
     local levelSlider = CreateFrame("Slider", "LevelSlider", optionsFrame, "OptionsSliderTemplate")
     levelSlider:SetWidth(180)
     levelSlider:SetHeight(20)
-    levelSlider:SetPoint("TOPLEFT", 20, -370)
+    levelSlider:SetPoint("TOPLEFT", 20, -390)
     levelSlider:SetOrientation("HORIZONTAL")
     levelSlider:SetMinMaxValues(1, 60) -- Set the minimum and maximum values for the slider
     levelSlider:SetValueStep(1) -- Set the step value for the slider
@@ -1677,6 +1692,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["FACTION_ID"] = PLAYER_FACTION
             elseif (toggleName == "Rating") then
                 TOMB_FILTERS["RATING"] = true
+            elseif (toggleName == "Guild") then
+                TOMB_FILTERS["GUILD"] = 1
             end
         else
             -- Perform actions for unselected state
@@ -1692,6 +1709,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["FACTION_ID"] = nil
             elseif (toggleName == "Rating") then
                 TOMB_FILTERS["RATING"] = false
+            elseif (toggleName == "Guild") then
+                TOMB_FILTERS["GUILD"] = 0
             end
         end
         ClearDeathMarkers(true)
@@ -1701,6 +1720,7 @@ local function GenerateTombstonesOptionsFrame()
     lastWordsOption:SetScript("OnClick", ToggleFilter)
     knownDeathOption:SetScript("OnClick", ToggleFilter)
     classOption:SetScript("OnClick", ToggleFilter)
+    guildOption:SetScript("OnClick", ToggleFilter)
     factionOption:SetScript("OnClick", ToggleFilter)
     realmsOption:SetScript("OnClick", ToggleFilter)
     ratingOption:SetScript("OnClick", ToggleFilter)
@@ -2826,6 +2846,7 @@ local function SlashCommandHandler(msg)
             print("Tombstones 'Hour Thresh' filtering on: " .. tostring(TOMB_FILTERS["HOUR_THRESH"]))
             print("Tombstones 'Realms' filtering on: " .. tostring(TOMB_FILTERS["REALMS"]))
             print("Tombstones 'Rating' filtering on: " .. tostring(TOMB_FILTERS["RATING"]))
+            print("Tombstones 'Guild' filtering on: " .. tostring(TOMB_FILTERS["GUILD"]))
             return
         elseif argsArray[1] == "reset" then
             TOMB_FILTERS["HAS_LAST_WORDS"] = false
@@ -2837,9 +2858,11 @@ local function SlashCommandHandler(msg)
             TOMB_FILTERS["HOUR_THRESH"] = 720
             TOMB_FILTERS["REALMS"] = true
             TOMB_FILTERS["RATING"] = false
+            TOMB_FILTERS["GUILD"] = 0
             if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
                 optionsFrame:Hide()
             end
+            ReloadUI()
         elseif argsArray[1] == "last_words" then
             TOMB_FILTERS["HAS_LAST_WORDS"] = true
         elseif argsArray[1] == "known_death" then
@@ -2878,6 +2901,8 @@ local function SlashCommandHandler(msg)
                 print("Tombstones ERROR : Faction not found.")
                 print("Tombstones WARN : Try 'alliance','horde'.")
             end
+        elseif argsArray[1] == "guild" then
+            TOMB_FILTERS["GUILD"] = 1
         end
         ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
