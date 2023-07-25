@@ -1332,7 +1332,7 @@ local function GenerateMinimapIcon(marker)
     iconTexture:SetVertexColor(1, 1, 1, 0.75)
     iconFrame:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Tombstone", 1, 1, 1)
+        GameTooltip:SetText("|cff9d9d9dTombstone|r", 1, 1, 1)
         GameTooltip:Show()
     end)
     iconFrame:SetScript("OnLeave", function()
@@ -1471,7 +1471,7 @@ local function GenerateTombstonesOptionsFrame()
 
     local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     titleText:SetPoint("TOP", optionsFrame, "TOP", 0, -10)
-    titleText:SetText("|cFFCFCFCFTombstones Options|r")
+    titleText:SetText("|cff9d9d9dTombstones Options|r")
 
     local bgTexture = optionsFrame:CreateTexture(nil, "BACKGROUND")
     bgTexture:SetAllPoints()
@@ -1565,7 +1565,7 @@ local function GenerateTombstonesOptionsFrame()
 
     local filtersText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     filtersText:SetPoint("TOP", optionsFrame, "TOP", 0, -160)
-    filtersText:SetText("|cFFCFCFCFFilters|r")
+    filtersText:SetText("|cff9d9d9dFilters|r")
 
     local optionText2 = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     optionText2:SetPoint("TOP", filtersText, "TOPLEFT", -35, -30)
@@ -1770,7 +1770,7 @@ local function MakeMinimapButton()
         OnTooltipShow = function(tooltip)
             if not tooltip or not tooltip.AddLine then return end
             tooltip:AddLine("Tombstones")
-            tooltip:AddLine("|cFFCFCFCFrecords:|r "..tostring(#deathRecordsDB.deathRecords))
+            tooltip:AddLine("|cff9d9d9drecords:|r "..tostring(#deathRecordsDB.deathRecords))
         end,
     })
 
