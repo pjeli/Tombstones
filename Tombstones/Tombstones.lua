@@ -180,6 +180,8 @@ local TOMB_FILTERS = {
 }
 
 -- Message/Karma Variables
+local throttle_player = {}
+local shadowbanned = {}
 local TallyInterval = 2
 local expectingTallyReply = false
 local expectingTallyReplyMapMarker = nil
@@ -2556,6 +2558,21 @@ local function selfDeathAlert(death_source_id)
   table.insert(deathlog_death_queue, COMM_COMMANDS["BROADCAST_DEATH_PING"] .. COMM_COMMAND_DELIM .. msg)
 end
 
+local function isPlayerMessageAllowed(player_name_short)
+    if shadowbanned[player_name_short] then return false end
+    if throttle_player[player_name_short] == nil then
+        throttle_player[player_name_short] = 0
+        return true
+    end
+    throttle_player[player_name_short] = throttle_player[player_name_short] + 1
+    if throttle_player[player_name_short] > 1000 then
+        print("Tombstones has shadowbanned "..player_name_short..".")
+        shadowbanned[player_name_short] = 1
+        return false
+    end
+    return true
+end
+
 
 --[[ Self Report Handling]]
 --
@@ -2947,6 +2964,8 @@ function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
   -- TALLY RESPONSE HANDLING
   if (command == TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] and expectingTallyReply and prefix == TS_COMM_NAME and channel == "WHISPER") then
+      -- CONSIDER: We only process messages we expect; and we only take 1 message; so, should be fine...
+      --if not isPlayerMessageAllowed(player_name_short) then return end 
       TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
   end
 end
@@ -2957,20 +2976,24 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
   if channel_name == death_alerts_channel then
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
       if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
+          if not isPlayerMessageAllowed(player_name_short) then return end
           printDebug("Receiving HC:DeathLog death for " .. player_name_short .. ".")
           TdeathlogReceiveChannelMessage(player_name_short, msg)
       end
       if command == COMM_COMMANDS["LAST_WORDS"] then
+          if not isPlayerMessageAllowed(player_name_short) then return end
           printDebug("Receiving HC:DeathLog last_words for " .. player_name_short .. ".")
           TdeathlogReceiveLastWords(player_name_short, msg)
       end
   elseif channel_name == tombstones_channel and deathRecordsDB.rating then
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
       if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] then
+          if not isPlayerMessageAllowed(player_name_short) then return end
           printDebug("Receiving TS:RatingRequest for " .. player_name_short .. ".")
           TwhisperRatingForMarkerTo(msg, player_name_short)
       end
       if command == TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] then
+          if not isPlayerMessageAllowed(player_name_short) then return end
           printDebug("Receiving TS:RatingPing from " .. player_name_short .. ".")
           
           local overlayFrame = CreateFrame("Button", nil, WorldMapButton)
