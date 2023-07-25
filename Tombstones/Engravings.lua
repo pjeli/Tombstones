@@ -876,7 +876,7 @@ local function CreatePhraseGenerationInterface()
         posX = string.format("%.4f", posX)
         posY = string.format("%.4f", posY)
         
-        local engravingLink = "!E["..PLAYER_NAME.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
+        local engravingLink = "!E[\""..PLAYER_NAME.."\" "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
         local say_msg = "I have left an engraving here: "..engravingLink
         CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
         
@@ -944,7 +944,7 @@ local function ReadOutNearestEngraving(engraving)
     end
     
     -- engraving = { realm , mapID, posX , posY, timestamp, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
-    local engravingLink = "!E["..user.." "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
+    local engravingLink = "!E[\""..user.."\" "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
     local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..user.."'s Engraving]|h|r"
     --local say_msg = "You found an engraving on the ground: "..engravingHyperLink
     --CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
