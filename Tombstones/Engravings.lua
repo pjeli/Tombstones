@@ -882,10 +882,12 @@ local function CreatePhraseGenerationInterface()
         
         --(name, map_id, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
         if (engravingsDB.participating) then
+            PlaySound(839)
             local channel_msg = EencodeMessage(PLAYER_NAME, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)   
             local channel_num = GetChannelName(tombstones_channel)
             CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_PING"] .. COMM_COMMAND_DELIM .. channel_msg, "CHANNEL", nil, channel_num)
         end
+        phraseFrame:Hide()
     end)
 
     table.insert(UISpecialFrames, "EngravingsPhraseGenerator")
