@@ -5,6 +5,7 @@ local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
 local PLAYERGUID = UnitGUID("player")
+local PLAYER_GUILD_NAME, _, _, _, _, _, _, _, _, _, _ = GetGuildInfo("player")
 local classNameToID = {
     ["warrior"] = 1,
     ["paladin"] = 2,
@@ -632,6 +633,7 @@ local function IsMarkerAllowedByFilters(marker)
     end
     if (allow == true and filter_guild ~= 0) then
         if (marker.guild == nil or marker.guild == "") then allow = false end
+        if (allow and filter_guild == 2 and marker.guild ~= PLAYER_GUILD_NAME) then allow = false end
     end
     if (allow == true and filter_realms and marker.realm ~= REALM) then allow = false end
     return allow
@@ -1582,10 +1584,26 @@ local function GenerateTombstonesOptionsFrame()
     
     local guildOption = CreateFrame("CheckButton", "Guild", optionsFrame, "OptionsCheckButtonTemplate")
     guildOption:SetPoint("TOPLEFT", 20, -250)
-    guildOption:SetChecked(TOMB_FILTERS["GUILD"] ~= 0)
+    guildOption:SetChecked(TOMB_FILTERS["GUILD"] >= 1)
     local guildOptionText = guildOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     guildOptionText:SetPoint("LEFT", guildOption, "RIGHT", 5, 0)
     guildOptionText:SetText("Are in a guild.")
+    
+    local guild2Option = CreateFrame("CheckButton", "MyGuild", optionsFrame, "OptionsCheckButtonTemplate")
+    guild2Option:SetPoint("LEFT", guildOptionText, "RIGHT", 5, 0)
+    if (TOMB_FILTERS["GUILD"] == 2) then
+        guild2Option:Enable()
+        guild2Option:SetChecked(true)
+    elseif(TOMB_FILTERS["GUILD"] == 1) then
+        guild2Option:Enable()
+        guild2Option:SetChecked(false)
+    else
+        guild2Option:Disable()
+        guild2Option:SetChecked(false)
+    end
+    local guild2OptionText = guild2Option:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    guild2OptionText:SetPoint("LEFT", guild2Option, "RIGHT", 5, 0)
+    guild2OptionText:SetText("In my guild.")
     
     local classOption = CreateFrame("CheckButton", "Class", optionsFrame, "OptionsCheckButtonTemplate")
     classOption:SetPoint("TOPLEFT", 20, -270)
@@ -1688,6 +1706,14 @@ local function GenerateTombstonesOptionsFrame()
         local isChecked = self:GetChecked()
         local toggleName = self:GetName()
         
+        if guildOption:GetChecked() then
+            guild2Option:Enable()
+        else
+            guild2Option:Disable()
+            guild2Option:SetChecked(false) -- Reset the dependent checkbox when main checkbox is unchecked
+            TOMB_FILTERS["GUILD"] = 0
+        end
+        
         if isChecked then
             -- Perform actions for selected state
             if (toggleName == "HasLastWords") then
@@ -1704,6 +1730,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["RATING"] = true
             elseif (toggleName == "Guild") then
                 TOMB_FILTERS["GUILD"] = 1
+            elseif (toggleName == "MyGuild") then
+                TOMB_FILTERS["GUILD"] = 2
             end
         else
             -- Perform actions for unselected state
@@ -1721,6 +1749,8 @@ local function GenerateTombstonesOptionsFrame()
                 TOMB_FILTERS["RATING"] = false
             elseif (toggleName == "Guild") then
                 TOMB_FILTERS["GUILD"] = 0
+            elseif (toggleName == "MyGuild") then
+                TOMB_FILTERS["GUILD"] = 1
             end
         end
         ClearDeathMarkers(true)
@@ -1731,6 +1761,7 @@ local function GenerateTombstonesOptionsFrame()
     knownDeathOption:SetScript("OnClick", ToggleFilter)
     classOption:SetScript("OnClick", ToggleFilter)
     guildOption:SetScript("OnClick", ToggleFilter)
+    guild2Option:SetScript("OnClick", ToggleFilter)
     factionOption:SetScript("OnClick", ToggleFilter)
     realmsOption:SetScript("OnClick", ToggleFilter)
     ratingOption:SetScript("OnClick", ToggleFilter)
