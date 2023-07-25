@@ -1184,8 +1184,15 @@ local function MakeInterfacePage()
       mmToggleText:SetPoint("LEFT", mmToggle, "RIGHT", 5, 0)
       mmToggleText:SetText("Show Minimap button")
       
+      local dangerFrameLockToggle = CreateFrame("CheckButton", "LockDangerFrames", interPanel, "OptionsCheckButtonTemplate")
+      dangerFrameLockToggle:SetPoint("TOPLEFT", 10, -60)
+      dangerFrameLockToggle:SetChecked(not deathRecordsDB.dangerFrameUnlocked)
+      local dangerFrameLockToggleText = dangerFrameLockToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      dangerFrameLockToggleText:SetPoint("LEFT", dangerFrameLockToggle, "RIGHT", 5, 0)
+      dangerFrameLockToggleText:SetText("Lock Zone Danger and Target Deadly frames")
+      
       local selfReportToggle = CreateFrame("CheckButton", "SelfReport", interPanel, "OptionsCheckButtonTemplate")
-      selfReportToggle:SetPoint("TOPLEFT", 10, -60)
+      selfReportToggle:SetPoint("TOPLEFT", 10, -80)
       selfReportToggle:SetChecked(deathRecordsDB.selfReporting)
       local selfReportToggleText = selfReportToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       selfReportToggleText:SetPoint("LEFT", selfReportToggle, "RIGHT", 5, 0)
@@ -1207,6 +1214,10 @@ local function MakeInterfacePage()
               elseif (toggleName == "SelfReport") then
                   deathRecordsDB.selfReporting = true
                   print("Tombstones will now report your death and last words. Please support the Hardcore add-on and community.")
+              elseif (toggleName == "LockDangerFrames") then
+                  deathRecordsDB.dangerFrameUnlocked = false
+                  if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+                  if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
               end
           else
               -- Perform actions for unselected state
@@ -1215,11 +1226,16 @@ local function MakeInterfacePage()
                   icon:Hide("Tombstones")
               elseif (toggleName == "SelfReport") then
                   deathRecordsDB.selfReporting = false
+              elseif (toggleName == "LockDangerFrames") then
+                  deathRecordsDB.dangerFrameUnlocked = true
+                  if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+                  if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
               end
           end
       end
       mmToggle:SetScript("OnClick", ToggleOnClick)
       selfReportToggle:SetScript("OnClick", ToggleOnClick)
+      dangerFrameLockToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
