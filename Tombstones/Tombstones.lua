@@ -1313,15 +1313,7 @@ local function GenerateMinimapIcon(marker)
     iconFrame:SetSize(12, 12)
     local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
     iconTexture:SetAllPoints()
-    if (marker.level == nil) then
-        iconTexture:SetTexture("Interface\\Icons\\Ability_fiegndead")
-    elseif (marker.level <= 30) then
-        iconTexture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
-    elseif (marker.level <= 59) then
-        iconTexture:SetTexture("Interface\\Icons\\Spell_holy_nullifydisease")
-    else
-        iconTexture:SetTexture("Interface\\Icons\\Ability_creature_cursed_05")
-    end
+    iconTexture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
 
     if (marker.last_words ~= nil) then
         local borderTexture = iconFrame:CreateTexture(nil, "OVERLAY")
