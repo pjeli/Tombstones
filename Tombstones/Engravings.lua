@@ -943,6 +943,41 @@ local function ReadOutNearestEngraving(engraving)
        user = user.."-"..engraving.realm
     end
     
+    -- Create a frame
+    local engravingFound = CreateFrame("Frame", "EngravingFound", UIParent)
+    engravingFound:SetSize(GetScreenWidth(), 2048)  -- Set the size of the frame
+    engravingFound:SetPoint("TOP", 0, 700) -- Set the position of the frame
+    local engravingFoundTexture = engravingFound:CreateTexture(nil, "BACKGROUND")
+    engravingFoundTexture:SetAllPoints() -- Fill the entire frame with the texture
+    engravingFoundTexture:SetTexture("Interface\\AddOns\\Tombstones\\artwork\\engraving_found.tga")
+    engravingFound:Show()
+    
+        -- Apply fade-out animation to the splash frame
+    engravingFound.fade = engravingFound:CreateAnimationGroup()
+    local fadeIn = engravingFound.fade:CreateAnimation("Alpha")
+    fadeIn:SetDuration(0.5) -- Adjust the delay duration as desired
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetOrder(1)
+    local delay = engravingFound.fade:CreateAnimation("Alpha")
+    delay:SetDuration(1) -- Adjust the delay duration as desired
+    delay:SetFromAlpha(1)
+    delay:SetToAlpha(1)
+    delay:SetOrder(2)
+    local fadeOut = engravingFound.fade:CreateAnimation("Alpha")
+    fadeOut:SetDuration(0.5) -- Adjust the fade duration as desired
+    fadeOut:SetFromAlpha(1)
+    fadeOut:SetToAlpha(0)
+    fadeOut:SetOrder(3)
+    engravingFound.fade:SetScript("OnFinished", function(self)
+        if (engravingFound ~= nil) then
+            engravingFound:Hide()
+            engravingFound = nil
+        end
+    end)
+    engravingFound:Show()
+    engravingFound.fade:Play()
+
     -- engraving = { realm , mapID, posX , posY, timestamp, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
     local engravingLink = "!E[\""..user.."\" "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
     local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..user.."'s Engraving]|h|r"
@@ -951,10 +986,12 @@ local function ReadOutNearestEngraving(engraving)
     --SendChatMessage(say_msg, "SAY")
     
     local phrase = decodePhrase(engraving.templ_index, engraving.cat_index, engraving.word_index, engraving.conj_index, engraving.conj_templ_index, engraving.conj_cat_index, engraving.conj_word_index)
-    DEFAULT_CHAT_FRAME:AddMessage("You found an engraving on the ground: "..engravingHyperLink, 1, 1, 0)
+    --DEFAULT_CHAT_FRAME:AddMessage("You found an engraving on the ground: "..engravingHyperLink, 1, 1, 0)
     PlaySound(1194)
-    
-    C_Timer.After(0.8, function()
+    C_Timer.After(0.5, function()
+        DEFAULT_CHAT_FRAME:AddMessage("You found an engraving on the ground: "..engravingHyperLink, 1, 1, 0)
+    end)
+    C_Timer.After(1, function()
         DEFAULT_CHAT_FRAME:AddMessage(user.."'s engraving reads: \""..phrase.."\"", 1, 1, 0)
     end)
     
