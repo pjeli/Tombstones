@@ -2621,6 +2621,7 @@ hooksecurefunc("SetItemRef", function(link, text)
                     numNewRecords = numNewRecords + 1
                 end
                 print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+                return
             end
             -- Do the magic
             if not WorldMapFrame:IsVisible() then

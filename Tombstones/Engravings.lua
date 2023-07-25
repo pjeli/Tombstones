@@ -517,18 +517,56 @@ StaticPopupDialogs["ENGRAVINGS_CLEAR_CONFIRMATION"] = {
     preferredIndex = 3,
 }
 
+local function IsNewRecordDuplicate(newRecord)
+    local isDuplicate = false 
+
+    -- Check if the imported record is "close enough" to existing record
+    for index, existingRecord in ipairs(engravingsDB.engravingRecords) do
+        if existingRecord.mapID == newRecord.mapID and
+            existingRecord.instID == newRecord.instID and
+            existingRecord.posX == newRecord.posX and
+            existingRecord.posY == newRecord.posY and
+            existingRecord.user == newRecord.user and
+            existingRecord.realm == newRecord.realm and
+            existingRecord.templ_index == newRecord.templ_index and
+            existingRecord.cat_index == newRecord.cat_index and
+            existingRecord.word_index == newRecord.word_index and
+            existingRecord.conj_index == newRecord.conj_index and
+            existingRecord.conj_templ_index == newRecord.conj_templ_index and 
+            existingRecord.conj_cat_index == newRecord.conj_cat_index and
+            existingRecord.conj_word_index == newRecord.conj_word_index then
+            -- Ignore last words. 
+            -- If last words arrive they will update our existing record instead of making a new record.
+            isDuplicate = true
+            break
+        end
+    end
+
+    return isDuplicate
+end
+
 -- Add engraving marker function
-local function AddEngravingMarker(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+local function ImportEngravingMarker(realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
     if (mapID == nil or posX == nil or posY == nil or templ_index == 0 or user == nil) then
         -- No location info. Useless.
         return
     end
 
-    local engraving = { realm = REALM, mapID = mapID, posX = posX, posY = posY, timestamp = time(), user = user , templ_index = templ_index, cat_index = cat_index, word_index = word_index, conj_index = conj_index, conj_templ_index = conj_templ_index, conj_cat_index = conj_cat_index, conj_word_index = conj_word_index }
+    local engraving = { realm = realm, mapID = mapID, posX = posX, posY = posY, timestamp = time(), user = user , templ_index = templ_index, cat_index = cat_index, word_index = word_index, conj_index = conj_index, conj_templ_index = conj_templ_index, conj_cat_index = conj_cat_index, conj_word_index = conj_word_index }
+    
+    local isDuplicate = IsNewRecordDuplicate(engraving)
+    if (not isDuplicate) then 
+        table.insert(engravingsDB.engravingRecords, engraving)
+        engravingsRecordCount = engravingsRecordCount + 1
+        printDebug("Engraving marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+        return true, engraving
+    end
+    printDebug("Received a duplicate record. Ignoring.")
+    return false, engraving
+end
 
-    table.insert(engravingsDB.engravingRecords, engraving)
-    engravingsRecordCount = engravingsRecordCount + 1
-    printDebug("Engraving marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
+local function AddEngravingMarker(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+    return ImportEngravingMarker(REALM, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
 end
 
 local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex) 
@@ -901,7 +939,7 @@ end
 local function ReadOutNearestEngraving(engraving)
     
     local user = engraving.user
-    if(engraving.realm ~= REALM) then
+    if(engraving.realm ~= nil and engraving.realm ~= REALM) then
        user = user.."-"..engraving.realm
     end
     
@@ -934,7 +972,7 @@ local function engravingsFilterFunc(_, event, msg, player, l, cs, t, flag, chann
   local remaining = msg;
   local done;
   repeat
-    local start, finish, characterName, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY = remaining:find("!E%[([^%s]+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) ([%d%.]+) ([%d%.]+)%]")
+    local start, finish, characterName, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY = remaining:find("!E%[\"%s*([^%]\"]*)\" (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) ([%d%.]+) ([%d%.]+)%]")
     if(characterName) then
       newMsg = newMsg..remaining:sub(1, start-1);
       newMsg = newMsg.."|cFFBF4500|Hgarrmission:engravings:"..templateIndex..":"..categoryIndex..":"..wordIndex..":"..conjunctionIndex..":"..conjTemplateIndex..":"..conjCategoryIndex..":"..conjWordIndex..":"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Engraving]|h|r";
@@ -964,7 +1002,7 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", engravingsFilterFunc)
 
 hooksecurefunc("SetItemRef", function(link, text)
     if(startsWith(link, "garrmission:engravings")) then    
-        local start, finish, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY, characterName = text:find("|cFFBF4500|Hgarrmission:engravings:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):([%d%.]+):([%d%.]+)|h%[([^%s]+)'s Engraving%]|h|r");
+        local start, finish, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY, characterName = text:find("|cFFBF4500|Hgarrmission:engravings:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):([%d%.]+):([%d%.]+)|h%[(.*)'s Engraving%]|h|r");
         templateIndex = tonumber(templateIndex) > 0 and tonumber(templateIndex) or 0
         categoryIndex = tonumber(categoryIndex) > 0 and tonumber(categoryIndex) or 0
         wordIndex = tonumber(wordIndex) > 0 and tonumber(wordIndex) or 0
@@ -979,15 +1017,19 @@ hooksecurefunc("SetItemRef", function(link, text)
         if(IsShiftKeyDown()) then
             local editbox = GetCurrentKeyBoardFocus();
             if(editbox) then
-                editbox:Insert("!E["..characterName.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex.." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex.." "..mapID.." "..posX.." "..posY.."]");
+                editbox:Insert("!E[\""..characterName.."\" "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex.." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex.." "..mapID.." "..posX.." "..posY.."]");
             end
         else
             if(IsControlKeyDown()) then
                 local player_name_short, realm = string.split("-", characterName)
-                --AddEngravingMarker(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
-                AddEngravingMarker(player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
-                print("Tombstones imported in an Engraving.")
-                --print("Engraving imported failed.")
+                local success, engraving = ImportEngravingMarker(realm, player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
+                local numImportRecords = 1
+                local numNewRecords = 0
+                if (success) then
+                    numNewRecords = numNewRecords + 1
+                end
+                print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+                return
             end
             -- Do the magic
             --local phrase = decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
