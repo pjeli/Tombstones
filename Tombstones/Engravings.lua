@@ -514,6 +514,10 @@ local function LoadEngravingRecords()
         engravingsDB.version = ADDON_SAVED_VARIABLES_VERSION
         engravingsDB.engravingRecords = {}
         engravingsDB.participating = false
+        engravingsDB.offerSync = false
+    end
+    if (engravingsDB.offerSync == nil) then
+        engravingsDB.offerSync = false
     end
 end
 
@@ -989,6 +993,13 @@ local function MakeInterfacePage()
       participateToggleText:SetPoint("LEFT", participateToggle, "RIGHT", 5, 0)
       participateToggleText:SetText("Participate")
       
+      local offerSyncToggle = CreateFrame("CheckButton", "OfferSync", interPanel, "OptionsCheckButtonTemplate")
+      offerSyncToggle:SetPoint("TOPLEFT", 10, -60)
+      offerSyncToggle:SetChecked(engravingsDB.offerSync)
+      local offerSyncToggleText = offerSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
+      offerSyncToggleText:SetText("Offer Engravings sync service")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/eng usage for slash command options.")
@@ -1001,15 +1012,22 @@ local function MakeInterfacePage()
               -- Perform actions for selected state
               if (toggleName == "Participate") then
                   engravingsDB.participating = true
+              elseif (toggleName == "OfferSync") then
+                  engravingsDB.offerSync = true
               end
           else
               -- Perform actions for unselected state
               if (toggleName == "Participate") then
                   engravingsDB.participating = false
+                  engravingsDB.offerSync = false
+                  offerSyncToggle:SetChecked(engravingsDB.offerSync)
+              elseif (toggleName == "OfferSync") then
+                  engravingsDB.offerSync = false
               end
           end
       end
       participateToggle:SetScript("OnClick", ToggleOnClick)
+      offerSyncToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
@@ -1472,6 +1490,7 @@ local function SlashCommandHandler(msg)
     elseif command == "info" then
         print("Engravings has " .. #engravingsDB.engravingRecords.. " records in total.")
         print("Engravings saw " .. engravingsRecordCount .. " records this session.")
+        print("Engravings offering sync service: " .. tostring(engravingsDB.offerSync) .. ".")
     elseif command == "usage" then
         print("Usage: /engravings or /eng [info | make | clear]")
     end
@@ -1527,6 +1546,7 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   -- RESPOND TO SYNC ACCEPTANCE; SEND THE DATA
   elseif (command == EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:EngravingSyncAccept from " .. player_name_short .. ".") 
+      if (engravingsDB.offerSync == false) then return end
       local timestampAgreedUpon = tonumber(msg)
       local numberOfEngravingsToFetch = 100
       local fetchedEngravings = GetEngravingsBeyondTimestamp(timestampAgreedUpon, numberOfEngravingsToFetch)
@@ -1590,6 +1610,7 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           end
       elseif command == EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] then
           printDebug("Receiving TS:EngravingSyncRequest from " .. player_name_short .. ".")
+          if (engravingsDB.offerSync == false) then return end
           local oldestTimestampInRequest = tonumber(msg)
           local haveNewEngravings = haveEngravingsBeyondTimestamp(oldestTimestampInRequest)
           if haveNewEngravings then
