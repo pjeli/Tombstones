@@ -479,6 +479,7 @@ local engravings_sync_data_queue = {}
 local agreedSender = nil
 local agreedReceiver = nil
 local requestedSync = false
+local printedWarning = false
 
 -- Variables
 local engravingsDB
@@ -1563,9 +1564,16 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       WhisperSyncDataTo(player_name_short, fetchedEngravings)
   -- RECEIVE THE CHUNKED DATA
   elseif (prefix == (EN_COMM_NAME_SERIAL) and channel == "WHISPER") then
-      if (player_name_short ~= agreedSender) then return end
+      if (player_name_short ~= agreedSender) then return end -- Sender is not the same player as we agreed upon? Spam / hacker.
+      if (requestedSync == false) then return end -- We didn't request a sync? Spammer...
       -- Parse the chunk info
       local chunkIndex, total, chunkData = data_str:match("(%d+)/(%d+):(.+)")
+      
+      if (total > 50 and not printedWarning) then
+          print("Engravings is receiving 50+ chunks. This may cause slowness.\nConsider ignoring " .. player_name_short .. " if this is griefing.")
+          printedWarning = true
+      end
+      
       if chunkIndex and total and chunkData then
          chunkIndex = tonumber(chunkIndex)
          printDebug("Receiving chunk "..chunkIndex..".")
@@ -1599,6 +1607,8 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
             -- Clear the received chunks for this sender and reset agreedSender
             receivedChunks[player_name_short] = nil
             agreedSender = nil
+            requestedSync = false
+            printedWarning = false
          end
       end
   end
