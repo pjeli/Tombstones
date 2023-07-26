@@ -1360,8 +1360,6 @@ end
 
 local function BroadcastSyncRequest()
     local oldest_engraving_timestamp = GetOldestEngravingTimestamp()
-    -- Allow to be off by 1 minute
-    oldest_engraving_timestamp = math.floor(oldest_engraving_timestamp / 60) * 60
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
     CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] .. COMM_COMMAND_DELIM .. oldest_engraving_timestamp, "CHANNEL", nil, channel_num)
@@ -1570,7 +1568,7 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       local chunkIndex, total, chunkData = data_str:match("(%d+)/(%d+):(.+)")
       
       if (total > 50 and not printedWarning) then
-          print("Engravings is receiving 50+ chunks. This may cause slowness.\nConsider ignoring " .. player_name_short .. " if this is griefing.")
+          print("Engravings is receiving 50+ chunks. This may cause slowness.\nConsider reloading and ignoring " .. player_name_short .. " if this is griefing.")
           printedWarning = true
       end
       
