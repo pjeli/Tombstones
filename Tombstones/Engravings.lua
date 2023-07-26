@@ -39,6 +39,8 @@ local templates = {
     "Let there be ****",
     "****..."
 }
+local templatesOrigToAlphaMappingTable
+local templatesAlphaToOrigMappingTable
 local categoryTable = {
   "Enemies",
   "People",
@@ -53,6 +55,8 @@ local categoryTable = {
   "Concepts",
   "Phrases",
 }
+local categoryOrigToAlphaMappingTable
+local categoryAlphaToOrigMappingTable
 local wordsTable = {
     [1] = {
         "enemy",
@@ -447,6 +451,8 @@ local wordsTable = {
         "are you ready?",
     },
 }
+local wordsOrigToAlphaMappingTable
+local wordsAlphaToOrigMappingTable
 local conjunctions = {
     "and then",
     "or",
@@ -459,6 +465,9 @@ local conjunctions = {
     "all the more",
     ",",
 }
+local conjunctionsOrigToAlphaMappingTable
+local conjunctionsAlphaToOrigMappingTable
+
 local tombstones_channel = "tsbroadcastchannel"
 local tombstones_channel_pw = "tsbroadcastchannelpw"
 
@@ -628,27 +637,28 @@ local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunction
         return ""
     end
     
-    local phrase = templates[templateIndex]
+    local phrase = templates[templatesOrigToAlphaMappingTable[templateIndex]]
     
     if(categoryIndex == 0 or wordIndex == 0) then
         phrase, _ = phrase:gsub("(%*%*%*%*)", "")
         return phrase
     end
-    
-    phrase, _ = phrase:gsub("(%*%*%*%*)", wordsTable[categoryIndex][wordIndex])
+
+    phrase, _ = phrase:gsub("(%*%*%*%*)", wordsTable[categoryIndex][wordsOrigToAlphaMappingTable[categoryIndex][wordIndex]])
     
     if (conjunctionIndex == 0) then
         return phrase
     else
-        phrase = phrase .. " " .. conjunctions[conjunctionIndex]
+        phrase = phrase .. " " .. conjunctions[conjunctionsOrigToAlphaMappingTable[conjunctionIndex]]
     end
     
     if (conjTemplateIndex == 0 or conjCategoryIndex == 0 or conjWordIndex == 0) then
         return phrase
     end
         
-    local conjPhrase = templates[conjTemplateIndex]
-    conjPhrase, _ = conjPhrase:gsub("(%*%*%*%*)", wordsTable[conjCategoryIndex][conjWordIndex])
+    local conjPhrase = templates[templatesOrigToAlphaMappingTable[conjTemplateIndex]]
+
+    conjPhrase, _ = conjPhrase:gsub("(%*%*%*%*)", wordsTable[conjCategoryIndex][wordsOrigToAlphaMappingTable[conjCategoryIndex][conjWordIndex]])
     return phrase.." "..conjPhrase
 end
 
@@ -761,7 +771,7 @@ local function CreatePhraseGenerationInterface()
             info.value = template
             info.func = function()
                 UIDropDownMenu_SetSelectedValue(self, template)
-                templateIndex = index
+                templateIndex = templatesAlphaToOrigMappingTable[index]
             end
             UIDropDownMenu_AddButton(info, level)
         end
@@ -779,14 +789,14 @@ local function CreatePhraseGenerationInterface()
     -- Function to handle the word dropdown initialization
     local function InitializeWordDropdown(self, level, menuList)
         local category = UIDropDownMenu_GetSelectedValue(categoryDropdown) or 0
-        local words = wordsTable[category] or {}
+        local words = wordsTable[categoryAlphaToOrigMappingTable[category]] or {}
         for index, word in ipairs(words) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = word
             info.value = word
             info.func = function()
                 UIDropDownMenu_SetSelectedValue(self, word)
-                wordIndex = index
+                wordIndex = wordsAlphaToOrigMappingTable[categoryAlphaToOrigMappingTable[category]][index]
             end
             UIDropDownMenu_AddButton(info, level)
         end
@@ -806,7 +816,7 @@ local function CreatePhraseGenerationInterface()
                 UIDropDownMenu_Initialize(wordDropdown, InitializeWordDropdown)
                 UIDropDownMenu_SetText(wordDropdown, "Select Word")
                 wordIndex = 0
-                categoryIndex = index
+                categoryIndex = categoryAlphaToOrigMappingTable[index]
             end
             UIDropDownMenu_AddButton(info, level)
         end
@@ -817,21 +827,8 @@ local function CreatePhraseGenerationInterface()
     local conjunctionDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     conjunctionDropdown:SetPoint("TOPLEFT", categoryDropdown, "BOTTOMLEFT", 0, -50)
     UIDropDownMenu_SetWidth(conjunctionDropdown, 150)
-    UIDropDownMenu_Initialize(conjunctionDropdown, function(self, level, menuList)
-        for index, conjunction in ipairs(conjunctions) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = conjunction
-            info.value = conjunction
-            info.func = function()
-                UIDropDownMenu_SetSelectedValue(self, conjunction)
-                conjunctionIndex = index
-            end
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end)
-  
       -- Function to handle conjection dropdown initialization
-    local function InitializeConjectionDropdown(self, level, menuList)
+    local function InitializeConjunctionDropdown(self, level, menuList)
         for index, conjunction in pairs(conjunctions) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = conjunction
@@ -839,12 +836,12 @@ local function CreatePhraseGenerationInterface()
             info.func = function()
                 UIDropDownMenu_SetSelectedValue(conjunctionDropdown, conjunction)
                 UIDropDownMenu_SetText(conjunctionDropdown, conjunction)
-                conjunctionIndex = index
+                conjunctionIndex = conjunctionsAlphaToOrigMappingTable[index]
             end
             UIDropDownMenu_AddButton(info, level)
         end
     end
-    UIDropDownMenu_Initialize(conjunctionDropdown, InitializeConjectionDropdown)
+    UIDropDownMenu_Initialize(conjunctionDropdown, InitializeConjunctionDropdown)
     UIDropDownMenu_SetText(conjunctionDropdown, "Select Conjunction")
   
     local conjTemplateDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
@@ -857,7 +854,7 @@ local function CreatePhraseGenerationInterface()
             info.value = template
             info.func = function()
                 UIDropDownMenu_SetSelectedValue(self, template)
-                conjTemplateIndex = index
+                conjTemplateIndex = templatesAlphaToOrigMappingTable[index]
             end
             UIDropDownMenu_AddButton(info, level)
         end
@@ -875,14 +872,14 @@ local function CreatePhraseGenerationInterface()
     -- Function to handle the word dropdown initialization
     local function InitializeConjWordDropdown(self, level, menuList)
         local category = UIDropDownMenu_GetSelectedValue(conjCategoryDropdown) or 0
-        local words = wordsTable[category] or {}
+        local words = wordsTable[categoryAlphaToOrigMappingTable[category]] or {}
         for index, word in ipairs(words) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = word
             info.value = word
             info.func = function()
                 UIDropDownMenu_SetSelectedValue(self, word)
-                conjWordIndex = index
+                conjWordIndex = wordsAlphaToOrigMappingTable[categoryAlphaToOrigMappingTable[category]][index]
             end
             UIDropDownMenu_AddButton(info, level)
         end
@@ -901,7 +898,7 @@ local function CreatePhraseGenerationInterface()
                 UIDropDownMenu_SetText(conjCategoryDropdown, category)
                 UIDropDownMenu_Initialize(conjWordDropdown, InitializeConjWordDropdown)
                 UIDropDownMenu_SetText(conjWordDropdown, "Select Word")
-                conjCategoryIndex = index
+                conjCategoryIndex = categoryAlphaToOrigMappingTable[index]
                 conjWordIndex = 0
             end
             UIDropDownMenu_AddButton(info, level)
@@ -1584,7 +1581,45 @@ function Engravings:PLAYER_LOGOUT()
   SaveEngravingRecords()
 end
 
+local function sortTableWithOriginalIndex(tbl)
+    local indexTable = {}
+    for index, value in ipairs(tbl) do
+        table.insert(indexTable, {index = index, value = value})
+    end
+    table.sort(indexTable, function(a, b) return a.value < b.value end)
+    local alphaTable = {}
+    local origToAlpha = {}
+    local alphaToOrig = {}
+    for newIndex, data in ipairs(indexTable) do
+        alphaTable[newIndex] = data.value
+        origToAlpha[data.index] = newIndex -- Store the original index for each new index
+        alphaToOrig[newIndex] = data.index
+        
+    end
+    return alphaTable, origToAlpha, alphaToOrig
+end
+
+local function sortTwoLevelTableWithOriginalIndex(tbl)
+    local alphaTable = {}
+    local origToAlpha = {}
+    local alphaToOrig = {}
+
+    for index, value in ipairs(tbl) do
+        -- value == { word, word, word }
+        local alphaWords, origToAlphaWordMappingTable, alphaToOrigWordMappingTable = sortTableWithOriginalIndex(value)
+        table.insert(alphaTable, index, alphaWords)
+        table.insert(origToAlpha, index, origToAlphaWordMappingTable)
+        table.insert(alphaToOrig, index, alphaToOrigWordMappingTable)
+    end
+    return alphaTable, origToAlpha, alphaToOrig
+end
+
 function Engravings:PLAYER_LOGIN()
+  templates, templatesOrigToAlphaMappingTable, templatesAlphaToOrigMappingTable = sortTableWithOriginalIndex(templates)
+  conjunctions, conjunctionsOrigToAlphaMappingTable, conjunctionsAlphaToOrigMappingTable = sortTableWithOriginalIndex(conjunctions)
+  categoryTable, categoryOrigToAlphaMappingTable, categoryAlphaToOrigMappingTable = sortTableWithOriginalIndex(categoryTable)
+  wordsTable, wordsOrigToAlphaMappingTable, wordsAlphaToOrigMappingTable = sortTwoLevelTableWithOriginalIndex(wordsTable)
+  
   -- called during load screen
   --  MakeMinimapButton()
   LoadEngravingRecords()
