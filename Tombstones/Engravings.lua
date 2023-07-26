@@ -764,7 +764,7 @@ local function CreatePhraseGenerationInterface()
     local templateDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     templateDropdown:SetPoint("TOPLEFT", 20, -50)
     UIDropDownMenu_SetWidth(templateDropdown, 150)
-    UIDropDownMenu_Initialize(templateDropdown, function(self, level, menuList)
+    local function InitializeTemplateDropdown(self, level, menuList)
         for index, template in ipairs(templates) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = template
@@ -775,7 +775,8 @@ local function CreatePhraseGenerationInterface()
             end
             UIDropDownMenu_AddButton(info, level)
         end
-    end)
+    end
+    UIDropDownMenu_Initialize(templateDropdown, InitializeTemplateDropdown)
     UIDropDownMenu_SetText(templateDropdown, "Select Template")
 
     local categoryDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
@@ -847,7 +848,7 @@ local function CreatePhraseGenerationInterface()
     local conjTemplateDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
     conjTemplateDropdown:SetPoint("TOPLEFT", conjunctionDropdown, "BOTTOMLEFT", 0, -10)
     UIDropDownMenu_SetWidth(conjTemplateDropdown, 150)
-    UIDropDownMenu_Initialize(conjTemplateDropdown, function(self, level, menuList)
+    local function InitializeConjTemplateDropdown(self, level, menuList)
         for index, template in ipairs(templates) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = template
@@ -858,7 +859,8 @@ local function CreatePhraseGenerationInterface()
             end
             UIDropDownMenu_AddButton(info, level)
         end
-    end)
+    end
+    UIDropDownMenu_Initialize(conjTemplateDropdown, InitializeConjTemplateDropdown)
     UIDropDownMenu_SetText(conjTemplateDropdown, "Select Template")
 
     local conjCategoryDropdown = CreateFrame("Frame", nil, phraseFrame, "UIDropDownMenuTemplate")
@@ -916,6 +918,10 @@ local function CreatePhraseGenerationInterface()
         local selectedConjunction = UIDropDownMenu_GetSelectedValue(conjunctionDropdown)
         local selectedConjTemplate = UIDropDownMenu_GetSelectedValue(conjTemplateDropdown)
         local selectedConjWord = UIDropDownMenu_GetSelectedValue(conjWordDropdown)
+        if(selectedTemplate == nil or selectedTemplate == 0) then
+            phraseFrame:Hide()
+            return
+        end
 
         local phrase = generatePhrase(selectedTemplate, selectedWord, selectedConjunction, selectedConjTemplate, selectedConjWord)
         printDebug("Generated Phrase: ", phrase)
@@ -939,6 +945,25 @@ local function CreatePhraseGenerationInterface()
             CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_PING"] .. COMM_COMMAND_DELIM .. channel_msg, "CHANNEL", nil, channel_num)
         end
         phraseFrame:Hide()
+    end)
+  
+    -- Reset frame options OnHide
+    phraseFrame:SetScript("OnHide", function(self)
+        PlaySound(39514)
+        templateIndex = 0
+        categoryIndex = 0
+        wordIndex = 0
+        conjunctionIndex = 0
+        conjTemplateIndex = 0
+        conjCategoryIndex = 0
+        conjWordIndex = 0
+        UIDropDownMenu_SetText(templateDropdown, "Select Template")
+        UIDropDownMenu_SetText(wordDropdown, "Select Word")
+        UIDropDownMenu_SetText(categoryDropdown, "Select Category")
+        UIDropDownMenu_SetText(conjunctionDropdown, "Select Conjunction")
+        UIDropDownMenu_SetText(conjTemplateDropdown, "Select Template")
+        UIDropDownMenu_SetText(conjWordDropdown, "Select Word")
+        UIDropDownMenu_SetText(conjCategoryDropdown, "Select Category")
     end)
 
     table.insert(UISpecialFrames, "EngravingsPhraseGenerator")
