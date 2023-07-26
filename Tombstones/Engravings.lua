@@ -476,6 +476,9 @@ local engravings_sync_request_queue = {}
 local engravings_sync_availability_queue = {}
 local engravings_sync_accept_queue = {}
 local engravings_sync_data_queue = {}
+local agreedSender = nil
+local agreedReceiver = nil
+local requestedSync = false
 
 -- Variables
 local engravingsDB
@@ -1359,6 +1362,7 @@ local function BroadcastSyncRequest()
     -- Allow to be off by 1 minute
     oldest_engraving_timestamp = math.floor(oldest_engraving_timestamp / 60) * 60
     local channel_num = GetChannelName(tombstones_channel)
+    requestedSync = true
     CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] .. COMM_COMMAND_DELIM .. oldest_engraving_timestamp, "CHANNEL", nil, channel_num)
 end
 
@@ -1453,6 +1457,7 @@ local function EsendNextInQueue()
 		local commMessage = engravings_sync_data_queue[1]
 		CTL:SendAddonMessage("BULK", EN_COMM_NAME_SERIAL, commMessage.msg, "WHISPER", commMessage.player_name_short)
 		table.remove(engravings_sync_data_queue, 1)
+    if #engravings_sync_data_queue == 0 then agreedReceiver = nil end -- Reset receiver after full send of all chunks.
 		return
 	end
 end
@@ -1537,16 +1542,20 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   -- RESPOND TO SYNC AVAILABILITY IF STILL VALID
   if (command == EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:EngravingSyncAvailability from " .. player_name_short .. ".") 
+      if (requestedSync == false) then return end -- We didn't request a sync? Spammer...
+      if (agreedSender ~= nil) then return end -- We already have a sender
       local oldestTimestampInRequest = tonumber(msg)
       local oldestEngravingTimestamp = GetOldestEngravingTimestamp()
       oldestEngravingTimestamp = math.floor(oldestEngravingTimestamp / 60) * 60
       if (oldestTimestampInRequest == oldestEngravingTimestamp) then 
+          agreedSender = player_name_short
           WhisperSyncAcceptanceTo(player_name_short, oldestEngravingTimestamp)
       end
   -- RESPOND TO SYNC ACCEPTANCE; SEND THE DATA
   elseif (command == EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:EngravingSyncAccept from " .. player_name_short .. ".") 
-      if (engravingsDB.offerSync == false) then return end
+      if (engravingsDB.offerSync == false) then return end -- We are not offering sync service
+      if (player_name_short ~= agreedReceiver) then return end -- The accepter is not the same player as we agreed upon? Spam / hacker.
       local timestampAgreedUpon = tonumber(msg)
       local numberOfEngravingsToFetch = 100
       local fetchedEngravings = GetEngravingsBeyondTimestamp(timestampAgreedUpon, numberOfEngravingsToFetch)
@@ -1554,6 +1563,7 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       WhisperSyncDataTo(player_name_short, fetchedEngravings)
   -- RECEIVE THE CHUNKED DATA
   elseif (prefix == (EN_COMM_NAME_SERIAL) and channel == "WHISPER") then
+      if (player_name_short ~= agreedSender) then return end
       -- Parse the chunk info
       local chunkIndex, total, chunkData = data_str:match("(%d+)/(%d+):(.+)")
       if chunkIndex and total and chunkData then
@@ -1586,8 +1596,9 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
                 if success then numNewRecords = numNewRecords + 1 end
             end
             print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
-            -- Clear the received chunks for this sender
+            -- Clear the received chunks for this sender and reset agreedSender
             receivedChunks[player_name_short] = nil
+            agreedSender = nil
          end
       end
   end
@@ -1610,10 +1621,12 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           end
       elseif command == EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] then
           printDebug("Receiving TS:EngravingSyncRequest from " .. player_name_short .. ".")
-          if (engravingsDB.offerSync == false) then return end
+          if (engravingsDB.offerSync == false) then return end -- We are not offering syncing service
+          if (agreedReceiver ~= nil) then return end -- We already have an agreed upon receiver of sync
           local oldestTimestampInRequest = tonumber(msg)
           local haveNewEngravings = haveEngravingsBeyondTimestamp(oldestTimestampInRequest)
           if haveNewEngravings then
+              agreedReceiver = player_name_short
               WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest)
           else
               printDebug("You don't have newer Engravings. Ignoring sync request.")
