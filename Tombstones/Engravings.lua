@@ -2,9 +2,14 @@
 local PLAYER_NAME, _ = UnitName("player")
 local REALM = GetRealmName()
 local CTL = _G.ChatThrottleLib
-local EN_COMM_NAME = "TombstonesEngravings"
+local EN_COMM_NAME = "Engravings"
+local EN_COMM_NAME_SERIAL = "EngravingsSer"
 local EN_COMM_COMMANDS = {
   ["BROADCAST_ENGRAVING_PING"] = "6",
+  ["BROADCAST_ENGRAVING_SYNC_REQUEST"] = "7",
+  ["WHISPER_SYNC_AVAILABILITY"] = "8",
+  ["WHISPER_SYNC_ACCEPT"] = "9",
+  ["WHISPER_SYNC_BULK_DATA"] = "10",
 }
 local COMM_COMMAND_DELIM = "$"
 local COMM_FIELD_DELIM = "~"
@@ -457,6 +462,12 @@ local conjunctions = {
 local tombstones_channel = "tsbroadcastchannel"
 local tombstones_channel_pw = "tsbroadcastchannelpw"
 
+-- Message Variables
+local engravings_sync_request_queue = {}
+local engravings_sync_availability_queue = {}
+local engravings_sync_accept_queue = {}
+local engravings_sync_data_queue = {}
+
 -- Variables
 local engravingsDB
 local phraseFrame
@@ -471,6 +482,8 @@ local glowFrame
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
+local ls = LibStub("LibSerialize")
+local ld = LibStub("LibDeflate")
 
 -- Main Frame
 local Engravings = CreateFrame("Frame")
@@ -543,6 +556,47 @@ local function IsNewRecordDuplicate(newRecord)
     end
 
     return isDuplicate
+end
+
+local function GetOldestEngravingTimestamp()
+    local oldest_engraving_timestamp = 0 
+
+    -- Check if the imported record is "close enough" to existing record
+    for _, engraving in ipairs(engravingsDB.engravingRecords) do
+        if engraving.timestamp > oldest_engraving_timestamp then 
+          oldest_engraving_timestamp = engraving.timestamp
+        end
+    end
+
+    return oldest_engraving_timestamp
+end
+
+local function haveEngravingsBeyondTimestamp(request_timestamp)
+    -- Get the number of engraving records
+    local numRecords = #engravingsDB.engravingRecords
+    -- Iterate over the engraving records in reverse
+    for index = numRecords, 1, -1 do
+        local record = engravingsDB.engravingRecords[index]
+        if record.timestamp > request_timestamp then return true end
+    end
+    return false
+end
+
+local function GetEngravingsBeyondTimestamp(request_timestamp, max_to_fetch)
+    local fetchedEngravings = {}
+    -- Get the number of engraving records
+    local numRecords = #engravingsDB.engravingRecords
+    -- Iterate over the engraving records in reverse
+    for index = numRecords, 1, -1 do
+        local record = engravingsDB.engravingRecords[index]
+        if record.timestamp > request_timestamp then 
+            table.insert(fetchedEngravings, record)
+        end
+        if #fetchedEngravings >= max_to_fetch then
+            break
+        end
+    end
+    return fetchedEngravings
 end
 
 -- Add engraving marker function
@@ -1240,7 +1294,7 @@ local function UnvisitAllEngravings()
 end
 
 local function TombstonesJoinChannel()
-    C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME)
+
     local channel_num = GetChannelName(tombstones_channel)
     if channel_num == 0 then
         JoinChannelByName(tombstones_channel, tombstones_channel_pw)
@@ -1259,6 +1313,118 @@ local function TombstonesJoinChannel()
         printDebug("Successfully joined Tombstones channel.")
     end
 end
+
+local function BroadcastSyncRequest()
+    local oldest_engraving_timestamp = GetOldestEngravingTimestamp()
+    -- Allow to be off by 1 minute
+    oldest_engraving_timestamp = math.floor(oldest_engraving_timestamp / 60) * 60
+    local channel_num = GetChannelName(tombstones_channel)
+    CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] .. COMM_COMMAND_DELIM .. oldest_engraving_timestamp, "CHANNEL", nil, channel_num)
+end
+
+local function WhisperSyncAvailabilityTo(player_name_short, oldest_timestamp)
+    --print("z1")
+    local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp , player_name_short = player_name_short }
+    table.insert(engravings_sync_availability_queue, commMessage)
+    --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp, "WHISPER", player_name_short)
+end
+
+local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp)
+  --print("z2")
+    local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp , player_name_short = player_name_short }
+    table.insert(engravings_sync_accept_queue, commMessage)
+    --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp, "WHISPER", player_name_short)
+end
+
+local function WhisperSyncDataTo(player_name_short, engravings_data)
+    --print("z3")
+    
+    local serialized = ls:Serialize(engravings_data)
+    local compressed = ld:CompressDeflate(serialized)
+    local encoded = ld:EncodeForWoWAddonChannel(compressed)
+   
+    local chunkSize = 200 -- Set the desired chunk size
+    local totalChunks = math.ceil(#encoded / chunkSize)
+   
+    for i = 1, totalChunks do
+      local startIndex = (i - 1) * chunkSize + 1
+      local endIndex = i * chunkSize
+      local chunk = encoded:sub(startIndex, endIndex)
+      
+      local msg = string.format("%d/%d:%s", i, totalChunks, chunk)
+      
+      local commMessage = { msg = msg , player_name_short = player_name_short }
+      table.insert(engravings_sync_data_queue, commMessage)
+    end
+    printDebug("Loaded up "..totalChunks.." chunks for sending out.")
+    --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_BULK_DATA"]..COMM_COMMAND_DELIM..encodedData, "WHISPER", player_name_short)
+end
+
+
+--[[ Self Report Handling]]
+--
+local function EsendNextInQueue()
+	if #engravings_sync_request_queue > 0 then 
+		local ts_channel_num = GetChannelName(tombstones_channel)
+		if ts_channel_num == 0 then
+		  TombstonesJoinChannel()
+		  return
+		end
+    
+		local commMessage = engravings_sync_request_queue[1]
+		CTL:SendChatMessage("BULK", EN_COMM_NAME, commMessage, "CHANNEL", nil, ts_channel_num)
+		table.remove(engravings_sync_request_queue, 1)
+		return
+	end
+
+	if #engravings_sync_availability_queue > 0 then 
+		local ts_channel_num = GetChannelName(tombstones_channel)
+		if ts_channel_num == 0 then
+		  TombstonesJoinChannel()
+		  return
+		end
+
+		local commMessage = engravings_sync_availability_queue[1]
+		CTL:SendAddonMessage("BULK", EN_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
+    table.remove(engravings_sync_availability_queue, 1)
+		return
+	end
+  
+  if #engravings_sync_accept_queue > 0 then 
+		local ts_channel_num = GetChannelName(tombstones_channel)
+		if ts_channel_num == 0 then
+		  TombstonesJoinChannel()
+		  return
+		end
+
+		local commMessage = engravings_sync_accept_queue[1]
+		CTL:SendAddonMessage("BULK", EN_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
+		table.remove(engravings_sync_accept_queue, 1)
+		return
+	end
+  
+  if #engravings_sync_data_queue > 0 then 
+		local ts_channel_num = GetChannelName(tombstones_channel)
+		if ts_channel_num == 0 then
+		  TombstonesJoinChannel()
+		  return
+		end
+
+		local commMessage = engravings_sync_data_queue[1]
+		CTL:SendAddonMessage("BULK", EN_COMM_NAME_SERIAL, commMessage.msg, "WHISPER", commMessage.player_name_short)
+		table.remove(engravings_sync_data_queue, 1)
+		return
+	end
+end
+-- Note: We can only send at most 1 message per click, otherwise we get a taint
+WorldFrame:HookScript("OnMouseDown", function(self, button)
+  EsendNextInQueue()
+end)
+-- This binds any key press to send, including hitting enter to type or esc to exit game
+local f  = CreateFrame("Frame", "Test", UIParent)
+f:SetScript("OnKeyDown", EsendNextInQueue)
+f:SetPropagateKeyboardInput(true)
+
 
 --[[ Slash Command Handler ]]
 --
@@ -1279,6 +1445,8 @@ local function SlashCommandHandler(msg)
     elseif command == "unvisit" then
         if (not debug) then return end
         UnvisitAllEngravings()
+    elseif command == "sync" then
+        BroadcastSyncRequest()
     elseif command == "info" then
         print("Engravings has " .. #engravingsDB.engravingRecords.. " records in total.")
         print("Engravings saw " .. engravingsRecordCount .. " records this session.")
@@ -1319,6 +1487,70 @@ function Engravings:PLAYER_STARTED_MOVING()
   -- Movement monitoring started
 end
 
+local receivedChunks = {} -- Table to store the received chunks
+local totalChunks = 0 -- Total number of expected chunks
+
+function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
+  local player_name_short, _ = string.split("-", sender_name_long)
+  local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
+  -- RESPOND TO SYNC AVAILABILITY IF STILL VALID
+  if (command == EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
+      printDebug("Receiving TS:EngravingSyncAvailability from " .. player_name_short .. ".") 
+      local oldestTimestampInRequest = tonumber(msg)
+      local oldestEngravingTimestamp = GetOldestEngravingTimestamp()
+      oldestEngravingTimestamp = math.floor(oldestEngravingTimestamp / 60) * 60
+      if (oldestTimestampInRequest == oldestEngravingTimestamp) then 
+          WhisperSyncAcceptanceTo(player_name_short, oldestEngravingTimestamp)
+      end
+  -- RESPOND TO SYNC ACCEPTANCE; SEND THE DATA
+  elseif (command == EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
+      printDebug("Receiving TS:EngravingSyncAccept from " .. player_name_short .. ".") 
+      local timestampAgreedUpon = tonumber(msg)
+      local numberOfEngravingsToFetch = 100
+      local fetchedEngravings = GetEngravingsBeyondTimestamp(timestampAgreedUpon, numberOfEngravingsToFetch)
+      printDebug("Sending "..#fetchedEngravings.." engravings.")
+      WhisperSyncDataTo(player_name_short, fetchedEngravings)
+  -- RECEIVE THE CHUNKED DATA
+  elseif (prefix == (EN_COMM_NAME_SERIAL) and channel == "WHISPER") then
+      -- Parse the chunk info
+      local chunkIndex, total, chunkData = data_str:match("(%d+)/(%d+):(.+)")
+      if chunkIndex and total and chunkData then
+         chunkIndex = tonumber(chunkIndex)
+         printDebug("Receiving chunk "..chunkIndex..".")
+         total = tonumber(total)
+         -- Init chunk table
+         if not receivedChunks[player_name_short] then
+            receivedChunks[player_name_short] = {}
+         end
+         -- Store chunk
+         receivedChunks[player_name_short][chunkIndex] = chunkData
+         -- Check if all chunks have been received
+         if #receivedChunks[player_name_short] == total then
+            local reconstructedData = table.concat(receivedChunks[player_name_short])
+            -- Process the reconstructed data
+            printDebug("Input data size is: " .. tostring(string.len(reconstructedData)))
+            local decodedData = ld:DecodeForWoWAddonChannel(reconstructedData)
+            printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
+            local decompressedData = ld:DecompressDeflate(decodedData, { level = 3 })
+            printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
+            local success, importedEngravingRecords = ls:Deserialize(decompressedData)
+            importedEngravingRecords = importedEngravingRecords or {}
+            local numImportRecords = #importedEngravingRecords or 0
+            local numNewRecords = 0
+            for _, engraving in ipairs(importedEngravingRecords) do
+                -- engraving = { realm, mapID, posX, posY, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
+                -- (realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+                local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index))
+                if success then numNewRecords = numNewRecords + 1 end
+            end
+            print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+            -- Clear the received chunks for this sender
+            receivedChunks[player_name_short] = nil
+         end
+      end
+  end
+end
+
 function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name_long)
   if (not engravingsDB.participating) then return end
   local _, channel_name = string.split(" ", channel_name_long)
@@ -1334,6 +1566,15 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
               local posX, posY = strsplit(",", engravingLocPing["map_pos"], 2)
               AddEngravingMarker(engravingLocPing.name, tonumber(engravingLocPing.map_id), tonumber(posX), tonumber(posY), tonumber(engravingLocPing.templ_index), tonumber(engravingLocPing.cat_index), tonumber(engravingLocPing.word_index), tonumber(engravingLocPing.conj_index), tonumber(engravingLocPing.conj_templ_index),  tonumber(engravingLocPing.conj_cat_index), tonumber(engravingLocPing.conj_word_index))
           end
+      elseif command == EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] then
+          printDebug("Receiving TS:EngravingSyncRequest from " .. player_name_short .. ".")
+          local oldestTimestampInRequest = tonumber(msg)
+          local haveNewEngravings = haveEngravingsBeyondTimestamp(oldestTimestampInRequest)
+          if haveNewEngravings then
+              WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest)
+          else
+              printDebug("You don't have newer Engravings. Ignoring sync request.")
+          end
       end
   end
 end
@@ -1348,14 +1589,18 @@ function Engravings:PLAYER_LOGIN()
   --  MakeMinimapButton()
   LoadEngravingRecords()
   MakeInterfacePage()
+  
+  C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME)
+  C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME_SERIAL)
 
   self:RegisterEvent("PLAYER_STARTED_MOVING")
   self:RegisterEvent("PLAYER_STOPPED_MOVING")
   self:RegisterEvent("CHAT_MSG_CHANNEL")
+  self:RegisterEvent("CHAT_MSG_ADDON")
 end
 
 function Engravings:ADDON_LOADED()
-  -- TODO
+    -- TODO
 end
 
 function Engravings:StartUp()
