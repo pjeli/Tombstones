@@ -483,6 +483,7 @@ local printedWarning = false
 
 -- Variables
 local engravingsDB
+local engravingsZoneCache = {}
 local phraseFrame
 local engravingsRecordCount = 0
 local debug = false
@@ -511,6 +512,16 @@ local function SaveEngravingRecords()
     _G["engravingsDB"] = engravingsDB
 end
 
+local function CacheEngraving(engraving)
+    if engraving.mapID then
+        if(engravingsZoneCache[engraving.mapID] == nil) then
+            engravingsZoneCache[engraving.mapID] = { engraving }
+        else
+            table.insert(engravingsZoneCache[engraving.mapID], engraving)
+        end
+    end
+end
+
 local function LoadEngravingRecords()
     engravingsDB = _G["engravingsDB"]
     if not engravingsDB then
@@ -522,6 +533,9 @@ local function LoadEngravingRecords()
     end
     if (engravingsDB.offerSync == nil) then
         engravingsDB.offerSync = false
+    end
+    for _, engraving in ipairs(engravingsDB.engravingRecords) do
+        CacheEngraving(engraving)  
     end
 end
 
@@ -1211,7 +1225,7 @@ local function ActOnNearestEngraving()
     local closestEngraving
     local closestDistance = math.huge
 
-    local zoneMarkers = engravingsDB.engravingRecords or {}
+    local zoneMarkers = engravingsZoneCache[playerInstance] or {}
     local totalZoneMarkers = #zoneMarkers
     if (zoneMarkers == nil or totalZoneMarkers == 0) then
         return
@@ -1274,7 +1288,7 @@ local function FlashWhenNearEngraving()
     local closestEngraving
     local closestDistance = math.huge
 
-    local zoneMarkers = engravingsDB.engravingRecords or {}
+    local zoneMarkers = engravingsZoneCache[playerInstance] or {}
     local totalZoneMarkers = #zoneMarkers
 
     -- Iterate through zone death markers and determine closest marker
