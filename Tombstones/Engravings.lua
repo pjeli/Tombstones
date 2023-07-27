@@ -1430,6 +1430,7 @@ local function EsendNextInQueue()
 		local commMessage = engravings_sync_availability_queue[1]
 		CTL:SendAddonMessage("BULK", EN_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
     table.remove(engravings_sync_availability_queue, 1)
+    printDebug("Sent availability ping to "..commMessage.player_name_short..".")
 		return
 	end
   
@@ -1456,7 +1457,10 @@ local function EsendNextInQueue()
 		local commMessage = engravings_sync_data_queue[1]
 		CTL:SendAddonMessage("BULK", EN_COMM_NAME_SERIAL, commMessage.msg, "WHISPER", commMessage.player_name_short)
 		table.remove(engravings_sync_data_queue, 1)
-    if #engravings_sync_data_queue == 0 then agreedReceiver = nil end -- Reset receiver after full send of all chunks.
+    if #engravings_sync_data_queue == 0 then
+        printDebug("Sent all chunks to "..commMessage.player_name_short..".")
+        agreedReceiver = nil 
+    end -- Reset receiver after full send of all chunks.
 		return
 	end
 end
@@ -1545,7 +1549,6 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       if (agreedSender ~= nil) then return end -- We already have a sender
       local oldestTimestampInRequest = tonumber(msg)
       local oldestEngravingTimestamp = GetOldestEngravingTimestamp()
-      oldestEngravingTimestamp = math.floor(oldestEngravingTimestamp / 60) * 60
       if (oldestTimestampInRequest == oldestEngravingTimestamp) then 
           agreedSender = player_name_short
           WhisperSyncAcceptanceTo(player_name_short, oldestEngravingTimestamp)
@@ -1561,13 +1564,20 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       printDebug("Sending "..#fetchedEngravings.." engravings.")
       WhisperSyncDataTo(player_name_short, fetchedEngravings)
   -- RECEIVE THE CHUNKED DATA
-  elseif (prefix == (EN_COMM_NAME_SERIAL) and channel == "WHISPER") then
-      if (player_name_short ~= agreedSender) then return end -- Sender is not the same player as we agreed upon? Spam / hacker.
-      if (requestedSync == false) then return end -- We didn't request a sync? Spammer...
+  elseif (prefix == EN_COMM_NAME_SERIAL and channel == "WHISPER") then
+      printDebug("Receiving TS:EngravingSyncData from " .. player_name_short .. ".") 
+      if (player_name_short ~= agreedSender) then
+          printDebug("Rejecting "..player_name_short.." because non-agreed sender.")
+          return
+      end -- Sender is not the same player as we agreed upon? Spam / hacker.
+      if (requestedSync == false) then
+          printDebug("Rejecting "..player_name_short.." because did not request sync.")
+          return
+      end -- We didn't request a sync? Spammer...
       -- Parse the chunk info
       local chunkIndex, total, chunkData = data_str:match("(%d+)/(%d+):(.+)")
-      
-      if (total > 50 and not printedWarning) then
+
+      if (tonumber(total) > 50 and not printedWarning) then
           print("Engravings is receiving 50+ chunks. This may cause slowness.\nConsider reloading and ignoring " .. player_name_short .. " if this is griefing.")
           printedWarning = true
       end
