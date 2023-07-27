@@ -642,6 +642,7 @@ local function ImportEngravingMarker(realm, user, mapID, posX, posY, templ_index
     local isDuplicate = IsNewRecordDuplicate(engraving)
     if (not isDuplicate) then 
         table.insert(engravingsDB.engravingRecords, engraving)
+        CacheEngraving(engraving)
         engravingsRecordCount = engravingsRecordCount + 1
         printDebug("Engraving marker added at (" .. posX .. ", " .. posY .. ") in map " .. mapID)
         return true, engraving
