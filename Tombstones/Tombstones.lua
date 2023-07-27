@@ -448,9 +448,6 @@ local function LoadDeathRecords()
     if (deathRecordsDB.rating == nil) then
         deathRecordsDB.rating = true
     end
-    if (deathRecordsDB.selfReporting == nil) then
-        deathRecordsDB.selfReporting = false
-    end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
         if (TOMB_FILTERS["HOUR_THRESH"] <= 0) then
@@ -1195,13 +1192,6 @@ local function MakeInterfacePage()
       dangerFrameLockToggleText:SetPoint("LEFT", dangerFrameLockToggle, "RIGHT", 5, 0)
       dangerFrameLockToggleText:SetText("Lock Zone Danger and Target Deadly frames")
       
-      local selfReportToggle = CreateFrame("CheckButton", "SelfReport", interPanel, "OptionsCheckButtonTemplate")
-      selfReportToggle:SetPoint("TOPLEFT", 10, -80)
-      selfReportToggle:SetChecked(deathRecordsDB.selfReporting)
-      local selfReportToggleText = selfReportToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-      selfReportToggleText:SetPoint("LEFT", selfReportToggle, "RIGHT", 5, 0)
-      selfReportToggleText:SetText("Self report death and last words")
-      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
@@ -1215,9 +1205,6 @@ local function MakeInterfacePage()
               if (toggleName == "MMB_Show") then
                   deathRecordsDB.minimapDB["hide"] = false
                   icon:Show("Tombstones")
-              elseif (toggleName == "SelfReport") then
-                  deathRecordsDB.selfReporting = true
-                  print("Tombstones will now report your death and last words. Please support the Hardcore add-on and community.")
               elseif (toggleName == "LockDangerFrames") then
                   deathRecordsDB.dangerFrameUnlocked = false
                   if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
@@ -1228,8 +1215,6 @@ local function MakeInterfacePage()
               if (toggleName == "MMB_Show") then
                   deathRecordsDB.minimapDB["hide"] = true
                   icon:Hide("Tombstones")
-              elseif (toggleName == "SelfReport") then
-                  deathRecordsDB.selfReporting = false
               elseif (toggleName == "LockDangerFrames") then
                   deathRecordsDB.dangerFrameUnlocked = true
                   if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
@@ -1238,7 +1223,6 @@ local function MakeInterfacePage()
           end
       end
       mmToggle:SetScript("OnClick", ToggleOnClick)
-      selfReportToggle:SetScript("OnClick", ToggleOnClick)
       dangerFrameLockToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
@@ -3246,13 +3230,11 @@ end
 
 function Tombstones:PLAYER_DEAD()
     if _G["deathlogJoinChannel"] ~= nil then
-        -- Refuse self report, even if enabled, if Hardcore add-on is present
+        -- Refuse self report if Hardcore add-on is present
         return
     end
-    if (deathRecordsDB.selfReporting == true) then
-        selfDeathAlert(lastDmgSourceID)
-        selfDeathAlertLastWords()
-    end
+    selfDeathAlert(lastDmgSourceID)
+    selfDeathAlertLastWords()
 end
 
 function Tombstones:COMBAT_LOG_EVENT_UNFILTERED(...)
