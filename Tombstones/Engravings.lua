@@ -556,6 +556,7 @@ StaticPopupDialogs["ENGRAVINGS_CLEAR_CONFIRMATION"] = {
     OnAccept = function()
         ClearEngravingRecords()
         print("Engravings have been cleared.")
+        ReloadUI()
     end,
     timeout = 0,
     whileDead = true,
@@ -1390,22 +1391,16 @@ local function BroadcastSyncRequest()
 end
 
 local function WhisperSyncAvailabilityTo(player_name_short, oldest_timestamp, mapID)
-    --print("z1")
     local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
-    table.insert(engravings_sync_availability_queue, commMessage)
-    --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp, "WHISPER", player_name_short)
+    CTL:SendAddonMessage("BULK", EN_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
 end
 
 local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp, mapID)
-  --print("z2")
     local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
-    table.insert(engravings_sync_accept_queue, commMessage)
-    --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp, "WHISPER", player_name_short)
+    CTL:SendAddonMessage("BULK", EN_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
 end
 
-local function WhisperSyncDataTo(player_name_short, engravings_data)
-    --print("z3")
-    
+local function WhisperSyncDataTo(player_name_short, engravings_data) 
     local serialized = ls:Serialize(engravings_data)
     local compressed = ld:CompressDeflate(serialized)
     local encoded = ld:EncodeForWoWAddonChannel(compressed)
@@ -1413,6 +1408,7 @@ local function WhisperSyncDataTo(player_name_short, engravings_data)
     local chunkSize = 200 -- Set the desired chunk size
     local totalChunks = math.ceil(#encoded / chunkSize)
    
+    printDebug("Loading up "..totalChunks.." chunks for sending out.")
     for i = 1, totalChunks do
       local startIndex = (i - 1) * chunkSize + 1
       local endIndex = i * chunkSize
@@ -1421,10 +1417,11 @@ local function WhisperSyncDataTo(player_name_short, engravings_data)
       local msg = string.format("%d/%d:%s", i, totalChunks, chunk)
       
       local commMessage = { msg = msg , player_name_short = player_name_short }
-      table.insert(engravings_sync_data_queue, commMessage)
+      CTL:SendAddonMessage("BULK", EN_COMM_NAME_SERIAL, commMessage.msg, "WHISPER", commMessage.player_name_short)
     end
-    printDebug("Loaded up "..totalChunks.." chunks for sending out.")
-    --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_BULK_DATA"]..COMM_COMMAND_DELIM..encodedData, "WHISPER", player_name_short)
+    
+    agreedReceiver = nil 
+    agreedMapReceiver = nil
 end
 
 
