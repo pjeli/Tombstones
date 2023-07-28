@@ -477,7 +477,9 @@ local engravings_sync_availability_queue = {}
 local engravings_sync_accept_queue = {}
 local engravings_sync_data_queue = {}
 local agreedSender = nil
+local agreedMapSender = nil
 local agreedReceiver = nil
+local agreedMapReceiver = nil
 local requestedSync = false
 local printedWarning = false
 
@@ -589,11 +591,15 @@ local function IsNewRecordDuplicate(newRecord)
     return isDuplicate
 end
 
-local function GetOldestEngravingTimestamp()
+local function GetOldestEngravingTimestamp(mapID)
     local oldest_engraving_timestamp = 0 
-
-    -- Check if the imported record is "close enough" to existing record
-    for _, engraving in ipairs(engravingsDB.engravingRecords) do
+    
+    local zoneEngravings = engravingsZoneCache[mapID] or {}
+    local numRecords = #zoneEngravings or 0
+    
+    -- Iterate over the engraving records in reverse
+    for index = numRecords, 1, -1 do
+        local engraving = zoneEngravings[index]
         if engraving.timestamp > oldest_engraving_timestamp then 
           oldest_engraving_timestamp = engraving.timestamp
         end
@@ -602,26 +608,28 @@ local function GetOldestEngravingTimestamp()
     return oldest_engraving_timestamp
 end
 
-local function haveEngravingsBeyondTimestamp(request_timestamp)
+local function haveEngravingsBeyondTimestamp(request_timestamp, mapID)
     -- Get the number of engraving records
-    local numRecords = #engravingsDB.engravingRecords
+    local zoneEngravings = engravingsZoneCache[mapID] or {}
+    local numRecords = #zoneEngravings or 0
     -- Iterate over the engraving records in reverse
     for index = numRecords, 1, -1 do
-        local record = engravingsDB.engravingRecords[index]
-        if record.timestamp > request_timestamp then return true end
+        local engraving = zoneEngravings[index]
+        if (engraving.timestamp > request_timestamp) then return true end
     end
     return false
 end
 
-local function GetEngravingsBeyondTimestamp(request_timestamp, max_to_fetch)
+local function GetEngravingsBeyondTimestamp(request_timestamp, max_to_fetch, mapID)
     local fetchedEngravings = {}
     -- Get the number of engraving records
-    local numRecords = #engravingsDB.engravingRecords
+    local zoneEngravings = engravingsZoneCache[mapID] or {}
+    local numRecords = #zoneEngravings or 0
     -- Iterate over the engraving records in reverse
     for index = numRecords, 1, -1 do
-        local record = engravingsDB.engravingRecords[index]
-        if record.timestamp > request_timestamp then 
-            table.insert(fetchedEngravings, record)
+        local engraving = zoneEngravings[index]
+        if engraving.timestamp > request_timestamp then 
+            table.insert(fetchedEngravings, engraving)
         end
         if #fetchedEngravings >= max_to_fetch then
             break
@@ -1374,22 +1382,23 @@ local function TombstonesJoinChannel()
 end
 
 local function BroadcastSyncRequest()
-    local oldest_engraving_timestamp = GetOldestEngravingTimestamp()
+    local playerMap = C_Map.GetBestMapForUnit("player")
+    local oldest_engraving_timestamp = GetOldestEngravingTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
-    CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] .. COMM_COMMAND_DELIM .. oldest_engraving_timestamp, "CHANNEL", nil, channel_num)
+    CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
 end
 
-local function WhisperSyncAvailabilityTo(player_name_short, oldest_timestamp)
+local function WhisperSyncAvailabilityTo(player_name_short, oldest_timestamp, mapID)
     --print("z1")
-    local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp , player_name_short = player_name_short }
+    local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
     table.insert(engravings_sync_availability_queue, commMessage)
     --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp, "WHISPER", player_name_short)
 end
 
-local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp)
+local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp, mapID)
   --print("z2")
-    local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp , player_name_short = player_name_short }
+    local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
     table.insert(engravings_sync_accept_queue, commMessage)
     --CTL:SendAddonMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp, "WHISPER", player_name_short)
 end
@@ -1475,6 +1484,7 @@ local function EsendNextInQueue()
     if #engravings_sync_data_queue == 0 then
         printDebug("Sent all chunks to "..commMessage.player_name_short..".")
         agreedReceiver = nil 
+        agreedMapReceiver = nil
     end -- Reset receiver after full send of all chunks.
 		return
 	end
@@ -1562,21 +1572,27 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       printDebug("Receiving TS:EngravingSyncAvailability from " .. player_name_short .. ".") 
       if (requestedSync == false) then return end -- We didn't request a sync? Spammer...
       if (agreedSender ~= nil) then return end -- We already have a sender
-      local oldestTimestampInRequest = tonumber(msg)
-      local oldestEngravingTimestamp = GetOldestEngravingTimestamp()
+      local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
+      oldestTimestampInRequest = tonumber(oldestTimestampInRequest)
+      mapID = tonumber(mapID)
+      local oldestEngravingTimestamp = GetOldestEngravingTimestamp(mapID) -- Ensure we are still in the same state and accepting to the same timestamp
       if (oldestTimestampInRequest == oldestEngravingTimestamp) then 
           agreedSender = player_name_short
-          WhisperSyncAcceptanceTo(player_name_short, oldestEngravingTimestamp)
+          agreedMapSender = mapID
+          WhisperSyncAcceptanceTo(player_name_short, oldestEngravingTimestamp, mapID)
       end
   -- RESPOND TO SYNC ACCEPTANCE; SEND THE DATA
   elseif (command == EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:EngravingSyncAccept from " .. player_name_short .. ".") 
       if (engravingsDB.offerSync == false) then return end -- We are not offering sync service
       if (player_name_short ~= agreedReceiver) then return end -- The accepter is not the same player as we agreed upon? Spam / hacker.
-      local timestampAgreedUpon = tonumber(msg)
+      local timestampAgreedUpon, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
+      timestampAgreedUpon = tonumber(timestampAgreedUpon)
+      mapID = tonumber(mapID)
+      if (mapID ~= agreedMapReceiver) then return end -- The acceptor has changed mapIDs on us? Reject sending.
       local numberOfEngravingsToFetch = 100
-      local fetchedEngravings = GetEngravingsBeyondTimestamp(timestampAgreedUpon, numberOfEngravingsToFetch)
-      printDebug("Sending "..#fetchedEngravings.." engravings.")
+      local fetchedEngravings = GetEngravingsBeyondTimestamp(timestampAgreedUpon, numberOfEngravingsToFetch, mapID)
+      printDebug("Sending "..#fetchedEngravings.." engravings for map "..mapID..".")
       WhisperSyncDataTo(player_name_short, fetchedEngravings)
   -- RECEIVE THE CHUNKED DATA
   elseif (prefix == EN_COMM_NAME_SERIAL and channel == "WHISPER") then
@@ -1620,16 +1636,25 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
             importedEngravingRecords = importedEngravingRecords or {}
             local numImportRecords = #importedEngravingRecords or 0
             local numNewRecords = 0
+            local badRecords = false
             for _, engraving in ipairs(importedEngravingRecords) do
-                -- engraving = { realm, mapID, posX, posY, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
-                -- (realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
-                local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index))
-                if success then numNewRecords = numNewRecords + 1 end
+                if (engraving.mapID == agreedMapSender) then
+                    -- engraving = { realm, mapID, posX, posY, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
+                    -- (realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+                    local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index))
+                    if success then numNewRecords = numNewRecords + 1 end
+                else
+                    badRecords = true
+                end
             end
             print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+            if badRecords == true then
+                print("Engravings detected that "..player_name_short.." sent improper data. Consider ignoring if this is griefing.")
+            end
             -- Clear the received chunks for this sender and reset agreedSender
             receivedChunks[player_name_short] = nil
             agreedSender = nil
+            agreedMapSender = nil
             requestedSync = false
             printedWarning = false
          end
@@ -1656,11 +1681,14 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           printDebug("Receiving TS:EngravingSyncRequest from " .. player_name_short .. ".")
           if (engravingsDB.offerSync == false) then return end -- We are not offering syncing service
           if (agreedReceiver ~= nil) then return end -- We already have an agreed upon receiver of sync
-          local oldestTimestampInRequest = tonumber(msg)
-          local haveNewEngravings = haveEngravingsBeyondTimestamp(oldestTimestampInRequest)
+          local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
+          oldestTimestampInRequest = tonumber(oldestTimestampInRequest)
+          mapID = tonumber(mapID)
+          local haveNewEngravings = haveEngravingsBeyondTimestamp(oldestTimestampInRequest, mapID) -- HANDLE MAPID IN BEYOND TIMESTAMP
           if haveNewEngravings then
               agreedReceiver = player_name_short
-              WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest)
+              agreedMapReceiver = mapID
+              WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest, mapID)
           else
               printDebug("You don't have newer Engravings. Ignoring sync request.")
           end
