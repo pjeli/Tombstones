@@ -17,6 +17,17 @@ local classNameToID = {
     ["warlock"] = 9,
     ["druid"] = 11,
 }
+local classIDToIcon = {
+    [1] = "classicon_warrior",
+    [2] = "classicon_paladin",
+    [3] = "classicon_hunter",
+    [4] = "classicon_rogue",
+    [5] = "classicon_priest",
+    [7] = "classicon_shaman",
+    [8] = "classicon_mage",
+    [9] = "classicon_warlock",
+    [11] = "classicon_druid",
+}
 local PLAYER_CLASS = select(3, UnitClass("player"))
 local raceNameToID = {
     ["human"] = 1,
@@ -420,6 +431,7 @@ local function LoadDeathRecords()
         deathRecordsDB.minimapDB.minimapPos = 204
         deathRecordsDB.minimapDB.hide = false
         deathRecordsDB.rating = true
+        deathRecordsDB.useClassIcons = false
     end
     if (deathRecordsDB.showMarkers == nil) then
         deathRecordsDB.showMarkers = true
@@ -447,6 +459,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.rating == nil) then
         deathRecordsDB.rating = true
+    end
+    if (deathRecordsDB.useClassIcons == nil) then
+        deathRecordsDB.useClassIcons = false
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
@@ -822,7 +837,12 @@ local function UpdateWorldMapMarkers()
                     markerMapButton:SetFrameStrata("FULLSCREEN") -- Set the frame strata to ensure it appears above other elements
                     markerMapButton.texture = markerMapButton:CreateTexture(nil, "BACKGROUND")
                     markerMapButton.texture:SetAllPoints(true)
-                    markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
+                    
+                    if(deathRecordsDB.useClassIcons == true and marker.class_id ~= nil) then
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\"..classIDToIcon[marker.class_id])
+                    else
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
+                    end
 
                     if (marker.visited == true and markerMapButton.checkmarkTexture == nil) then
                         -- Create the checkmark texture
@@ -1192,6 +1212,13 @@ local function MakeInterfacePage()
       dangerFrameLockToggleText:SetPoint("LEFT", dangerFrameLockToggle, "RIGHT", 5, 0)
       dangerFrameLockToggleText:SetText("Lock Zone Danger and Target Deadly frames")
       
+      local classIconsToggle = CreateFrame("CheckButton", "ClassIcons", interPanel, "OptionsCheckButtonTemplate")
+      classIconsToggle:SetPoint("TOPLEFT", 10, -80)
+      classIconsToggle:SetChecked(deathRecordsDB.useClassIcons)
+      local classIconsToggleText = mmToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      classIconsToggleText:SetPoint("LEFT", classIconsToggle, "RIGHT", 5, 0)
+      classIconsToggleText:SetText("Use class icons as Tombstones")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
@@ -1209,6 +1236,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.dangerFrameUnlocked = false
                   if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
                   if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+              elseif (toggleName == "ClassIcons") then
+                  deathRecordsDB.useClassIcons = true
               end
           else
               -- Perform actions for unselected state
@@ -1219,11 +1248,14 @@ local function MakeInterfacePage()
                   deathRecordsDB.dangerFrameUnlocked = true
                   if targetDangerFrame then targetDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
                   if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
+              elseif (toggleName == "ClassIcons") then
+                  deathRecordsDB.useClassIcons = false
               end
           end
       end
       mmToggle:SetScript("OnClick", ToggleOnClick)
       dangerFrameLockToggle:SetScript("OnClick", ToggleOnClick)
+      classIconsToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
