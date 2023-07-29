@@ -1815,8 +1815,35 @@ function TdeathlogReceiveChannelMessage(sender, data)
   printDebug("Tombstones decoded a DeathLog death for " .. sender .. "!")
   if sender ~= decoded_player_data["name"] then return end
   local x, y = strsplit(",", decoded_player_data["map_pos"],2)
+  
+  local mapID = tonumber(decoded_player_data["map_id"])
+  local posX = tonumber(x)
+  local posY = tonumber(y)
 
-  AddDeathMarker(tonumber(decoded_player_data["map_id"]), decoded_player_data["instance_id"], tonumber(x), tonumber(y), tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]), decoded_player_data["guild"])
+  AddDeathMarker(mapID, decoded_player_data["instance_id"], posX, posY, tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]), decoded_player_data["guild"])
+  
+  local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+  local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
+  local textureIcon = "Interface\\Icons\\Ability_Creature_Cursed_03"
+  overlayFrameTexture:SetAllPoints()
+  overlayFrameTexture:SetTexture(textureIcon)
+
+  ratingsSeenCount = ratingsSeenCount + 1
+
+  miniButton.icon = textureIcon
+  icon:Refresh("Tombstones")
+  
+  C_Timer.After(7.0, function()
+      ratingsSeenCount = ratingsSeenCount - 1
+      if overlayFrame ~= nil then
+          overlayFrame:Hide()
+          overlayFrame = nil 
+      end
+      if(ratingsSeenCount == 0) then
+        miniButton.icon = "Interface\\Icons\\Ability_fiegndead"
+        icon:Refresh("Tombstones")
+      end
+  end)
 end
 
 function TdecodeMessage(msg)
