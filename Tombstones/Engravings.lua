@@ -485,9 +485,12 @@ local printedWarning = false
 
 -- Variables
 local engravingsDB
+local miniButton
+local icon
 local engravingsZoneCache = {}
 local phraseFrame
 local engravingsRecordCount = 0
+local engravingsSeenCount = 0
 local debug = false
 local iconSize = 12
 local isPlayerMoving = false
@@ -532,6 +535,18 @@ local function LoadEngravingRecords()
         engravingsDB.engravingRecords = {}
         engravingsDB.participating = false
         engravingsDB.offerSync = false
+        engravingsDB.minimapDB = {}
+        engravingsDB.minimapDB.minimapPos = 204
+        engravingsDB.minimapDB.hide = false
+    end
+    if (engravingsDB.minimapDB == nil) then
+        engravingsDB.minimapDB = {}
+    end
+    if (engravingsDB.minimapDB.minimapPos == nil) then
+        engravingsDB.minimapDB.minimapPos = 204
+    end
+    if (engravingsDB.minimapDB.hide == nil) then
+        engravingsDB.minimapDB.hide = false
     end
     if (engravingsDB.offerSync == nil) then
         engravingsDB.offerSync = false
@@ -783,7 +798,7 @@ local function CreatePhraseGenerationInterface()
 
     local title = phraseFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("TOP", 0, -15)
-    title:SetText("Make Engraving Phrase")
+    title:SetText("|cFFBF4500Make Engraving Phrase|r")
     
     local templateIndex = 0
     local categoryIndex = 0
@@ -1040,6 +1055,9 @@ local function MakeInterfacePage()
               -- Perform actions for selected state
               if (toggleName == "Participate") then
                   engravingsDB.participating = true
+                  engravingsDB.minimapDB["hide"] = false
+                  icon:Show("Engravings")
+                  offerSyncToggle:Enable()
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = true
               end
@@ -1047,8 +1065,11 @@ local function MakeInterfacePage()
               -- Perform actions for unselected state
               if (toggleName == "Participate") then
                   engravingsDB.participating = false
+                  engravingsDB.minimapDB["hide"] = true
+                  icon:Hide("Engravings")
                   engravingsDB.offerSync = false
-                  offerSyncToggle:SetChecked(engravingsDB.offerSync)
+                  offerSyncToggle:SetChecked(false)
+                  offerSyncToggle:Disable()
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = false
               end
@@ -1058,6 +1079,38 @@ local function MakeInterfacePage()
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
+end
+
+local function MakeMinimapButton()
+    -- Minimap button click function
+    local function MiniBtnClickFunc(btn)
+        if (phraseFrame ~= nil and phraseFrame:IsVisible()) then
+            phraseFrame:Hide()
+        else
+            CreatePhraseGenerationInterface()
+        end
+    end
+    -- Create minimap button using LibDBIcon
+    miniButton = LibStub("LibDataBroker-1.1"):NewDataObject("Engravings", {
+        type = "data source",
+        text = "Engravings",
+        icon = "Interface\\Icons\\Inv_misc_rune_04",
+        OnClick = function(self, btn)
+            MiniBtnClickFunc(btn)
+        end,
+        OnTooltipShow = function(tooltip)
+            if not tooltip or not tooltip.AddLine then return end
+            tooltip:AddLine("Engravings")
+            tooltip:AddLine("|cFFBF4500records:|r "..tostring(#engravingsDB.engravingRecords))
+        end,
+    })
+
+    icon = LibStub("LibDBIcon-1.0", true)
+    icon:Register("Engravings", miniButton, engravingsDB.minimapDB)
+    
+    if (not engravingsDB.participating) then
+        icon:Hide("Engravings")
+    end
 end
 
 local function ReadOutNearestEngraving(engraving)
@@ -1672,7 +1725,35 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           if (engravingLocPing ~= nil) then
               --(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
               local posX, posY = strsplit(",", engravingLocPing["map_pos"], 2)
-              AddEngravingMarker(engravingLocPing.name, tonumber(engravingLocPing.map_id), tonumber(posX), tonumber(posY), tonumber(engravingLocPing.templ_index), tonumber(engravingLocPing.cat_index), tonumber(engravingLocPing.word_index), tonumber(engravingLocPing.conj_index), tonumber(engravingLocPing.conj_templ_index),  tonumber(engravingLocPing.conj_cat_index), tonumber(engravingLocPing.conj_word_index))
+              local mapID = tonumber(engravingLocPing.map_id)
+              AddEngravingMarker(engravingLocPing.name, mapID, tonumber(posX), tonumber(posY), tonumber(engravingLocPing.templ_index), tonumber(engravingLocPing.cat_index), tonumber(engravingLocPing.word_index), tonumber(engravingLocPing.conj_index), tonumber(engravingLocPing.conj_templ_index),  tonumber(engravingLocPing.conj_cat_index), tonumber(engravingLocPing.conj_word_index))
+              
+              local overlayFrame = CreateFrame("Button", nil, WorldMapButton)
+              overlayFrame:SetSize(iconSize * 1.5, iconSize * 1.5)
+
+              local textureIcon = "Interface\\Addons\\Tombstones\\artwork\\inv_misc_rune_04_orange_tb.tga"
+              local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
+              overlayFrameTexture:SetAllPoints()
+              overlayFrameTexture:SetTexture(textureIcon)
+
+              engravingsSeenCount = engravingsSeenCount + 1
+              
+              hbdp:AddWorldMapIconMap("EngravingsPing", overlayFrame, tonumber(mapID), tonumber(posX), tonumber(posY), 3)
+              miniButton.icon = textureIcon
+              icon:Refresh("Engravings")
+              
+              C_Timer.After(7.0, function()
+                  engravingsSeenCount = engravingsSeenCount - 1
+                  hbdp:RemoveWorldMapIcon("EngravingsPing", overlayFrame)
+                  if overlayFrame ~= nil then
+                      overlayFrame:Hide()
+                      overlayFrame = nil 
+                  end
+                  if(engravingsSeenCount == 0) then
+                    miniButton.icon = "Interface\\Icons\\inv_misc_rune_04"
+                    icon:Refresh("Engravings")
+                  end
+              end)
           end
       elseif command == EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] then
           printDebug("Receiving TS:EngravingSyncRequest from " .. player_name_short .. ".")
@@ -1685,7 +1766,10 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           if haveNewEngravings then
               agreedReceiver = player_name_short
               agreedMapReceiver = mapID
-              WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest, mapID)
+              local randomDelay = math.random(0,5) -- Give random delay to create competition
+              C_Timer.After(randomDelay, function()
+                  WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest, mapID)
+              end)
           else
               printDebug("You don't have newer Engravings. Ignoring sync request.")
           end
@@ -1738,8 +1822,8 @@ function Engravings:PLAYER_LOGIN()
   wordsTable, wordsOrigToAlphaMappingTable, wordsAlphaToOrigMappingTable = sortTwoLevelTableWithOriginalIndex(wordsTable)
   
   -- called during load screen
-  --  MakeMinimapButton()
   LoadEngravingRecords()
+  MakeMinimapButton()
   MakeInterfacePage()
   
   C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME)
