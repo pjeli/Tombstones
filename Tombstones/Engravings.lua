@@ -472,6 +472,7 @@ local tombstones_channel = "tsbroadcastchannel"
 local tombstones_channel_pw = "tsbroadcastchannelpw"
 
 -- Message Variables
+local engravings_readout_queue = {}
 local engravings_sync_request_queue = {}
 local engravings_sync_availability_queue = {}
 local engravings_sync_accept_queue = {}
@@ -1058,7 +1059,7 @@ local function MakeInterfacePage()
       announcePlacementToggle:SetChecked(engravingsDB.announcePlacement)
       local announcePlacementToggleText = announcePlacementToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       announcePlacementToggleText:SetPoint("LEFT", announcePlacementToggle, "RIGHT", 5, 0)
-      announcePlacementToggleText:SetText("Announce Engraving in /say on placement")
+      announcePlacementToggleText:SetText("Announce engravings in /say")
       
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
@@ -1181,10 +1182,17 @@ local function ReadOutNearestEngraving(engraving)
     local engravingLink = "!E[\""..user.."\" "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
     local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..user.."'s Engraving]|h|r"
     --local say_msg = "You found an engraving on the ground: "..engravingHyperLink
-    --CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
+
     --SendChatMessage(say_msg, "SAY")
     
     local phrase = decodePhrase(engraving.templ_index, engraving.cat_index, engraving.word_index, engraving.conj_index, engraving.conj_templ_index, engraving.conj_cat_index, engraving.conj_word_index)
+    if (engravingsDB.announcePlacement) then
+        --local firstSayMessage = "I found an engraving on the ground: "..engravingHyperLink
+        local sayReadoutMessage = user.."'s engraving reads: \""..phrase.."\""
+        --table.insert(engravings_readout_queue, { msg = firstSayMessage})
+        table.insert(engravings_readout_queue, {msg = sayReadoutMessage})
+        --CTL:SendChatMessage("BULK", EN_COMM_NAME, user.."'s engraving reads: \""..phrase.."\"", "SAY", nil)
+    end
     --DEFAULT_CHAT_FRAME:AddMessage("You found an engraving on the ground: "..engravingHyperLink, 1, 1, 0)
     PlaySound(1194)
     C_Timer.After(0.5, function()
@@ -1503,6 +1511,13 @@ end
 --[[ Self Report Handling]]
 --
 local function EsendNextInQueue()
+  if #engravings_readout_queue > 0 then 
+		local commMessage = engravings_readout_queue[1]
+		CTL:SendChatMessage("BULK", EN_COMM_NAME, commMessage.msg, "SAY", nil)
+		table.remove(engravings_readout_queue, 1)
+		return
+	end
+  
 	if #engravings_sync_request_queue > 0 then 
 		local ts_channel_num = GetChannelName(tombstones_channel)
 		if ts_channel_num == 0 then
