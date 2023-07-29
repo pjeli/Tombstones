@@ -538,6 +538,7 @@ local function LoadEngravingRecords()
         engravingsDB.minimapDB = {}
         engravingsDB.minimapDB.minimapPos = 204
         engravingsDB.minimapDB.hide = false
+        engravingsDB.announcePlacement = true
     end
     if (engravingsDB.minimapDB == nil) then
         engravingsDB.minimapDB = {}
@@ -550,6 +551,9 @@ local function LoadEngravingRecords()
     end
     if (engravingsDB.offerSync == nil) then
         engravingsDB.offerSync = false
+    end
+    if (engravingsDB.announcePlacement == nil) then
+        engravingsDB.announcePlacement = true
     end
     for _, engraving in ipairs(engravingsDB.engravingRecords) do
         CacheEngraving(engraving)  
@@ -772,6 +776,10 @@ local function generatePhrase(selectedTemplate, selectedWords, selectedConjuncti
 end
 
 local function CreatePhraseGenerationInterface()
+    if (not engravingsDB.participating) then
+        print("You are not participating in Tombstones:Engravings. Please enable via Interface Options.")
+        return
+    end
     if (phraseFrame ~= nil and phraseFrame:IsVisible()) then
         return
     elseif (phraseFrame ~= nil and not phraseFrame:IsVisible()) then
@@ -980,9 +988,11 @@ local function CreatePhraseGenerationInterface()
         posX = string.format("%.4f", posX)
         posY = string.format("%.4f", posY)
         
-        local engravingLink = "!E[\""..PLAYER_NAME.."\" "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
-        local say_msg = "I have left an engraving here: "..engravingLink
-        CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
+        if (engravingsDB.announcePlacement) then 
+            local engravingLink = "!E[\""..PLAYER_NAME.."\" "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
+            local say_msg = "I have left an engraving here: "..engravingLink
+            CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
+        end
         
         --(name, map_id, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
         if (engravingsDB.participating) then
@@ -1043,6 +1053,13 @@ local function MakeInterfacePage()
       offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
       offerSyncToggleText:SetText("Offer Engravings sync service")
       
+      local announcePlacementToggle = CreateFrame("CheckButton", "AnnouncePlacement", interPanel, "OptionsCheckButtonTemplate")
+      announcePlacementToggle:SetPoint("TOPLEFT", 10, -80)
+      announcePlacementToggle:SetChecked(engravingsDB.announcePlacement)
+      local announcePlacementToggleText = announcePlacementToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      announcePlacementToggleText:SetPoint("LEFT", announcePlacementToggle, "RIGHT", 5, 0)
+      announcePlacementToggleText:SetText("Announce Engraving in /say on placement")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/eng usage for slash command options.")
@@ -1060,6 +1077,8 @@ local function MakeInterfacePage()
                   offerSyncToggle:Enable()
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = true
+              elseif (toggleName == "AnnouncePlacement") then
+                  engravingsDB.announcePlacement = true
               end
           else
               -- Perform actions for unselected state
@@ -1072,11 +1091,14 @@ local function MakeInterfacePage()
                   offerSyncToggle:Disable()
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = false
+              elseif (toggleName == "AnnouncePlacement") then
+                  engravingsDB.announcePlacement = false
               end
           end
       end
       participateToggle:SetScript("OnClick", ToggleOnClick)
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
+      announcePlacementToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
