@@ -1104,13 +1104,25 @@ local function MakeInterfacePage()
 			InterfaceOptions_AddCategory(interPanel)
 end
 
+local function BroadcastSyncRequest()
+    local playerMap = C_Map.GetBestMapForUnit("player")
+    local oldest_engraving_timestamp = GetOldestEngravingTimestamp(playerMap)
+    local channel_num = GetChannelName(tombstones_channel)
+    requestedSync = true
+    CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
+end
+
 local function MakeMinimapButton()
     -- Minimap button click function
     local function MiniBtnClickFunc(btn)
-        if (phraseFrame ~= nil and phraseFrame:IsVisible()) then
-            phraseFrame:Hide()
+        if (IsControlKeyDown()) then
+          BroadcastSyncRequest()
         else
-            CreatePhraseGenerationInterface()
+          if (phraseFrame ~= nil and phraseFrame:IsVisible()) then
+              phraseFrame:Hide()
+          else
+              CreatePhraseGenerationInterface()
+          end
         end
     end
     -- Create minimap button using LibDBIcon
@@ -1463,14 +1475,6 @@ local function TombstonesJoinChannel()
     else
         printDebug("Successfully joined Tombstones channel.")
     end
-end
-
-local function BroadcastSyncRequest()
-    local playerMap = C_Map.GetBestMapForUnit("player")
-    local oldest_engraving_timestamp = GetOldestEngravingTimestamp(playerMap)
-    local channel_num = GetChannelName(tombstones_channel)
-    requestedSync = true
-    CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
 end
 
 local function WhisperSyncAvailabilityTo(player_name_short, oldest_timestamp, mapID)
