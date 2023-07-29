@@ -474,6 +474,9 @@ local function LoadDeathRecords()
         if (TOMB_FILTERS["FACTION_ID"] ~= nil) then
             TOMB_FILTERS["FACTION_ID"] = PLAYER_FACTION
         end
+        if (TOMB_FILTERS["CLASS_ID"] ~= nil) then
+            TOMB_FILTERS["CLASS_ID"] = PLAYER_CLASS
+        end
         if (TOMB_FILTERS["HAS_KNOWN_DEATH"] == nil) then
             TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
         end
