@@ -147,7 +147,9 @@ local deathRecordCount = 0
 local deathVisitCount = 0
 local deadlyNPCs = {}
 local deadlyZones = {}
+local deadlyClasses = {}
 local deadlyZoneLvlSums = {}
+local deadlyClassLvlSums = {}
 local visitingZoneCache = {}
 local iconSize = 12
 local maxRenderCount = 3000
@@ -257,7 +259,17 @@ local function IncrementDeadlyCounts(marker)
         else
             deadlyZoneLvlSums[marker.mapID] = deadlyZoneLvlSums[marker.mapID] + marker.level
         end
+        if marker.class_id then
+            if(deadlyClasses[marker.class_id] == nil) then
+                deadlyClasses[marker.class_id] = 1
+                deadlyClassLvlSums[marker.class_id] = marker.level
+            else
+                deadlyClasses[marker.class_id] = deadlyClasses[marker.class_id] + 1
+                deadlyClassLvlSums[marker.class_id] = deadlyClassLvlSums[marker.class_id] + marker.level
+            end
+        end
     end
+
     if marker.visited and marker.visited == true then
         deathVisitCount = deathVisitCount + 1
     end
@@ -1468,6 +1480,131 @@ local function FlashWhenNearTombstone()
             glowFrame = nil
         end
     end
+end
+
+local function PrintDeadliestNPCs() 
+  -- Function to compare the values for sorting
+  local function compareValues(a, b)
+      return deadlyNPCs[a] > deadlyNPCs[b]
+  end
+  -- Create a temporary table to store the keys
+  local tempKeys = {}
+  for key in pairs(deadlyNPCs) do
+      --print(key)
+      if (tonumber(key) ~= nil and tonumber(key) > 0) then
+        table.insert(tempKeys, key)
+      end
+  end
+
+  -- Sort the keys based on their values
+  table.sort(tempKeys, compareValues)
+
+  -- Fetch the top 3 keys with the highest values
+  local top3Keys = {}
+  for i = 1, 3 do
+      if tempKeys[i] then
+          table.insert(top3Keys, tempKeys[i])
+      end
+  end
+
+  -- Print the top 3 keys and their corresponding values
+  for _, key in ipairs(top3Keys) do
+      print(id_to_npc[key] .. " has the highest value: " .. deadlyNPCs[key])
+  end
+end
+
+local function PrintDeadliestEnvironmentalDamages() 
+  -- Function to compare the values for sorting
+  local function compareValues(a, b)
+      return deadlyNPCs[a] > deadlyNPCs[b]
+  end
+  -- Create a temporary table to store the keys
+  local tempKeys = {}
+  for key in pairs(deadlyNPCs) do
+      --print(key)
+      if (tonumber(key) ~= nil and tonumber(key) < -1) then
+        table.insert(tempKeys, key)
+      end
+  end
+
+  -- Sort the keys based on their values
+  table.sort(tempKeys, compareValues)
+
+  -- Fetch the top 3 keys with the highest values
+  local top3Keys = {}
+  for i = 1, 3 do
+      if tempKeys[i] then
+          table.insert(top3Keys, tempKeys[i])
+      end
+  end
+
+  -- Print the top 3 keys and their corresponding values
+  for _, key in ipairs(top3Keys) do
+      print(environment_damage[key] .. " has the highest value: " .. deadlyNPCs[key])
+  end
+end
+
+local function PrintDeadliestZones() 
+  -- Function to compare the values for sorting
+  local function compareValues(a, b)
+      return deadlyZones[a] > deadlyZones[b]
+  end
+  -- Create a temporary table to store the keys
+  local tempKeys = {}
+  for key in pairs(deadlyZones) do
+      --print(key)
+      if (tonumber(key) ~= nil and tonumber(key) > 0) then
+        table.insert(tempKeys, key)
+      end
+  end
+
+  -- Sort the keys based on their values
+  table.sort(tempKeys, compareValues)
+
+  -- Fetch the top 3 keys with the highest values
+  local top3Keys = {}
+  for i = 1, 3 do
+      if tempKeys[i] then
+          table.insert(top3Keys, tempKeys[i])
+      end
+  end
+
+  -- Print the top 3 keys and their corresponding values
+  for _, key in ipairs(top3Keys) do
+      print(C_Map.GetMapInfo(key).name .. " has the highest value: " .. deadlyZones[key])
+  end
+end
+
+local function PrintDeadliestClasses() 
+  -- Function to compare the values for sorting
+  local function compareValues(a, b)
+      return deadlyClasses[a] > deadlyClasses[b]
+  end
+  -- Create a temporary table to store the keys
+  local tempKeys = {}
+  for key in pairs(deadlyClasses) do
+      --print(key)
+      if (tonumber(key) ~= nil and tonumber(key) > 0) then
+        table.insert(tempKeys, key)
+      end
+  end
+
+  -- Sort the keys based on their values
+  table.sort(tempKeys, compareValues)
+
+  -- Fetch the top 3 keys with the highest values
+  local top3Keys = {}
+  for i = 1, 3 do
+      if tempKeys[i] then
+          table.insert(top3Keys, tempKeys[i])
+      end
+  end
+
+  -- Print the top 3 keys and their corresponding values
+  for _, key in ipairs(top3Keys) do
+      print(C_CreatureInfo.GetClassInfo(key).className .. " has the highest value: " .. deadlyClasses[key])
+      print(C_CreatureInfo.GetClassInfo(key).className .. " death level average is level: " .. math.floor(deadlyClassLvlSums[key] / deadlyClasses[key]))
+  end
 end
 
 local function GenerateTombstonesOptionsFrame()
@@ -3008,10 +3145,27 @@ local function SlashCommandHandler(msg)
         end
         ClearDeathMarkers(true)
         UpdateWorldMapMarkers()
+    elseif command == "deadly" then
+        local argsArray = {}
+        if args then
+           for word in string.gmatch(args, "%S+") do
+               table.insert(argsArray, word)
+           end
+        end
+        if argsArray[1] == "npc" then
+            PrintDeadliestNPCs()
+        elseif argsArray[1] == "zone" then
+            PrintDeadliestZones()
+        elseif argsArray[1] == "env" then
+            PrintDeadliestEnvironmentalDamages()
+        elseif argsArray[1] == "class" then
+            PrintDeadliestClasses()
+        end
     elseif command == "usage" then
        -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT} | highlight {PLAYER}]")
         print("Usage: /tombstones or /ts [filter (info | reset | last_words | known_death | rating | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
+        print("Usage: /tombstones or /ts [deadly (npc | zone | env | class)]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
         print("Usage: /tombstones or /ts [visiting (info | on | off )]")
         print("Usage: /tombstones or /ts [zone (show | hide )]")
