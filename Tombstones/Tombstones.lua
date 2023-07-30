@@ -1043,7 +1043,7 @@ local function UpdateWorldMapMarkers()
                             GameTooltip:Show()
                             
                             -- Marker must be from this realm and PLAYER_FACTION to receive flowers; pointless otherwise.
-                            if (marker.realm ~= nil and marker.race_id ~= nil and marker.realm == REALM and raceIDToFactionID[marker.race_id] ~= PLAYER_FACTION) then
+                            if (marker.realm ~= nil and marker.race_id ~= nil and marker.realm == REALM and raceIDToFactionID[marker.race_id] == PLAYER_FACTION) then
                               local encodedRatingPingMsg = TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] .. COMM_COMMAND_DELIM .. TencodeMessageLite(marker)
                               local channel_num = GetChannelName(tombstones_channel)
                               CTL:SendChatMessage("BULK", TS_COMM_NAME, encodedRatingPingMsg, "CHANNEL", nil, channel_num)
