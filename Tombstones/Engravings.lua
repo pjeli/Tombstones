@@ -662,13 +662,13 @@ local function GetEngravingsBeyondTimestamp(request_timestamp, max_to_fetch, map
 end
 
 -- Add engraving marker function
-local function ImportEngravingMarker(realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+local function ImportEngravingMarker(realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index, timestamp)
     if (mapID == nil or posX == nil or posY == nil or templ_index == 0 or user == nil) then
         -- No location info. Useless.
         return
     end
 
-    local engraving = { realm = realm, mapID = mapID, posX = posX, posY = posY, timestamp = time(), user = user , templ_index = templ_index, cat_index = cat_index, word_index = word_index, conj_index = conj_index, conj_templ_index = conj_templ_index, conj_cat_index = conj_cat_index, conj_word_index = conj_word_index }
+    local engraving = { realm = realm, mapID = mapID, posX = posX, posY = posY, timestamp = timestamp, user = user , templ_index = templ_index, cat_index = cat_index, word_index = word_index, conj_index = conj_index, conj_templ_index = conj_templ_index, conj_cat_index = conj_cat_index, conj_word_index = conj_word_index }
     
     local isDuplicate = IsNewRecordDuplicate(engraving)
     if (not isDuplicate) then 
@@ -683,7 +683,7 @@ local function ImportEngravingMarker(realm, user, mapID, posX, posY, templ_index
 end
 
 local function AddEngravingMarker(user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
-    return ImportEngravingMarker(REALM, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
+    return ImportEngravingMarker(REALM, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index, time())
 end
 
 local function decodePhrase(templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex) 
@@ -1280,7 +1280,7 @@ hooksecurefunc("SetItemRef", function(link, text)
         else
             if(IsControlKeyDown()) then
                 local player_name_short, realm = string.split("-", characterName)
-                local success, engraving = ImportEngravingMarker(realm, player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex)
+                local success, engraving = ImportEngravingMarker(realm, player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, time())
                 local numImportRecords = 1
                 local numNewRecords = 0
                 if (success) then
@@ -1740,7 +1740,7 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
                 if (engraving.mapID == agreedMapSender) then
                     -- engraving = { realm, mapID, posX, posY, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
                     -- (realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
-                    local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index))
+                    local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index), tonumber(engraving.timestamp))
                     if success then numNewRecords = numNewRecords + 1 end
                 else
                     badRecords = true
