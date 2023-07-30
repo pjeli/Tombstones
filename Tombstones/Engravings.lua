@@ -1685,6 +1685,10 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       mapID = tonumber(mapID)
       if (mapID ~= agreedMapReceiver) then return end -- The acceptor has changed mapIDs on us? Reject sending.
       syncAccepted = true
+      if (syncAvailabilityTimer ~= nil) then
+          syncAvailabilityTimer:Cancel()
+          syncAvailabilityTimer = nil
+      end
       local numberOfEngravingsToFetch = 100
       local fetchedEngravings = GetEngravingsBeyondTimestamp(timestampAgreedUpon, numberOfEngravingsToFetch, mapID)
       printDebug("Sending "..#fetchedEngravings.." engravings for map "..mapID..".")
@@ -1814,8 +1818,8 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
               local randomDelay = math.random(0,5) -- Give random delay to create competition
               C_Timer.After(randomDelay, function()
                   WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest, mapID)
-                  C_Timer.After(1, function()
-                      if (syncAccepted == false) then
+                  syncAvailabilityTimer = C_Timer.After(1, function()
+                      if (syncAccepted == false and agreedReceiver ~= nil and agreedMapReceiver ~= nil) then
                           agreedReceiver = nil
                           agreedMapReceiver = nil
                           syncAccepted = false
