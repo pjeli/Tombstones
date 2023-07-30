@@ -60,6 +60,7 @@ local TS_COMM_COMMANDS = {
   ["BROADCAST_KARMA_PING"] = "0",
   ["BROADCAST_TALLY_REQUEST"] = "1",
   ["WHISPER_TALLY_REPLY"] = "2",
+  ["BROADCAST_PVP_DEATH"] = "3",
 }
 local MAP_TABLE = {
 --[[Eastern Kingdoms]]      [1415] = {minLevel = 1,     maxLevel = 60,},
@@ -133,10 +134,13 @@ local environment_damage = {
   [-5] = "Fire",
   [-6] = "Lava",
   [-7] = "Slime",
+  [-8] = "PvP" -- Added for Tombstones
 }
 -- DeathLog Variables
 local deathlog_death_queue = {}
 local deathlog_last_words_queue = {}
+-- Tombstones Queue Variables
+local tombstones_pvp_death_queue = {}
 
 -- Variables
 local deathRecordsDB
@@ -180,6 +184,7 @@ local tooltipKarmaBackgroundTexture
 local debugCount = 0
 local lastWords = nil
 local lastDmgSourceID = nil
+local lastPvpSourceName = nil
 local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
   ["HAS_KNOWN_DEATH"] = true,
@@ -444,6 +449,7 @@ local function LoadDeathRecords()
         deathRecordsDB.minimapDB.hide = false
         deathRecordsDB.rating = true
         deathRecordsDB.useClassIcons = false
+        deathRecordsDB.broadcastPvpDeath = true
     end
     if (deathRecordsDB.showMarkers == nil) then
         deathRecordsDB.showMarkers = true
@@ -474,6 +480,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.useClassIcons == nil) then
         deathRecordsDB.useClassIcons = false
+    end
+    if (deathRecordsDB.broadcastPvpDeath == nil) then
+        deathRecordsDB.broadcastPvpDeath = true
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
@@ -909,7 +918,11 @@ local function UpdateWorldMapMarkers()
                             if (source_id ~= nil) then 
                                 GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
                             elseif (env_dmg ~= nil) then
-                                GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                                if (marker.source_id == -8 and marker.pvpKiller ~= nil) then 
+                                    GameTooltip:AddLine("Died from: " .. env_dmg .. " w/ " .. marker.pvpKiller, 1, 0, 0, true)
+                                else 
+                                    GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true)
+                                end
                             end
                         end
                         if (marker.last_words ~= nil) then
@@ -1234,6 +1247,13 @@ local function MakeInterfacePage()
       classIconsToggleText:SetPoint("LEFT", classIconsToggle, "RIGHT", 5, 0)
       classIconsToggleText:SetText("Use class icons as Tombstones")
       
+      local broadcastPvpToggle = CreateFrame("CheckButton", "BroadcastPvpDeath", interPanel, "OptionsCheckButtonTemplate")
+      broadcastPvpToggle:SetPoint("TOPLEFT", 10, -100)
+      broadcastPvpToggle:SetChecked(deathRecordsDB.broadcastPvpDeath)
+      local broadcastPvpToggleText = broadcastPvpToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      broadcastPvpToggleText:SetPoint("LEFT", broadcastPvpToggle, "RIGHT", 5, 0)
+      broadcastPvpToggleText:SetText("Broadcast killer on death by World PvP")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
@@ -1253,6 +1273,8 @@ local function MakeInterfacePage()
                   if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
               elseif (toggleName == "ClassIcons") then
                   deathRecordsDB.useClassIcons = true
+              elseif (toggleName == "BroadcastPvpDeath") then
+                  deathRecordsDB.broadcastPvpDeath = true
               end
           else
               -- Perform actions for unselected state
@@ -1265,6 +1287,8 @@ local function MakeInterfacePage()
                   if zoneDangerFrame then zoneDangerFrame:EnableMouse(deathRecordsDB.dangerFrameUnlocked) end
               elseif (toggleName == "ClassIcons") then
                   deathRecordsDB.useClassIcons = false
+              elseif (toggleName == "BroadcastPvpDeath") then
+                  deathRecordsDB.broadcastPvpDeath = false
               end
           end
       end
@@ -1959,6 +1983,28 @@ local function MakeMinimapButton()
     icon:Register("Tombstones", miniButton, deathRecordsDB.minimapDB)
 end
 
+function TReceivePvpDeath(sender, data)
+  if data == nil then return end
+  local values = {}
+  for w in data:gmatch("(.-)~") do table.insert(values, w) end
+  local msg = values[1]
+  local currentTimeHour = math.floor(time() / 3600)
+
+  -- Get the number of death records
+  local numRecords = #deathRecordsDB.deathRecords
+
+  -- Iterate over the death records in reverse
+  for index = numRecords, 1, -1 do
+      local record = deathRecordsDB.deathRecords[index]
+      if (record.user == sender and record.realm == REALM and record.source_id == -8 and record.pvpKiller == nil) then
+          if (math.floor(record.timestamp / 3600) == currentTimeHour) then
+              record.pvpKiller = msg
+              break
+          end
+      end
+  end
+end
+
 function TdeathlogReceiveLastWords(sender, data)
   if data == nil then return end
   local values = {}
@@ -2478,7 +2524,11 @@ local function ShowNearestTombstoneSplashText(marker)
         if (source_npc ~= nil) then 
             fallenText = "They were killed by " .. source_npc .. "."
         elseif (env_dmg ~= nil) then
-            fallenText = "They died from " .. env_dmg .. "."
+            if (marker.pvpKiller ~= nil) then
+                fallenText = "They died from " .. env_dmg .. " against " .. marker.pvpKiller .. "."
+            else
+                fallenText = "They died from " .. env_dmg .. "."
+            end
         end
     end
 
@@ -2720,13 +2770,25 @@ local function fletcher16(_player_data)
     return _player_data["name"] .. "-" .. bit.bor(bit.lshift(sum2,8), sum1)
 end
 
+local function selfDeathAlertPvp()
+  if (not deathRecordsDB.broadcastPvpDeath) then return end
+	if (lastDmgSourceID ~= -8 or lastPvpSourceName == nil) then return end
+	local _, _, race_id = UnitRace("player")
+	local _, _, class_id = UnitClass("player")
+	local guildName, guildRankName, guildRankIndex = GetGuildInfo("player");
+
+	local player_data = TPlayerData(UnitName("player"), guildName, nil, nil, nil, UnitLevel("player"), nil, nil, nil, nil, nil)
+	local msg = lastPvpSourceName .. COMM_FIELD_DELIM
+
+  table.insert(tombstones_pvp_death_queue, TS_COMM_COMMANDS["BROADCAST_PVP_DEATH"] .. COMM_COMMAND_DELIM .. msg)
+end
+
 local function selfDeathAlertLastWords()
 	if lastWords == nil then return end
 	local _, _, race_id = UnitRace("player")
 	local _, _, class_id = UnitClass("player")
 	local guildName, guildRankName, guildRankIndex = GetGuildInfo("player");
 	if guildName == nil then guildName = "" end
-	local death_source = "-1"
 
 	local player_data = TPlayerData(UnitName("player"), guildName, nil, nil, nil, UnitLevel("player"), nil, nil, nil, nil, nil)
 	local checksum = fletcher16(player_data)
@@ -2808,6 +2870,19 @@ local function TsendNextInQueue()
 		table.remove(deathlog_last_words_queue, 1)
 		return
 	end
+  
+  if #tombstones_pvp_death_queue > 0 then
+    local ts_channel_num = GetChannelName(tombstones_channel)
+		if ts_channel_num == 0 then
+		  TombstonesJoinChannel()
+		  return
+		end
+
+		local commMessage = tombstones_pvp_death_queue[1]
+		CTL:SendChatMessage("BULK", TS_COMM_NAME, commMessage, "CHANNEL", nil, ts_channel_num)
+		table.remove(tombstones_pvp_death_queue, 1)
+		return
+  end
 end
 -- Note: We can only send at most 1 message per click, otherwise we get a taint
 WorldFrame:HookScript("OnMouseDown", function(self, button)
@@ -2981,6 +3056,7 @@ local function SlashCommandHandler(msg)
         if (not debug) then return end
         selfDeathAlert(lastDmgSourceID)
         selfDeathAlertLastWords()
+        selfDeathAlertPvp()
     elseif command == "prune" then
         -- Clear all death records
         StaticPopup_Show("TOMBSTONES_PRUNE_CONFIRMATION")
@@ -3208,14 +3284,19 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           printDebug("Receiving HC:DeathLog last_words for " .. player_name_short .. ".")
           TdeathlogReceiveLastWords(player_name_short, msg)
       end
-  elseif channel_name == tombstones_channel and deathRecordsDB.rating then
+  elseif channel_name == tombstones_channel then
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
-      if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] then
+      if command == TS_COMM_COMMANDS["BROADCAST_PVP_DEATH"] then
+          if not isPlayerMessageAllowed(player_name_short) then return end
+          printDebug("Receiving TS:PvPDeathPing for " .. player_name_short .. ".")
+          TReceivePvpDeath(player_name_short, msg)
+      end
+      if command == TS_COMM_COMMANDS["BROADCAST_TALLY_REQUEST"] and deathRecordsDB.rating then
           if not isPlayerMessageAllowed(player_name_short) then return end
           printDebug("Receiving TS:RatingRequest for " .. player_name_short .. ".")
           TwhisperRatingForMarkerTo(msg, player_name_short)
       end
-      if command == TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] then
+      if command == TS_COMM_COMMANDS["BROADCAST_KARMA_PING"] and deathRecordsDB.rating then
           if not isPlayerMessageAllowed(player_name_short) then return end
           printDebug("Receiving TS:RatingPing from " .. player_name_short .. ".")
           
@@ -3451,6 +3532,7 @@ function Tombstones:PLAYER_DEAD()
     end
     selfDeathAlert(lastDmgSourceID)
     selfDeathAlertLastWords()
+    selfDeathAlertPvp()
 end
 
 function Tombstones:COMBAT_LOG_EVENT_UNFILTERED(...)
@@ -3458,7 +3540,12 @@ function Tombstones:COMBAT_LOG_EVENT_UNFILTERED(...)
 	if not (source_name == PLAYER_NAME) then
 		if not (source_name == nil) then
 			if string.find(ev, "DAMAGE") ~= nil then
-        lastDmgSourceID = npc_to_id[source_name]
+        if (UnitIsPlayer(source_name) and UnitIsEnemy("player", source_name)) then
+            lastDmgSourceID = -8 -- PVP
+            lastPvpSourceName = source_name
+        else
+            lastDmgSourceID = npc_to_id[source_name]
+        end
 			end
 		end
 	end
