@@ -792,24 +792,26 @@ local function CreatePhraseGenerationInterface()
   
     phraseFrame = CreateFrame("Frame", "EngravingsPhraseGenerator", UIParent)--, "UIPanelDialogTemplate")
     phraseFrame:SetSize(280, 390)
+    phraseFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+    phraseFrame:SetFrameLevel(5500)
+    phraseFrame:SetClampedToScreen(true)
     phraseFrame:SetPoint("CENTER")
-    phraseFrame:SetFrameStrata("HIGH")
     phraseFrame:SetMovable(true)
     phraseFrame:EnableMouse(true)
     phraseFrame:RegisterForDrag("LeftButton")
     phraseFrame:SetScript("OnDragStart", phraseFrame.StartMoving)
     phraseFrame:SetScript("OnDragStop", phraseFrame.StopMovingOrSizing)
     
-    local bgTexture = phraseFrame:CreateTexture(nil, "BACKGROUND")
-    bgTexture:SetAllPoints()
-    bgTexture:SetColorTexture(0, 0, 0, 0.75)
+    phraseFrame.t = phraseFrame:CreateTexture(nil, "BACKGROUND")
+    phraseFrame.t:SetAllPoints()
+    phraseFrame.t:SetColorTexture(0, 0, 0, 0.75)
     
-    local closeButton = CreateFrame("Button", "CloseButton", phraseFrame, "UIPanelCloseButton")
-    closeButton:SetPoint("TOPRIGHT", -8, -8)
+    phraseFrame.c = CreateFrame("Button", "CloseButton", phraseFrame, "UIPanelCloseButton")
+    phraseFrame.c:SetPoint("TOPRIGHT", 0, 0)
 
-    local title = phraseFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    title:SetPoint("TOP", 0, -15)
-    title:SetText("|cFFBF4500Make Engraving Phrase|r")
+    phraseFrame.title = phraseFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    phraseFrame.title:SetPoint("TOP", 0, -10)
+    phraseFrame.title:SetText("|cFFBF4500Make Engraving Phrase|r")
     
     local templateIndex = 0
     local categoryIndex = 0

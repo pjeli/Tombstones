@@ -1641,17 +1641,19 @@ local function GenerateTombstonesOptionsFrame()
 
     -- Create the main frame
     optionsFrame = CreateFrame("Frame", "TombstonesOptionsFrame", UIParent)
-    optionsFrame:SetFrameStrata("HIGH")
     optionsFrame:SetSize(360, 430)
+    optionsFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+    optionsFrame:SetFrameLevel(6000)
+    optionsFrame:SetClampedToScreen(true)
     optionsFrame:SetPoint("CENTER", 0, 80)
+    
+    optionsFrame.t = optionsFrame:CreateTexture(nil, "BACKGROUND")
+    optionsFrame.t:SetAllPoints()
+    optionsFrame.t:SetColorTexture(0, 0, 0, 0.75)
 
-    local titleText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    titleText:SetPoint("TOP", optionsFrame, "TOP", 0, -10)
-    titleText:SetText("|cff9d9d9dTombstones Options|r")
-
-    local bgTexture = optionsFrame:CreateTexture(nil, "BACKGROUND")
-    bgTexture:SetAllPoints()
-    bgTexture:SetColorTexture(0, 0, 0, 0.75)
+    optionsFrame.title = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionsFrame.title:SetPoint("TOP", optionsFrame, "TOP", 0, -10)
+    optionsFrame.title:SetText("|cff9d9d9dTombstones Options|r")
 
     local optionText1 = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     optionText1:SetPoint("TOP", optionsFrame, "TOPLEFT", 40, -40)
@@ -1736,8 +1738,8 @@ local function GenerateTombstonesOptionsFrame()
     toggle3:SetScript("OnClick", ToggleOnClick)
     toggle4:SetScript("OnClick", ToggleOnClick)
 
-    local closeButton = CreateFrame("Button", "CloseButton", optionsFrame, "UIPanelCloseButton")
-    closeButton:SetPoint("TOPRIGHT", -8, -8)
+    optionsFrame.c = CreateFrame("Button", "CloseButton", optionsFrame, "UIPanelCloseButton")
+    optionsFrame.c:SetPoint("TOPRIGHT", 0, 0)
 
     local filtersText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     filtersText:SetPoint("TOP", optionsFrame, "TOP", 0, -160)
