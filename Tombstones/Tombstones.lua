@@ -2071,7 +2071,7 @@ function TdeathlogReceiveChannelMessage(sender, data)
   local posX = tonumber(x)
   local posY = tonumber(y)
 
-  AddDeathMarker(mapID, decoded_player_data["instance_id"], posX, posY, tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]), decoded_player_data["guild"])
+  local success, marker = AddDeathMarker(mapID, decoded_player_data["instance_id"], posX, posY, tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]), decoded_player_data["guild"])
   
   local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
   local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
@@ -2095,6 +2095,22 @@ function TdeathlogReceiveChannelMessage(sender, data)
         icon:Refresh("Tombstones")
       end
   end)
+
+  if (success and not IsInInstance()) then
+      if _G["deathlogJoinChannel"] ~= nil then
+          -- Refuse reporting to channel if Hardcore add-on is present
+          return
+      end
+      C_Timer.After(7.0, function()
+          if (IsMarkerAllowedByFilters(marker)) then
+              local last_words = marker.last_words or ""
+              local _, santizedLastWords = extractBracketTextWithColor(last_words)
+              local encodedLastWords = encodeColorizedText(santizedLastWords)
+              local msg = "|cff9d9d9d|Hgarrmission:tombstones:"..marker.guild..":"..marker.timestamp..":"..marker.level..":"..marker.class_id..":"..marker.race_id..":"..marker.source_id..":"..marker.mapID..":"..marker.posX..":"..marker.posY..":\""..encodedLastWords.."\"|h["..marker.user.."'s Tombstone]|h|r"
+              DEFAULT_CHAT_FRAME:AddMessage(msg .. " has been added to your collection.")
+          end
+      end)
+  end
 end
 
 function TdecodeMessage(msg)
