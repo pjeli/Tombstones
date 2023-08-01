@@ -187,7 +187,7 @@ local lastDmgSourceID = nil
 local lastPvpSourceName = nil
 local TOMB_FILTERS = {
   ["HAS_LAST_WORDS"] = false,
-  ["HAS_KNOWN_DEATH"] = true,
+  ["HAS_KNOWN_DEATH"] = 1,
   ["CLASS_ID"] = nil,
   ["RACE_ID"] = nil,
   ["FACTION_ID"] = PLAYER_FACTION,
@@ -498,8 +498,8 @@ local function LoadDeathRecords()
         if (TOMB_FILTERS["CLASS_ID"] ~= nil) then
             TOMB_FILTERS["CLASS_ID"] = PLAYER_CLASS
         end
-        if (TOMB_FILTERS["HAS_KNOWN_DEATH"] == nil) then
-            TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
+        if (TOMB_FILTERS["HAS_KNOWN_DEATH"] == nil or TOMB_FILTERS["HAS_KNOWN_DEATH"] == true) then
+            TOMB_FILTERS["HAS_KNOWN_DEATH"] = 1
         end
         if (TOMB_FILTERS["GUILD"] == nil) then
             TOMB_FILTERS["GUILD"] = 0
@@ -646,8 +646,9 @@ local function IsMarkerAllowedByFilters(marker)
         if (marker.last_words == nil) then allow = false end
         -- Smart filter is now the default...
     end
-    if (allow == true and filter_has_death == true) then
+    if (allow == true and filter_has_death >= 1) then
         if (marker.source_id == nil or marker.source_id == -1) then allow = false end
+        if (allow and filter_has_death == 2 and marker.source_id == -8) then allow = false end
     end
     if (allow == true and filter_rating == true) then
         if (marker.karma ~= nil and marker.karma < 0) then allow = false end
@@ -1760,10 +1761,26 @@ local function GenerateTombstonesOptionsFrame()
     
     local knownDeathOption = CreateFrame("CheckButton", "HasKnownDeath", optionsFrame, "OptionsCheckButtonTemplate")
     knownDeathOption:SetPoint("TOPLEFT", 20, -230)
-    knownDeathOption:SetChecked(TOMB_FILTERS["HAS_KNOWN_DEATH"])
+    knownDeathOption:SetChecked(TOMB_FILTERS["HAS_KNOWN_DEATH"] >= 1)
     local knownDeathOptionText = knownDeathOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     knownDeathOptionText:SetPoint("LEFT", knownDeathOption, "RIGHT", 5, 0)
     knownDeathOptionText:SetText("Have known means of death.")
+    
+    local ignorePvpOption = CreateFrame("CheckButton", "IgnorePvp", optionsFrame, "OptionsCheckButtonTemplate")
+    ignorePvpOption:SetPoint("LEFT", knownDeathOptionText, "RIGHT", 5, 0)
+    if (TOMB_FILTERS["HAS_KNOWN_DEATH"] == 2) then
+        ignorePvpOption:Enable()
+        ignorePvpOption:SetChecked(true)
+    elseif(TOMB_FILTERS["HAS_KNOWN_DEATH"] == 1) then
+        ignorePvpOption:Enable()
+        ignorePvpOption:SetChecked(false)
+    else
+        ignorePvpOption:Disable()
+        ignorePvpOption:SetChecked(false)
+    end
+    local ignorePvpOptionText = ignorePvpOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ignorePvpOptionText:SetPoint("LEFT", ignorePvpOption, "RIGHT", 5, 0)
+    ignorePvpOptionText:SetText("Ignore PvP.")
     
     local guildOption = CreateFrame("CheckButton", "Guild", optionsFrame, "OptionsCheckButtonTemplate")
     guildOption:SetPoint("TOPLEFT", 20, -250)
@@ -1897,12 +1914,22 @@ local function GenerateTombstonesOptionsFrame()
             TOMB_FILTERS["GUILD"] = 0
         end
         
+        if knownDeathOption:GetChecked() then
+            ignorePvpOption:Enable()
+        else
+            ignorePvpOption:Disable()
+            ignorePvpOption:SetChecked(false) -- Reset the dependent checkbox when main checkbox is unchecked
+            TOMB_FILTERS["HAS_KNOWN_DEATH"] = 0
+        end
+        
         if isChecked then
             -- Perform actions for selected state
             if (toggleName == "HasLastWords") then
                 TOMB_FILTERS["HAS_LAST_WORDS"] = true
             elseif (toggleName == "HasKnownDeath") then
-                TOMB_FILTERS["HAS_KNOWN_DEATH"] = true
+                TOMB_FILTERS["HAS_KNOWN_DEATH"] = 1
+            elseif (toggleName == "IgnorePvp") then
+                TOMB_FILTERS["HAS_KNOWN_DEATH"] = 2
             elseif (toggleName == "Realms") then
                 TOMB_FILTERS["REALMS"] = true
             elseif (toggleName == "Class") then
@@ -1921,7 +1948,9 @@ local function GenerateTombstonesOptionsFrame()
             if (toggleName == "HasLastWords") then
                 TOMB_FILTERS["HAS_LAST_WORDS"] = false
             elseif (toggleName == "HasKnownDeath") then
-                TOMB_FILTERS["HAS_KNOWN_DEATH"] = false
+                TOMB_FILTERS["HAS_KNOWN_DEATH"] = 0
+            elseif (toggleName == "IgnorePvp") then
+                TOMB_FILTERS["HAS_KNOWN_DEATH"] = 1
             elseif (toggleName == "Realms") then
                 TOMB_FILTERS["REALMS"] = false
             elseif (toggleName == "Class") then
@@ -1942,6 +1971,7 @@ local function GenerateTombstonesOptionsFrame()
 
     lastWordsOption:SetScript("OnClick", ToggleFilter)
     knownDeathOption:SetScript("OnClick", ToggleFilter)
+    ignorePvpOption:SetScript("OnClick", ToggleFilter)
     classOption:SetScript("OnClick", ToggleFilter)
     guildOption:SetScript("OnClick", ToggleFilter)
     guild2Option:SetScript("OnClick", ToggleFilter)
