@@ -1295,6 +1295,7 @@ local function MakeInterfacePage()
       mmToggle:SetScript("OnClick", ToggleOnClick)
       dangerFrameLockToggle:SetScript("OnClick", ToggleOnClick)
       classIconsToggle:SetScript("OnClick", ToggleOnClick)
+      broadcastPvpToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
@@ -2775,11 +2776,6 @@ end
 local function selfDeathAlertPvp()
   if (not deathRecordsDB.broadcastPvpDeath) then return end
 	if (lastDmgSourceID ~= -8 or lastPvpSourceName == nil) then return end
-	local _, _, race_id = UnitRace("player")
-	local _, _, class_id = UnitClass("player")
-	local guildName, guildRankName, guildRankIndex = GetGuildInfo("player");
-
-	local player_data = TPlayerData(UnitName("player"), guildName, nil, nil, nil, UnitLevel("player"), nil, nil, nil, nil, nil)
 	local msg = lastPvpSourceName .. COMM_FIELD_DELIM
 
   table.insert(tombstones_pvp_death_queue, TS_COMM_COMMANDS["BROADCAST_PVP_DEATH"] .. COMM_COMMAND_DELIM .. msg)
@@ -3538,11 +3534,12 @@ function Tombstones:PLAYER_DEAD()
 end
 
 function Tombstones:COMBAT_LOG_EVENT_UNFILTERED(...)
-	local _, ev, _, _, source_name, _, _, target_guid, _, _, _, environmental_type, _, _, _, _, _ = CombatLogGetCurrentEventInfo()
+	local _, ev, _, source_guid, source_name, _, _, target_guid, _, _, _, environmental_type, _, _, _, _, _ = CombatLogGetCurrentEventInfo()
 	if not (source_name == PLAYER_NAME) then
 		if not (source_name == nil) then
-			if string.find(ev, "DAMAGE") ~= nil then
-        if (UnitIsPlayer(source_name) and UnitIsEnemy("player", source_name)) then
+			if (string.find(ev, "DAMAGE") ~= nil and target_guid == UnitGUID("player")) then
+        local sourceIsPlayer = startsWith(source_guid, "Player-") 
+        if (sourceIsPlayer) then
             lastDmgSourceID = -8 -- PVP
             lastPvpSourceName = source_name
         else
