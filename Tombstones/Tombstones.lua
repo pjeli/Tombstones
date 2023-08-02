@@ -878,15 +878,6 @@ local function UpdateWorldMapMarkers()
                         checkmarkTexture:SetPoint("CENTER", markerMapButton, "CENTER", 0, 0)
                     end
 
-                    if (marker.last_words ~= nil and markerMapButton.borderTexture == nil) then
-                        local borderTexture = markerMapButton:CreateTexture(nil, "OVERLAY")
-                        markerMapButton.borderTexture = borderTexture
-                        borderTexture:SetAllPoints(markerMapButton)
-                        borderTexture:SetTexture("Interface\\Cooldown\\ping4")
-                        borderTexture:SetBlendMode("ADD")
-                        borderTexture:SetVertexColor(1, 1, 0, 0.7)
-                    end
-
                     local markerUsername = marker.user
                     if (not filter_realms and marker.realm ~= REALM) then
                         markerUsername = marker.user .. "-" .. marker.realm
