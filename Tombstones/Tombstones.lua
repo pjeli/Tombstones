@@ -450,6 +450,7 @@ local function LoadDeathRecords()
         deathRecordsDB.rating = true
         deathRecordsDB.useClassIcons = false
         deathRecordsDB.broadcastPvpDeath = true
+        deathRecordsDB.filteredTombsChat = true
     end
     if (deathRecordsDB.showMarkers == nil) then
         deathRecordsDB.showMarkers = true
@@ -483,6 +484,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.broadcastPvpDeath == nil) then
         deathRecordsDB.broadcastPvpDeath = true
+    end
+    if (deathRecordsDB.filteredTombsChat == nil) then
+        deathRecordsDB.filteredTombsChat = true
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
@@ -1246,6 +1250,13 @@ local function MakeInterfacePage()
       broadcastPvpToggleText:SetPoint("LEFT", broadcastPvpToggle, "RIGHT", 5, 0)
       broadcastPvpToggleText:SetText("Broadcast killer on death by World PvP")
       
+      local filtedTombsInChatToggle = CreateFrame("CheckButton", "FiltedTombsInChat", interPanel, "OptionsCheckButtonTemplate")
+      filtedTombsInChatToggle:SetPoint("TOPLEFT", 10, -120)
+      filtedTombsInChatToggle:SetChecked(deathRecordsDB.filteredTombsChat)
+      local filtedTombsInChatToggleText = filtedTombsInChatToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      filtedTombsInChatToggleText:SetPoint("LEFT", filtedTombsInChatToggle, "RIGHT", 5, 0)
+      filtedTombsInChatToggleText:SetText("Show new filtered Tombstones in Default Chat")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
@@ -1267,6 +1278,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.useClassIcons = true
               elseif (toggleName == "BroadcastPvpDeath") then
                   deathRecordsDB.broadcastPvpDeath = true
+              elseif (toggleName == "FiltedTombsInChat") then
+                  deathRecordsDB.filteredTombsChat = true
               end
           else
               -- Perform actions for unselected state
@@ -1281,6 +1294,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.useClassIcons = false
               elseif (toggleName == "BroadcastPvpDeath") then
                   deathRecordsDB.broadcastPvpDeath = false
+              elseif (toggleName == "FiltedTombsInChat") then
+                  deathRecordsDB.filteredTombsChat = false
               end
           end
       end
@@ -1288,6 +1303,7 @@ local function MakeInterfacePage()
       dangerFrameLockToggle:SetScript("OnClick", ToggleOnClick)
       classIconsToggle:SetScript("OnClick", ToggleOnClick)
       broadcastPvpToggle:SetScript("OnClick", ToggleOnClick)
+      filtedTombsInChatToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
@@ -2087,11 +2103,7 @@ function TdeathlogReceiveChannelMessage(sender, data)
       end
   end)
 
-  if (success and not IsInInstance()) then
-      if _G["deathlogJoinChannel"] ~= nil then
-          -- Refuse reporting to channel if Hardcore add-on is present
-          return
-      end
+  if (success and not IsInInstance() and deathRecordsDB.filteredTombsChat) then
       C_Timer.After(7.0, function()
           if (IsMarkerAllowedByFilters(marker)) then
               local last_words = marker.last_words or ""
