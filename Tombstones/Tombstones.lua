@@ -706,13 +706,13 @@ local function IsNewRecordDuplicate(newRecord)
     return isDuplicate
 end
 
-local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words, guild)
+local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words, guild, pvpKiller)
     if (mapID == nil and instID == nil) then
         -- No location info. Useless.
        return false, nil
     end
 
-    local marker = { realm = realm, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words, guild = guild }
+    local marker = { realm = realm, mapID = mapID, instID = instID, posX = posX, posY = posY, timestamp = timestamp, user = user , level = level, last_words = last_words, source_id = source_id, class_id = class_id, race_id = race_id, last_words = last_words, guild = guild , pvpKiller = pvpKiller }
 
     local isDuplicate = IsNewRecordDuplicate(marker)
     if (not isDuplicate) then 
@@ -728,7 +728,7 @@ end
 
 -- Add death marker function
 local function AddDeathMarker(mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, guild)
-    return ImportDeathMarker(REALM, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, nil, guild)
+    return ImportDeathMarker(REALM, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, nil, guild, nil)
 end
 
 -- Function to create a frame to display serialized data
@@ -2348,7 +2348,7 @@ local function CreateDataImportFrame()
             level = tonumber(level) == 0 and nil or level
             last_words = #last_words > 2 and fetchQuotedPart(last_words) or nil
             guild = #guild > 2 and fetchQuotedPart(guild) or nil
-            local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words, guild)
+            local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, tonumber(level), tonumber(sourceID), tonumber(classID), tonumber(raceID), last_words, guild, nil)
             singleRecord = marker
             numImportRecords = numImportRecords + 1
             if (success) then
@@ -2372,7 +2372,7 @@ local function CreateDataImportFrame()
                 singleRecord = importedDeathRecords[1]
             end
             for _, marker in ipairs(importedDeathRecords) do
-                local success, _ = ImportDeathMarker(marker.realm, marker.mapID, marker.instID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words)
+                local success, _ = ImportDeathMarker(marker.realm, marker.mapID, marker.instID, marker.posX, marker.posY, marker.timestamp, marker.user, marker.level, marker.source_id, marker.class_id, marker.race_id, marker.last_words, marker.guild, marker.pvpKiller)
                 if success then numNewRecords = numNewRecords + 1 end
             end
             ClearDeathMarkers(false) 
@@ -2766,7 +2766,7 @@ local function StressGen(numberOfMarkers)
         local level = math.random(1, 60)
         local race_id = math.random(1, 8)
         local last_words = SillySentence()
-        ImportDeathMarker(REALM, map_id, nil, posX, posY, timestamp, user, level, nil, class_id, race_id, last_words)
+        ImportDeathMarker(REALM, map_id, nil, posX, posY, timestamp, user, level, nil, class_id, race_id, last_words, nil, nil)
     end
 end
 
@@ -2983,7 +2983,7 @@ hooksecurefunc("SetItemRef", function(link, text)
             if(IsControlKeyDown()) then
                 local player_name_short, realm = string.split("-", characterName) 
                 decoded_last_words = #last_words > 2 and decoded_last_words or nil
-                local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, level, sourceID, classID, raceID, fetchQuotedPart(decoded_last_words), guild)
+                local success, marker = ImportDeathMarker(realm or REALM, tonumber(mapID), nil, tonumber(posX), tonumber(posY), tonumber(timestamp), player_name_short, level, sourceID, classID, raceID, fetchQuotedPart(decoded_last_words), guild, nil)
                 local numImportRecords = 1
                 local numNewRecords = 0
                 if (success) then
