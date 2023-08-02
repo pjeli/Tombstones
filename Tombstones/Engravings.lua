@@ -1460,6 +1460,150 @@ local function UnvisitAllEngravings()
     end
 end
 
+local function CreateDataImportFrame()
+    local frame = CreateFrame("Frame", "EngravingsImportFrame", UIParent)
+    frame:SetSize(400, 300)
+    frame:SetPoint("CENTER", 0, 200)
+    frame:SetFrameStrata("HIGH")
+
+    -- Create the background texture
+    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.8) -- Set the RGB values and alpha
+
+    local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleText:SetPoint("TOP", frame, "TOP", 0, -10)
+    titleText:SetText("Engravings Data Import")
+
+    -- Create a scroll frame
+    local scrollFrame = CreateFrame("ScrollFrame", "EngravingsImportScrollFrameEditBox", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 8, -30)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 40)
+
+    local editBox = CreateFrame("EditBox", "EngravingsImportFrameEditBox", scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:SetEnabled(true)
+    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetWidth(scrollFrame:GetWidth() - 20)
+    editBox:SetHeight(scrollFrame:GetHeight() - 20)
+    editBox:SetText("Paste import string here...")
+    editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    editBox:SetScript("OnEditFocusGained", function(self) self:SetText("") end) -- Clear the default text when the EditBox receives focus
+
+    -- Set the scroll frame's content
+    scrollFrame:SetScrollChild(editBox)
+
+    -- Add a close button
+    local closeButton = CreateFrame("Button", "SerializedDisplayFrameCloseButton", frame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    closeButton:SetScript("OnClick", function()
+        frame:Hide()
+        frame = nil
+    end)
+
+    local importButton = CreateFrame("Button", "EngravingsImportButton", frame, "UIPanelButtonTemplate")
+    importButton:SetSize(80, 22)
+    importButton:SetPoint("BOTTOM", 0, 10)
+    importButton:SetText("Import")
+    importButton:SetScript("OnClick", function()
+        local encodedData = editBox:GetText()
+        local numImportRecords = 0
+        local numNewRecords = 0
+        local singleRecord = nil
+        
+        printDebug("Input data size is: " .. tostring(string.len(encodedData)))
+        local decodedData = ld:DecodeForPrint(encodedData)
+        printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
+        local decompressedData = ld:DecompressDeflate(decodedData)
+        printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
+        local success, importedEngravingRecords = ls:Deserialize(decompressedData)
+        -- Example: Print the received data to the chat frame
+        printDebug("Deserialization sucess: " .. tostring(success))
+        numImportRecords = #importedEngravingRecords
+        printDebug("Imported records size is: " .. tostring(numImportRecords))
+        for _, engraving in ipairs(importedEngravingRecords) do
+            local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index), tonumber(engraving.timestamp))
+            if success then numNewRecords = numNewRecords + 1 end
+        end
+        print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+
+        frame:Hide()
+        frame = nil
+    end)
+
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
+    frame:Show()
+end
+
+-- Function to create a frame to display serialized data
+local function CreateDataDisplayFrame(data)
+    local frame = CreateFrame("Frame", "SerializedDisplayFrame", UIParent)
+    frame:SetSize(400, 300)
+    frame:SetPoint("CENTER", 0, 200)
+    frame:SetFrameStrata("HIGH")
+
+    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetAllPoints()
+    bgTexture:SetColorTexture(0, 0, 0, 0.8)
+
+    local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleText:SetPoint("TOP", frame, "TOP", 0, -10)
+    titleText:SetText("Engravings Data Export")
+
+    local scrollFrame = CreateFrame("ScrollFrame", "SerializedDisplayFrameScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 8, -30)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 8)
+
+    local textArea = CreateFrame("EditBox", "SerializedDisplayFrameText", scrollFrame)
+    textArea:SetMultiLine(true)
+    textArea:SetMaxLetters(0)
+    textArea:SetAutoFocus(false)
+    textArea:SetFontObject("ChatFontNormal")
+    textArea:SetWidth(scrollFrame:GetWidth() - 20)
+    textArea:SetHeight(scrollFrame:GetHeight() - 20)
+    textArea:SetText(data)
+    textArea:HighlightText()
+    textArea:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    local function OnCursorChanged(self)
+        self:SetCursorPosition(0)
+        self:HighlightText()
+    end
+    textArea:SetScript("OnCursorChanged", OnCursorChanged)
+
+    local function OnTextChanged(self)
+        self:SetCursorPosition(0)
+        self:SetText(data)
+        self:HighlightText()
+    end
+    textArea:SetScript("OnTextChanged", OnTextChanged)
+
+    local closeButton = CreateFrame("Button", "SerializedDisplayFrameCloseButton", frame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    closeButton:SetScript("OnClick", function()
+        frame:Hide()
+        frame = nil
+    end)
+
+    scrollFrame:SetScrollChild(textArea)
+
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
+    frame:Show()
+end
+
 local function TombstonesJoinChannel()
 
     local channel_num = GetChannelName(tombstones_channel)
@@ -1608,6 +1752,16 @@ local function SlashCommandHandler(msg)
     elseif command == "debug" then
         debug = not debug
         print("Engravings debug mode is: ".. tostring(debug))
+    elseif command == "export" then
+        local serializedData = ls:Serialize(engravingsDB.engravingRecords)
+        printDebug("Serialized data size is: " .. tostring(string.len(serializedData)))
+        local compressedData = ld:CompressDeflate(serializedData)
+        printDebug("Compressed data size is: " .. tostring(string.len(compressedData)))
+        local encodedData = ld:EncodeForPrint(compressedData)
+        printDebug("Encoded data size is: " .. tostring(string.len(encodedData)))
+        CreateDataDisplayFrame(encodedData)
+    elseif command == "import" then
+        CreateDataImportFrame()
     elseif command == "clear" then
         -- Clear all death records
         StaticPopup_Show("ENGRAVINGS_CLEAR_CONFIRMATION")
