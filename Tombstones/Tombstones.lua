@@ -3573,7 +3573,7 @@ function Tombstones:ZONE_CHANGED_NEW_AREA()
 end
 
 function Tombstones:PLAYER_DEAD()
-    if _G["deathlogJoinChannel"] ~= nil then
+    if (_G["deathlogJoinChannel"] ~= nil or IsInInstance()) then
         -- Refuse self report if Hardcore add-on is present
         return
     end
