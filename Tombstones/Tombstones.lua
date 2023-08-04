@@ -1186,12 +1186,14 @@ local function MakeWorldMapButton()
             mapButton:SetNormalTexture("Interface\\Icons\\Ability_fiegndead") -- Set the new icon texture
             GameTooltip:SetText("Hide Tombstones")
             deathRecordsDB.showMarkers = true
+            if (optionsFrame) then optionsFrame.toggle2:SetChecked(true) end
             renderingScheduled = true
             UpdateWorldMapMarkers()
         else
             mapButton:SetNormalTexture("Interface\\Icons\\INV_Misc_Map_01") -- Set the default icon texture
             GameTooltip:SetText("Show Tombstones")
             deathRecordsDB.showMarkers = false
+            if (optionsFrame) then optionsFrame.toggle2:SetChecked(false) end
             renderingScheduled = false
             ClearDeathMarkers(false)
         end
@@ -1678,6 +1680,7 @@ local function GenerateTombstonesOptionsFrame()
     toggle1Text:SetText("To visit the dead.")
 
     local toggle2 = CreateFrame("CheckButton", "MapRender", optionsFrame, "OptionsCheckButtonTemplate")
+    optionsFrame.toggle2 = toggle2
     toggle2:SetPoint("TOPLEFT", 20, -80)
     toggle2:SetChecked(deathRecordsDB.showMarkers)
     local toggle2Text = toggle2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1710,6 +1713,7 @@ local function GenerateTombstonesOptionsFrame()
                 deathRecordsDB.visiting = true
             elseif (toggleName == "MapRender") then
                 deathRecordsDB.showMarkers = true
+                renderingScheduled = true
                 UpdateWorldMapMarkers()
                 MakeWorldMapButton()
             elseif (toggleName == "ZoneInfo") then
@@ -1728,6 +1732,7 @@ local function GenerateTombstonesOptionsFrame()
                 lastClosestMarker = nil
             elseif (toggleName == "MapRender") then
                 deathRecordsDB.showMarkers = false
+                renderingScheduled = false
                 ClearDeathMarkers(false)
                 MakeWorldMapButton()
             elseif (toggleName == "ZoneInfo") then
