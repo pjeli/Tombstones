@@ -1093,6 +1093,7 @@ local function MakeInterfacePage()
                   engravingsDB.offerSync = false
                   offerSyncToggle:SetChecked(false)
                   offerSyncToggle:Disable()
+                  hbdp:RemoveAllMinimapIcons("EngravingsMM")
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = false
               elseif (toggleName == "AnnouncePlacement") then
