@@ -604,8 +604,7 @@ local function IsNewRecordDuplicate(newRecord)
             existingRecord.conj_templ_index == newRecord.conj_templ_index and 
             existingRecord.conj_cat_index == newRecord.conj_cat_index and
             existingRecord.conj_word_index == newRecord.conj_word_index then
-            -- Ignore last words. 
-            -- If last words arrive they will update our existing record instead of making a new record.
+            -- Ignore timestamp
             isDuplicate = true
             break
         end
@@ -994,7 +993,7 @@ local function CreatePhraseGenerationInterface()
         posY = string.format("%.4f", posY)
         
         if (engravingsDB.announcePlacement) then 
-            local engravingLink = "!E[\""..PLAYER_NAME.."\" "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
+            local engravingLink = "!E[\""..PLAYER_NAME.."\" "..time().." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex .." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex .." "..mapID.." "..posX.." "..posY.."]"
             local say_msg = "I have left an engraving here: "..engravingLink
             CTL:SendChatMessage("BULK", EN_COMM_NAME, say_msg, "SAY", nil)
         end
@@ -1195,8 +1194,8 @@ local function ReadOutNearestEngraving(engraving)
     engravingFound.fade:Play()
 
     -- engraving = { realm , mapID, posX , posY, timestamp, user , templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index }
-    local engravingLink = "!E[\""..user.."\" "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
-    local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..user.."'s Engraving]|h|r"
+    local engravingLink = "!E[\""..user.."\" "..engraving.timestamp.." "..engraving.templ_index.." "..engraving.cat_index.." "..engraving.word_index.." "..engraving.conj_index.." "..engraving.conj_templ_index.." "..engraving.conj_cat_index.." "..engraving.conj_word_index.." "..engraving.mapID.." "..engraving.posX.." "..engraving.posY.."]"
+    local engravingHyperLink = "|cFFBF4500|Hgarrmission:engravings:"..engraving.templ_index..":"..engraving.cat_index..":"..engraving.word_index..":"..engraving.conj_index..":"..engraving.conj_templ_index..":"..engraving.conj_cat_index..":"..engraving.conj_word_index..":"..engraving.timestamp..":"..engraving.mapID..":"..engraving.posX..":"..engraving.posY.."|h["..user.."'s Engraving]|h|r"
     --local say_msg = "You found an engraving on the ground: "..engravingHyperLink
 
     --SendChatMessage(say_msg, "SAY")
@@ -1232,10 +1231,10 @@ local function engravingsFilterFunc(_, event, msg, player, l, cs, t, flag, chann
   local remaining = msg;
   local done;
   repeat
-    local start, finish, characterName, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY = remaining:find("!E%[\"%s*([^%]\"]*)\" (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) ([%d%.]+) ([%d%.]+)%]")
+    local start, finish, characterName, timestamp, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY = remaining:find("!E%[\"%s*([^%]\"]*)\" (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) ([%d%.]+) ([%d%.]+)%]")
     if(characterName) then
       newMsg = newMsg..remaining:sub(1, start-1);
-      newMsg = newMsg.."|cFFBF4500|Hgarrmission:engravings:"..templateIndex..":"..categoryIndex..":"..wordIndex..":"..conjunctionIndex..":"..conjTemplateIndex..":"..conjCategoryIndex..":"..conjWordIndex..":"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Engraving]|h|r";
+      newMsg = newMsg.."|cFFBF4500|Hgarrmission:engravings:"..templateIndex..":"..categoryIndex..":"..wordIndex..":"..conjunctionIndex..":"..conjTemplateIndex..":"..conjCategoryIndex..":"..conjWordIndex..":"..timestamp..":"..mapID..":"..posX..":"..posY.."|h["..characterName.."'s Engraving]|h|r";
       remaining = remaining:sub(finish + 1);
     else
       done = true;
@@ -1262,7 +1261,7 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", engravingsFilterFunc)
 
 hooksecurefunc("SetItemRef", function(link, text)
     if(startsWith(link, "garrmission:engravings")) then    
-        local start, finish, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY, characterName = text:find("|cFFBF4500|Hgarrmission:engravings:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):([%d%.]+):([%d%.]+)|h%[(.*)'s Engraving%]|h|r");
+        local start, finish, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, timestamp, mapID, posX, posY, characterName = text:find("|cFFBF4500|Hgarrmission:engravings:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):([%d%.]+):([%d%.]+)|h%[(.*)'s Engraving%]|h|r");
         templateIndex = tonumber(templateIndex) > 0 and tonumber(templateIndex) or 0
         categoryIndex = tonumber(categoryIndex) > 0 and tonumber(categoryIndex) or 0
         wordIndex = tonumber(wordIndex) > 0 and tonumber(wordIndex) or 0
@@ -1270,6 +1269,7 @@ hooksecurefunc("SetItemRef", function(link, text)
         conjTemplateIndex = tonumber(conjTemplateIndex) > 0 and tonumber(conjTemplateIndex) or 0
         conjCategoryIndex = tonumber(conjCategoryIndex) > 0 and tonumber(conjCategoryIndex) or 0
         conjWordIndex = tonumber(conjWordIndex) > 0 and tonumber(conjWordIndex) or 0
+        timestamp = tonumber(timestamp) == 0 and nil or tonumber(timestamp)
         mapID = tonumber(mapID) == 0 and nil or tonumber(mapID)
         posX = tonumber(posX) == 0 and nil or tonumber(posX)
         posY = tonumber(posY) == 0 and nil or tonumber(posY)
@@ -1277,12 +1277,13 @@ hooksecurefunc("SetItemRef", function(link, text)
         if(IsShiftKeyDown()) then
             local editbox = GetCurrentKeyBoardFocus();
             if(editbox) then
-                editbox:Insert("!E[\""..characterName.."\" "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex.." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex.." "..mapID.." "..posX.." "..posY.."]");
+                editbox:Insert("!E[\""..characterName.."\" "..timestamp.." "..templateIndex.." "..categoryIndex.." "..wordIndex.." "..conjunctionIndex.." "..conjTemplateIndex.." "..conjCategoryIndex.." "..conjWordIndex.." "..mapID.." "..posX.." "..posY.."]");
             end
         else
             if(IsControlKeyDown()) then
                 local player_name_short, realm = string.split("-", characterName)
-                local success, engraving = ImportEngravingMarker(realm, player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, time())
+                realm = realm ~= nil and realm or REALM
+                local success, engraving = ImportEngravingMarker(realm, player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, timestamp)
                 local numImportRecords = 1
                 local numNewRecords = 0
                 if (success) then
@@ -1510,24 +1511,32 @@ local function CreateDataImportFrame()
         local encodedData = editBox:GetText()
         local numImportRecords = 0
         local numNewRecords = 0
-        local singleRecord = nil
-        
-        printDebug("Input data size is: " .. tostring(string.len(encodedData)))
-        local decodedData = ld:DecodeForPrint(encodedData)
-        printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
-        local decompressedData = ld:DecompressDeflate(decodedData)
-        printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
-        local success, importedEngravingRecords = ls:Deserialize(decompressedData)
-        -- Example: Print the received data to the chat frame
-        printDebug("Deserialization sucess: " .. tostring(success))
-        numImportRecords = #importedEngravingRecords
-        printDebug("Imported records size is: " .. tostring(numImportRecords))
-        for _, engraving in ipairs(importedEngravingRecords) do
-            local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index), tonumber(engraving.timestamp))
-            if success then numNewRecords = numNewRecords + 1 end
+        if (startsWith(encodedData, "!E[")) then
+            local start, finish, characterName, timestamp, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, mapID, posX, posY = encodedData:find("!E%[\"%s*([^%]\"]*)\" (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) (%d+) ([%d%.]+) ([%d%.]+)%]")
+            local player_name_short, realm = string.split("-", characterName)
+            local success, engraving = ImportEngravingMarker(realm, player_name_short, mapID, posX, posY, templateIndex, categoryIndex, wordIndex, conjunctionIndex, conjTemplateIndex, conjCategoryIndex, conjWordIndex, timestamp)
+            numImportRecords = numImportRecords + 1
+            if (success) then
+                numNewRecords = numNewRecords + 1
+            end
+            print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+        else  
+            printDebug("Input data size is: " .. tostring(string.len(encodedData)))
+            local decodedData = ld:DecodeForPrint(encodedData)
+            printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
+            local decompressedData = ld:DecompressDeflate(decodedData)
+            printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
+            local success, importedEngravingRecords = ls:Deserialize(decompressedData)
+            -- Example: Print the received data to the chat frame
+            printDebug("Deserialization sucess: " .. tostring(success))
+            numImportRecords = #importedEngravingRecords
+            printDebug("Imported records size is: " .. tostring(numImportRecords))
+            for _, engraving in ipairs(importedEngravingRecords) do
+                local success, _ = ImportEngravingMarker(engraving.realm,  engraving.user, tonumber(engraving.mapID), tonumber(engraving.posX), tonumber(engraving.posY), tonumber(engraving.templ_index), tonumber(engraving.cat_index), tonumber(engraving.word_index), tonumber(engraving.conj_index), tonumber(engraving.conj_templ_index), tonumber(engraving.conj_cat_index), tonumber(engraving.conj_word_index), tonumber(engraving.timestamp))
+                if success then numNewRecords = numNewRecords + 1 end
+            end
+            print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
         end
-        print("Engravings imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
-
         frame:Hide()
         frame = nil
     end)
