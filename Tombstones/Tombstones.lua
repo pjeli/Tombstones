@@ -1376,6 +1376,45 @@ local function CreateZoneDangerFrame()
     zoneDangerFrame.text = zoneDangerText -- Assign the text object to the frame to keep a reference
 end
 
+-- Event handler for PLAYER_TARGET_CHANGED event
+local function UnitTargetChange()
+    local target = "target"
+    if (not UnitExists("target") and targetDangerFrame ~= nil) then
+        targetDangerFrame:Hide()
+    end
+    local targetName = UnitName(target)
+    local source_id = npc_to_id[targetName]
+    local friendly = UnitIsFriend("player", target)
+
+    local playerLevel = UnitLevel("player")
+    local targetLevel = UnitLevel("target")
+
+    -- Check if the target is an enemy NPC
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
+        local sourceDeathCount = deadlyNPCs[source_id] or 0
+        local currentMapID = C_Map.GetBestMapForUnit("player")
+        local deathMarkersTotal = deadlyZones[currentMapID] or 0
+        local dangerPercentage = 0.0
+        if (deathMarkersTotal > 0) then
+            dangerPercentage = math.min((sourceDeathCount / deathMarkersTotal) * 100.0, 100.0)
+        end
+
+        if (targetDangerFrame == nil) then
+            CreateTargetDangerFrame()
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        else
+            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
+        end
+
+        targetDangerFrame:Show()
+    else
+        if (targetDangerFrame ~= nil) then
+            targetDangerText:SetText("")
+            targetDangerFrame:Hide()
+        end
+    end
+end
+
 local function GenerateMinimapIcon(marker)
     local iconFrame = CreateFrame("Frame", "NearestTombstoneMM", Minimap)
     iconFrame:SetSize(12, 12)
@@ -3418,49 +3457,10 @@ end
 
 function Tombstones:PLAYER_STARTED_MOVING()
   isPlayerMoving = true
-  if not movementTimer and deathRecordsDB.visiting then
+  if not movementTimer and (deathRecordsDB.visiting or deathRecordsDB.showDanger) then
     movementTimer = C_Timer.NewTicker(movementUpdateInterval, OnUpdateMovementHandler)
   end
   -- Movement monitoring started
-end
-
--- Event handler for PLAYER_TARGET_CHANGED event
-local function UnitTargetChange()
-    local target = "target"
-    if (not UnitExists("target") and targetDangerFrame ~= nil) then
-        targetDangerFrame:Hide()
-    end
-    local targetName = UnitName(target)
-    local source_id = npc_to_id[targetName]
-    local friendly = UnitIsFriend("player", target)
-
-    local playerLevel = UnitLevel("player")
-    local targetLevel = UnitLevel("target")
-
-    -- Check if the target is an enemy NPC
-    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
-        local sourceDeathCount = deadlyNPCs[source_id] or 0
-        local currentMapID = C_Map.GetBestMapForUnit("player")
-        local deathMarkersTotal = deadlyZones[currentMapID] or 0
-        local dangerPercentage = 0.0
-        if (deathMarkersTotal > 0) then
-            dangerPercentage = math.min((sourceDeathCount / deathMarkersTotal) * 100.0, 100.0)
-        end
-
-        if (targetDangerFrame == nil) then
-            CreateTargetDangerFrame()
-            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
-        else
-            targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
-        end
-
-        targetDangerFrame:Show()
-    else
-        if (targetDangerFrame ~= nil) then
-            targetDangerText:SetText("")
-            targetDangerFrame:Hide()
-        end
-    end
 end
 
 function Tombstones:PLAYER_TARGET_CHANGED()
