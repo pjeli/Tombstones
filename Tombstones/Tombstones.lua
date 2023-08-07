@@ -401,6 +401,7 @@ end
 
 local function TombstonesJoinChannel()
     C_ChatInfo.RegisterAddonMessagePrefix(TS_COMM_NAME)
+    
     local channel_num = GetChannelName(tombstones_channel)
     if channel_num == 0 then
         JoinChannelByName(tombstones_channel, tombstones_channel_pw)
@@ -1390,7 +1391,7 @@ local function UnitTargetChange()
     local targetLevel = UnitLevel("target")
 
     -- Check if the target is an enemy NPC
-    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4 or targetLevel == -1)) then
         local sourceDeathCount = deadlyNPCs[source_id] or 0
         local currentMapID = C_Map.GetBestMapForUnit("player")
         local deathMarkersTotal = deadlyZones[currentMapID] or 0
@@ -1494,6 +1495,13 @@ local function FlashWhenNearTombstone()
             zoneDangerText:SetText(string.format("%.2f%% Danger", dangerPercentage))
         else
             zoneDangerText:SetText(string.format("%.2f%% Danger", dangerPercentage))
+        end
+    elseif (deathRecordsDB.showDanger and minLevel ~= nil and maxLevel ~= nil and playerLevel < minLevel) then
+        if (zoneDangerFrame == nil) then
+            CreateZoneDangerFrame()
+            zoneDangerText:SetText(string.format("%d%% Danger", 100))
+        else
+            zoneDangerText:SetText(string.format("%d%% Danger", 100))
         end
     else
         if (zoneDangerFrame ~= nil) then
