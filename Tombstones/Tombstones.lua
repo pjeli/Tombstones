@@ -1,6 +1,7 @@
 -- Constants
 local ADDON_NAME = "Tombstones"
-local TS_COMM_NAME = "TombstonesRating"
+local TS_COMM_NAME = "Tombstones"
+local EN_COMM_NAME_SERIAL = "TombstonesSer"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
@@ -61,6 +62,9 @@ local TS_COMM_COMMANDS = {
   ["BROADCAST_TALLY_REQUEST"] = "1",
   ["WHISPER_TALLY_REPLY"] = "2",
   ["BROADCAST_PVP_DEATH"] = "3",
+  ["BROADCAST_TOMBSTONE_SYNC_REQUEST"] = "4",
+  ["WHISPER_SYNC_AVAILABILITY"] = "5",
+  ["WHISPER_SYNC_ACCEPT"] = "6",
 }
 local MAP_TABLE = {
 --[[Eastern Kingdoms]]      [1415] = {minLevel = 1,     maxLevel = 60,},
@@ -209,6 +213,14 @@ local expectingTallyReplyMapID = nil
 local ratings = {}
 local ratingsSeenCount = 0
 local ratingsSeenTotal = 0
+local syncAvailabilityTimer = nil
+local agreedSender = nil
+local agreedMapSender = nil
+local agreedReceiver = nil
+local agreedMapReceiver = nil
+local syncAccepted = false
+local requestedSync = false
+local printedWarning = false
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -399,6 +411,41 @@ local function TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
     ratings[player_name_short] = karmaScore == "+" and 1 or -1
 end
 
+local function WhisperSyncAvailabilityTo(player_name_short, oldest_timestamp, mapID)
+    local commMessage = { msg = TS_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
+    CTL:SendAddonMessage("BULK", TS_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
+end
+
+local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp, mapID)
+    local commMessage = { msg = TS_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
+    CTL:SendAddonMessage("BULK", TS_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
+end
+
+local function WhisperSyncDataTo(player_name_short, tombstones_data) 
+    local serialized = ls:Serialize(tombstones_data)
+    local compressed = ld:CompressDeflate(serialized)
+    local encoded = ld:EncodeForWoWAddonChannel(compressed)
+   
+    local chunkSize = 200 -- Set the desired chunk size
+    local totalChunks = math.ceil(#encoded / chunkSize)
+   
+    printDebug("Loading up "..totalChunks.." chunks for sending out.")
+    for i = 1, totalChunks do
+      local startIndex = (i - 1) * chunkSize + 1
+      local endIndex = i * chunkSize
+      local chunk = encoded:sub(startIndex, endIndex)
+      
+      local msg = string.format("%d/%d:%s", i, totalChunks, chunk)
+      
+      local commMessage = { msg = msg , player_name_short = player_name_short }
+      CTL:SendAddonMessage("BULK", TS_COMM_NAME_SERIAL, commMessage.msg, "WHISPER", commMessage.player_name_short)
+    end
+    
+    agreedReceiver = nil 
+    agreedMapReceiver = nil
+    syncAccepted = false
+end
+
 local function TombstonesJoinChannel()
     C_ChatInfo.RegisterAddonMessagePrefix(TS_COMM_NAME)
     
@@ -419,6 +466,61 @@ local function TombstonesJoinChannel()
     else
         printDebug("Successfully joined Tombstones channel.")
     end
+end
+
+local function GetOldestTombstoneTimestamp(mapID)
+    local oldest_tombstone_timestamp = 0 
+    
+    local zoneMarkers = visitingZoneCache[mapID] or {}
+    local numRecords = #zoneMarkers or 0
+    
+    -- Iterate over the death records in reverse
+    for index = numRecords, 1, -1 do
+        local marker = zoneMarkers[index]
+        if marker.timestamp > oldest_tombstone_timestamp then 
+          oldest_tombstone_timestamp = marker.timestamp
+        end
+    end
+
+    return oldest_tombstone_timestamp
+end
+
+local function haveTombstonesBeyondTimestamp(request_timestamp, mapID)
+    -- Get the number of death records
+    local zoneMarkers = visitingZoneCache[mapID] or {}
+    local numRecords = #zoneMarkers or 0
+    -- Iterate over the death records in reverse
+    for index = numRecords, 1, -1 do
+        local marker = zoneMarkers[index]
+        if (marker.timestamp > request_timestamp) then return true end
+    end
+    return false
+end
+
+local function GetTombstonesBeyondTimestamp(request_timestamp, max_to_fetch, mapID)
+    local fetchedTombstones = {}
+    -- Get the number of death records
+    local zoneMarkers = visitingZoneCache[mapID] or {}
+    local numRecords = #zoneMarkers or 0
+    -- Iterate over the death records in reverse
+    for index = numRecords, 1, -1 do
+        local marker = zoneMarkers[index]
+        if marker.timestamp > request_timestamp then 
+            table.insert(fetchedTombstones, marker)
+        end
+        if #fetchedTombstones >= max_to_fetch then
+            break
+        end
+    end
+    return fetchedTombstones
+end
+
+local function BroadcastSyncRequest()
+    local playerMap = C_Map.GetBestMapForUnit("player")
+    local oldest_tombstone_timestamp = GetOldestTombstoneTimestamp(playerMap)
+    local channel_num = GetChannelName(tombstones_channel)
+    requestedSync = true
+    CTL:SendChatMessage("BULK", TS_COMM_NAME, TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_tombstone_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
 end
 
 local function TombstonesLeaveChannel()
@@ -452,6 +554,7 @@ local function LoadDeathRecords()
         deathRecordsDB.useClassIcons = false
         deathRecordsDB.broadcastPvpDeath = true
         deathRecordsDB.filteredTombsChat = true
+        deathRecordsDB.offerSync = false
     end
     if (deathRecordsDB.showMarkers == nil) then
         deathRecordsDB.showMarkers = true
@@ -488,6 +591,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.filteredTombsChat == nil) then
         deathRecordsDB.filteredTombsChat = true
+    end
+    if (deathRecordsDB.offerSync == nil) then
+        deathRecordsDB.offerSync = false
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
@@ -1260,6 +1366,13 @@ local function MakeInterfacePage()
       filtedTombsInChatToggleText:SetPoint("LEFT", filtedTombsInChatToggle, "RIGHT", 5, 0)
       filtedTombsInChatToggleText:SetText("Show new filtered Tombstones in Default Chat")
       
+      local offerSyncToggle = CreateFrame("CheckButton", "OfferSync", interPanel, "OptionsCheckButtonTemplate")
+      offerSyncToggle:SetPoint("TOPLEFT", 10, -60)
+      offerSyncToggle:SetChecked(deathRecordsDB.offerSync)
+      local offerSyncToggleText = offerSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
+      offerSyncToggleText:SetText("Offer Tombstones sync service")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
@@ -1283,6 +1396,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.broadcastPvpDeath = true
               elseif (toggleName == "FiltedTombsInChat") then
                   deathRecordsDB.filteredTombsChat = true
+              elseif (toggleName == "OfferSync") then
+                  deathRecordsDB.offerSync = true
               end
           else
               -- Perform actions for unselected state
@@ -1299,6 +1414,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.broadcastPvpDeath = false
               elseif (toggleName == "FiltedTombsInChat") then
                   deathRecordsDB.filteredTombsChat = false
+              elseif (toggleName == "OfferSync") then
+                  deathRecordsDB.offerSync = false
               end
           end
       end
@@ -1307,6 +1424,7 @@ local function MakeInterfacePage()
       classIconsToggle:SetScript("OnClick", ToggleOnClick)
       broadcastPvpToggle:SetScript("OnClick", ToggleOnClick)
       filtedTombsInChatToggle:SetScript("OnClick", ToggleOnClick)
+      offerSyncToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
@@ -3343,6 +3461,8 @@ local function SlashCommandHandler(msg)
         elseif argsArray[1] == "class" then
             PrintDeadliestClasses()
         end
+    elseif command == "sync" then
+        BroadcastSyncRequest()
     elseif command == "usage" then
        -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT} | highlight {PLAYER}]")
@@ -3364,6 +3484,9 @@ SlashCmdList["TOMBSTONES"] = SlashCommandHandler
 
 --[[ Initialize Event Handlers ]]
 --
+local receivedChunks = {} -- Table to store the received chunks
+local totalChunks = 0 -- Total number of expected chunks
+
 function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   local player_name_short, _ = string.split("-", sender_name_long)
   local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
@@ -3372,6 +3495,102 @@ function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       -- CONSIDER: We only process messages we expect; and we only take 1 message; so, should be fine...
       --if not isPlayerMessageAllowed(player_name_short) then return end 
       TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
+  end
+  -- RESPOND TO SYNC AVAILABILITY IF STILL VALID
+  if (command == TS_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"] and prefix == TS_COMM_NAME and channel == "WHISPER") then
+      printDebug("Receiving TS:TombstoneSyncAvailability from " .. player_name_short .. ".") 
+      if (requestedSync == false) then return end -- We didn't request a sync? Spammer...
+      if (agreedSender ~= nil) then return end -- We already have a sender
+      local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
+      oldestTimestampInRequest = tonumber(oldestTimestampInRequest)
+      mapID = tonumber(mapID)
+      local oldestTombstoneTimestamp = GetOldestTombstoneTimestamp(mapID) -- Ensure we are still in the same state and accepting to the same timestamp
+      if (oldestTimestampInRequest == oldestTombstoneTimestamp) then 
+          agreedSender = player_name_short
+          agreedMapSender = mapID
+          WhisperSyncAcceptanceTo(player_name_short, oldestTombstoneTimestamp, mapID)
+      end
+  -- RESPOND TO SYNC ACCEPTANCE; SEND THE DATA
+  elseif (command == TS_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"] and prefix == TS_COMM_NAME and channel == "WHISPER") then
+      printDebug("Receiving TS:TombstoneSyncAccept from " .. player_name_short .. ".") 
+      if (deathRecordsDB.offerSync == false) then return end -- We are not offering sync service
+      if (player_name_short ~= agreedReceiver) then return end -- The accepter is not the same player as we agreed upon? Spam / hacker.
+      local timestampAgreedUpon, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
+      timestampAgreedUpon = tonumber(timestampAgreedUpon)
+      mapID = tonumber(mapID)
+      if (mapID ~= agreedMapReceiver) then return end -- The acceptor has changed mapIDs on us? Reject sending.
+      syncAccepted = true
+      if (syncAvailabilityTimer ~= nil) then
+          syncAvailabilityTimer:Cancel()
+          syncAvailabilityTimer = nil
+      end
+      local numberOfTombstonesToFetch = 40
+      local fetchedTombstones = GetTombstonesBeyondTimestamp(timestampAgreedUpon, numberOfTombstonesToFetch, mapID)
+      printDebug("Sending "..#fetchedTombstones.." tombstones for map "..mapID..".")
+      WhisperSyncDataTo(player_name_short, fetchedTombstones)
+  -- RECEIVE THE CHUNKED DATA
+  elseif (prefix == EN_COMM_NAME_SERIAL and channel == "WHISPER") then
+      printDebug("Receiving TS:TombstoneSyncData from " .. player_name_short .. ".") 
+      if (player_name_short ~= agreedSender) then
+          printDebug("Rejecting "..player_name_short.." because non-agreed sender.")
+          return
+      end -- Sender is not the same player as we agreed upon? Spam / hacker.
+      if (requestedSync == false) then
+          printDebug("Rejecting "..player_name_short.." because did not request sync.")
+          return
+      end -- We didn't request a sync? Spammer...
+      -- Parse the chunk info
+      local chunkIndex, total, chunkData = data_str:match("(%d+)/(%d+):(.+)")
+
+      if (tonumber(total) > 50 and not printedWarning) then
+          print("Tombstones is receiving 50+ chunks. This may cause slowness.\nConsider reloading and ignoring " .. player_name_short .. " if this is griefing.")
+          printedWarning = true
+      end
+      
+      if chunkIndex and total and chunkData then
+         chunkIndex = tonumber(chunkIndex)
+         printDebug("Receiving chunk "..chunkIndex..".")
+         total = tonumber(total)
+         -- Init chunk table
+         if not receivedChunks[player_name_short] then
+            receivedChunks[player_name_short] = {}
+         end
+         -- Store chunk
+         receivedChunks[player_name_short][chunkIndex] = chunkData
+         -- Check if all chunks have been received
+         if #receivedChunks[player_name_short] == total then
+            local reconstructedData = table.concat(receivedChunks[player_name_short])
+            -- Process the reconstructed data
+            printDebug("Input data size is: " .. tostring(string.len(reconstructedData)))
+            local decodedData = ld:DecodeForWoWAddonChannel(reconstructedData)
+            printDebug("Decoded data size is: " .. tostring(string.len(decodedData)))
+            local decompressedData = ld:DecompressDeflate(decodedData, { level = 3 })
+            printDebug("Decompressed data size is: " .. tostring(string.len(decompressedData)))
+            local success, importedDeathRecords = ls:Deserialize(decompressedData)
+            importedDeathRecords = importedDeathRecords or {}
+            local numImportRecords = #importedDeathRecords or 0
+            local numNewRecords = 0
+            local badRecords = false
+            for _, marker in ipairs(importedDeathRecords) do
+                if (marker.mapID == agreedMapSender) then
+                    local success, _ = ImportDeathMarker(marker.realm, tonumber(marker.mapID), tonumber(marker.instID), tonumber(marker.posX), tonumber(marker.posY), tonumber(marker.timestamp), marker.user, tonumber(marker.level), tonumber(marker.source_id), tonumber(marker.class_id), tonumber(marker.race_id), marker.last_words, marker.guild, marker.pvpKiller)
+                    if success then numNewRecords = numNewRecords + 1 end
+                else
+                    badRecords = true
+                end
+            end
+            print("Tombstones imported in " .. tostring(numNewRecords) .. " new records out of " .. tostring(numImportRecords) .. ".")
+            if badRecords == true then
+                print("Tombstones detected that "..player_name_short.." sent improper data. Consider ignoring if this is griefing.")
+            end
+            -- Clear the received chunks for this sender and reset agreedSender
+            receivedChunks[player_name_short] = nil
+            agreedSender = nil
+            agreedMapSender = nil
+            requestedSync = false
+            printedWarning = false
+         end
+      end
   end
 end
 
@@ -3445,6 +3664,32 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
                   lastFlowersWarning = time()
                   DEFAULT_CHAT_FRAME:AddMessage("You received flowers at your gravesite from "..player_name_short..".", 1, 1, 0)
               end
+          end
+      end
+      if command == TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"] then
+          printDebug("Receiving TS:TombstoneSyncRequest from " .. player_name_short .. ".")
+          if (deathRecordsDB.offerSync == false) then return end -- We are not offering syncing service
+          if (agreedReceiver ~= nil) then return end -- We already have an agreed upon receiver of sync
+          local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
+          oldestTimestampInRequest = tonumber(oldestTimestampInRequest)
+          mapID = tonumber(mapID)
+          local haveNewTombstones = haveTombstonesBeyondTimestamp(oldestTimestampInRequest, mapID) -- HANDLE MAPID IN BEYOND TIMESTAMP
+          if haveNewTombstones then
+              agreedReceiver = player_name_short
+              agreedMapReceiver = mapID
+              local randomDelay = math.random(0,5) -- Give random delay to create competition
+              C_Timer.After(randomDelay, function()
+                  WhisperSyncAvailabilityTo(player_name_short, oldestTimestampInRequest, mapID)
+                  syncAvailabilityTimer = C_Timer.After(1, function()
+                      if (syncAccepted == false and agreedReceiver ~= nil and agreedMapReceiver ~= nil) then
+                          agreedReceiver = nil
+                          agreedMapReceiver = nil
+                          syncAccepted = false
+                      end
+                  end)
+              end)
+          else
+              printDebug("You don't have newer Tombstones. Ignoring sync request.")
           end
       end
   end
