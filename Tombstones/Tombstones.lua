@@ -870,7 +870,7 @@ local function UpdateWorldMapMarkers()
                     if(deathRecordsDB.useClassIcons == true and marker.class_id ~= nil) then
                         markerMapButton.texture:SetTexture("Interface\\Icons\\"..classIDToIcon[marker.class_id])
                     else
-                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
+                        markerMapButton.texture:SetTexture("Interface\\Icons\\Ability_fiegndead")
                     end
 
                     if (marker.visited == true and markerMapButton.checkmarkTexture == nil) then
@@ -1420,15 +1420,7 @@ local function GenerateMinimapIcon(marker)
     iconFrame:SetSize(12, 12)
     local iconTexture = iconFrame:CreateTexture(nil, "BACKGROUND")
     iconTexture:SetAllPoints()
-    iconTexture:SetTexture("Interface\\Icons\\Ability_Creature_Cursed_03")
-
-    if (marker.last_words ~= nil) then
-        local borderTexture = iconFrame:CreateTexture(nil, "OVERLAY")
-        borderTexture:SetAllPoints(iconFrame)
-        borderTexture:SetTexture("Interface\\Cooldown\\ping4")
-        borderTexture:SetBlendMode("ADD")
-        borderTexture:SetVertexColor(1, 1, 0, 0.7)
-    end
+    iconTexture:SetTexture("Interface\\Icons\\Ability_fiegndead")
 
     iconTexture:SetVertexColor(1, 1, 1, 0.75)
     iconFrame:SetScript("OnEnter", function(self)
