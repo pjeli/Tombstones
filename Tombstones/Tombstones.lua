@@ -3465,7 +3465,7 @@ local function SlashCommandHandler(msg)
         BroadcastSyncRequest()
     elseif command == "usage" then
        -- Display command usage information
-        print("Usage: /tombstones or /ts [show | hide | export | import | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT} | highlight {PLAYER}]")
+        print("Usage: /tombstones or /ts [show | hide | export | import | sync | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT} | highlight {PLAYER}]")
         print("Usage: /tombstones or /ts [filter (info | reset | last_words | known_death | rating | hours {#HOURS} | days {#DAYS} | level {#LEVEL} | class {CLASS} | race {RACE})]")
         print("Usage: /tombstones or /ts [deadly (npc | zone | env | class)]")
         print("Usage: /tombstones or /ts [danger (show | hide | lock | unlock)]")
