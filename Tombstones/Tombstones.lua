@@ -1400,7 +1400,7 @@ local function UnitTargetChange()
     end
 
     -- Check if the target is an enemy NPC
-    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and targetLevel ~= -1 and (playerLevel <= targetLevel + 4)) then
         local sourceDeathCount = deadlyNPCs[source_id] or 0
         local currentMapID = C_Map.GetBestMapForUnit("player")
         local deathMarkersTotal = deadlyZones[currentMapID] or 0
