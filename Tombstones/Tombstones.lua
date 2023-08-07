@@ -1389,9 +1389,18 @@ local function UnitTargetChange()
 
     local playerLevel = UnitLevel("player")
     local targetLevel = UnitLevel("target")
+    
+    local playerInstance = C_Map.GetBestMapForUnit("player")
+    local levelRange = MAP_TABLE[playerInstance]
+    local minLevel
+    local maxLevel
+    if levelRange then
+        minLevel = levelRange.minLevel
+        maxLevel = levelRange.maxLevel
+    end
 
     -- Check if the target is an enemy NPC
-    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4 or targetLevel == -1)) then
+    if  (deathRecordsDB.showDanger and source_id ~= nil and not UnitIsPlayer(target) and not friendly and (playerLevel <= targetLevel + 4)) then
         local sourceDeathCount = deadlyNPCs[source_id] or 0
         local currentMapID = C_Map.GetBestMapForUnit("player")
         local deathMarkersTotal = deadlyZones[currentMapID] or 0
@@ -1399,14 +1408,20 @@ local function UnitTargetChange()
         if (deathMarkersTotal > 0) then
             dangerPercentage = math.min((sourceDeathCount / deathMarkersTotal) * 100.0, 100.0)
         end
-
         if (targetDangerFrame == nil) then
             CreateTargetDangerFrame()
             targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
         else
             targetDangerText:SetText(string.format("%.2f%% Deadly", dangerPercentage))
         end
-
+        targetDangerFrame:Show()
+    elseif (deathRecordsDB.showDanger and not UnitIsPlayer(target) and not friendly and targetLevel == -1 and playerLevel < minLevel) then
+        if (targetDangerFrame == nil) then
+            CreateTargetDangerFrame()
+            targetDangerText:SetText(string.format("%d%% Deadly", 100))
+        else
+            targetDangerText:SetText(string.format("%d%% Deadly", 100))
+        end
         targetDangerFrame:Show()
     else
         if (targetDangerFrame ~= nil) then
