@@ -1,7 +1,7 @@
 -- Constants
 local ADDON_NAME = "Tombstones"
 local TS_COMM_NAME = "Tombstones"
-local EN_COMM_NAME_SERIAL = "TombstonesSer"
+local TS_COMM_NAME_SERIAL = "TombstonesSer"
 local CTL = _G.ChatThrottleLib
 local REALM = GetRealmName()
 local PLAYER_NAME, _ = UnitName("player")
@@ -232,13 +232,13 @@ local l64 = LibStub("LibBase64-1.0")
 -- Main Frame
 local Tombstones = CreateFrame("Frame")
 
-function printDebug(msg)
+local function printDebug(msg)
     if debug then
         print(msg)
     end
 end
 
-function printTrace(msg)
+local function printTrace(msg)
     if trace then
         print(msg)
     end
@@ -448,6 +448,7 @@ end
 
 local function TombstonesJoinChannel()
     C_ChatInfo.RegisterAddonMessagePrefix(TS_COMM_NAME)
+    C_ChatInfo.RegisterAddonMessagePrefix(TS_COMM_NAME_SERIAL)
     
     local channel_num = GetChannelName(tombstones_channel)
     if channel_num == 0 then
@@ -477,7 +478,7 @@ local function GetOldestTombstoneTimestamp(mapID)
     -- Iterate over the death records in reverse
     for index = numRecords, 1, -1 do
         local marker = zoneMarkers[index]
-        if marker.timestamp > oldest_tombstone_timestamp then 
+        if (marker.timestamp > oldest_tombstone_timestamp and marker.realm == REALM) then 
           oldest_tombstone_timestamp = marker.timestamp
         end
     end
@@ -492,7 +493,7 @@ local function haveTombstonesBeyondTimestamp(request_timestamp, mapID)
     -- Iterate over the death records in reverse
     for index = numRecords, 1, -1 do
         local marker = zoneMarkers[index]
-        if (marker.timestamp > request_timestamp) then return true end
+        if (marker.timestamp > request_timestamp and marker.realm == REALM) then return true end
     end
     return false
 end
@@ -505,7 +506,7 @@ local function GetTombstonesBeyondTimestamp(request_timestamp, max_to_fetch, map
     -- Iterate over the death records in reverse
     for index = numRecords, 1, -1 do
         local marker = zoneMarkers[index]
-        if marker.timestamp > request_timestamp then 
+        if (marker.timestamp > request_timestamp and marker.realm == REALM) then 
             table.insert(fetchedTombstones, marker)
         end
         if #fetchedTombstones >= max_to_fetch then
@@ -516,6 +517,10 @@ local function GetTombstonesBeyondTimestamp(request_timestamp, max_to_fetch, map
 end
 
 local function BroadcastSyncRequest()
+    if (IsInInstance()) then 
+      print("Tombstones cannot sync while in instance.")
+      return 
+    end
     local playerMap = C_Map.GetBestMapForUnit("player")
     local oldest_tombstone_timestamp = GetOldestTombstoneTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
@@ -1367,7 +1372,7 @@ local function MakeInterfacePage()
       filtedTombsInChatToggleText:SetText("Show new filtered Tombstones in Default Chat")
       
       local offerSyncToggle = CreateFrame("CheckButton", "OfferSync", interPanel, "OptionsCheckButtonTemplate")
-      offerSyncToggle:SetPoint("TOPLEFT", 10, -60)
+      offerSyncToggle:SetPoint("TOPLEFT", 10, -140)
       offerSyncToggle:SetChecked(deathRecordsDB.offerSync)
       local offerSyncToggleText = offerSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
@@ -1463,6 +1468,7 @@ local function CreateTargetDangerFrame()
 end
 
 local function CreateZoneDangerFrame()
+    --if (IsInInstance()) then return end
     zoneDangerFrame = CreateFrame("Frame", "ZoneDangerFrame", UIParent)
     zoneDangerFrame:SetSize(100, 20)
     local position = deathRecordsDB.zoneDangerFramePos
@@ -1497,6 +1503,7 @@ end
 
 -- Event handler for PLAYER_TARGET_CHANGED event
 local function UnitTargetChange()
+    if (IsInInstance()) then return end
     local target = "target"
     if (not UnitExists("target") and targetDangerFrame ~= nil) then
         targetDangerFrame:Hide()
@@ -2800,12 +2807,14 @@ local function ShowNearestTombstoneSplashText(marker)
 end
 
 local function ActOnNearestTombstone()
-    if (deathRecordsDB.visiting == false or IsInInstance()) then
+    local inInstance, _ = IsInInstance()
+    if (deathRecordsDB.visiting == false or inInstance) then
         return
     end
     
     -- Handle player death event
     local playerInstance = C_Map.GetBestMapForUnit("player")
+    if (playerInstance == nil) then return end
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
     local playerX, playerY = playerPosition:GetXY()
 
@@ -3529,7 +3538,7 @@ function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
       printDebug("Sending "..#fetchedTombstones.." tombstones for map "..mapID..".")
       WhisperSyncDataTo(player_name_short, fetchedTombstones)
   -- RECEIVE THE CHUNKED DATA
-  elseif (prefix == EN_COMM_NAME_SERIAL and channel == "WHISPER") then
+  elseif (prefix == TS_COMM_NAME_SERIAL and channel == "WHISPER") then
       printDebug("Receiving TS:TombstoneSyncData from " .. player_name_short .. ".") 
       if (player_name_short ~= agreedSender) then
           printDebug("Rejecting "..player_name_short.." because non-agreed sender.")
@@ -3667,6 +3676,7 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           end
       end
       if command == TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"] then
+          print(player_name_short)
           printDebug("Receiving TS:TombstoneSyncRequest from " .. player_name_short .. ".")
           if (deathRecordsDB.offerSync == false) then return end -- We are not offering syncing service
           if (agreedReceiver ~= nil) then return end -- We already have an agreed upon receiver of sync
@@ -3674,6 +3684,7 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           oldestTimestampInRequest = tonumber(oldestTimestampInRequest)
           mapID = tonumber(mapID)
           local haveNewTombstones = haveTombstonesBeyondTimestamp(oldestTimestampInRequest, mapID) -- HANDLE MAPID IN BEYOND TIMESTAMP
+          print(haveNewTombstones)
           if haveNewTombstones then
               agreedReceiver = player_name_short
               agreedMapReceiver = mapID
