@@ -2182,10 +2182,14 @@ end
 local function MakeMinimapButton()
     -- Minimap button click function
     local function MiniBtnClickFunc(btn)
-        if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
-            optionsFrame:Hide()
+        if (IsControlKeyDown()) then
+          BroadcastSyncRequest()
         else
-            GenerateTombstonesOptionsFrame()
+          if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
+              optionsFrame:Hide()
+          else
+              GenerateTombstonesOptionsFrame()
+          end
         end
     end
     -- Create minimap button using LibDBIcon
