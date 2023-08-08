@@ -3676,7 +3676,6 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           end
       end
       if command == TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"] then
-          print(player_name_short)
           printDebug("Receiving TS:TombstoneSyncRequest from " .. player_name_short .. ".")
           if (deathRecordsDB.offerSync == false) then return end -- We are not offering syncing service
           if (agreedReceiver ~= nil) then return end -- We already have an agreed upon receiver of sync
@@ -3684,7 +3683,6 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           oldestTimestampInRequest = tonumber(oldestTimestampInRequest)
           mapID = tonumber(mapID)
           local haveNewTombstones = haveTombstonesBeyondTimestamp(oldestTimestampInRequest, mapID) -- HANDLE MAPID IN BEYOND TIMESTAMP
-          print(haveNewTombstones)
           if haveNewTombstones then
               agreedReceiver = player_name_short
               agreedMapReceiver = mapID
