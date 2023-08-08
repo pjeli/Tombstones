@@ -510,7 +510,7 @@ local ld = LibStub("LibDeflate")
 -- Main Frame
 local Engravings = CreateFrame("Frame")
 
-function printDebug(msg)
+local function printDebug(msg)
     if debug then
         print(msg)
     end
@@ -622,7 +622,7 @@ local function GetOldestEngravingTimestamp(mapID)
     -- Iterate over the engraving records in reverse
     for index = numRecords, 1, -1 do
         local engraving = zoneEngravings[index]
-        if engraving.timestamp > oldest_engraving_timestamp then 
+        if (engraving.timestamp > oldest_engraving_timestamp and engraving.realm == REALM) then 
           oldest_engraving_timestamp = engraving.timestamp
         end
     end
@@ -637,7 +637,7 @@ local function haveEngravingsBeyondTimestamp(request_timestamp, mapID)
     -- Iterate over the engraving records in reverse
     for index = numRecords, 1, -1 do
         local engraving = zoneEngravings[index]
-        if (engraving.timestamp > request_timestamp) then return true end
+        if (engraving.timestamp > request_timestamp and engraving.realm == REALM) then return true end
     end
     return false
 end
@@ -650,7 +650,7 @@ local function GetEngravingsBeyondTimestamp(request_timestamp, max_to_fetch, map
     -- Iterate over the engraving records in reverse
     for index = numRecords, 1, -1 do
         local engraving = zoneEngravings[index]
-        if engraving.timestamp > request_timestamp then 
+        if (engraving.timestamp > request_timestamp and engraving.realm == REALM) then 
             table.insert(fetchedEngravings, engraving)
         end
         if #fetchedEngravings >= max_to_fetch then
@@ -1330,6 +1330,7 @@ local function ActOnNearestEngraving()
     
     -- Handle player death event
     local playerInstance = C_Map.GetBestMapForUnit("player")
+    if (playerInstance == nil) then return end
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
     local playerX, playerY = playerPosition:GetXY()
 
