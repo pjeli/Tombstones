@@ -686,9 +686,9 @@ end
 
 -- Add engraving marker function
 local function ImportEngravingMarker(realm, user, mapID, posX, posY, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index, timestamp)
-    if (mapID == nil or posX == nil or posY == nil or templ_index == 0 or user == nil) then
-        -- No location info. Useless.
-        return
+    if (mapID == nil or posX == nil or posY == nil or templ_index == 0 or user == nil or timestamp > time()) then
+        -- No location info. Or from the future. Useless.
+        return false, nil
     end
 
     local engraving = { realm = realm, mapID = mapID, posX = posX, posY = posY, timestamp = timestamp, user = user , templ_index = templ_index, cat_index = cat_index, word_index = word_index, conj_index = conj_index, conj_templ_index = conj_templ_index, conj_cat_index = conj_cat_index, conj_word_index = conj_word_index }

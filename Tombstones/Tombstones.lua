@@ -839,8 +839,8 @@ local function IsNewRecordDuplicate(newRecord)
 end
 
 local function ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words, guild, pvpKiller)
-    if (mapID == nil and instID == nil) then
-        -- No location info. Useless.
+    if ((mapID == nil and instID == nil) or timestamp > time()) then
+        -- No location info. Or from the future. Useless.
        return false, nil
     end
 
@@ -2697,7 +2697,8 @@ local function ShowLastWordsDialogueBox(marker)
     dialogueBox.model = CreateFrame("PlayerModel", nil, dialogueBox)
     dialogueBox.model:SetPoint("BOTTOMLEFT", 10, 10)
     dialogueBox.model:SetSize(80, 80)
-    dialogueBox.model:SetDisplayInfo(146)
+    --dialogueBox.model:SetDisplayInfo(146)
+    dialogueBox.model:SetDisplayInfo(21587)
     --dialogueBox.model:SetUnit("player") -- Set the model to the player's character
     dialogueBox.model:SetAnimation(60)
     dialogueBox.model:SetCamDistanceScale(0.7) -- Adjust the camera distance as needed
