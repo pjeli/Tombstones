@@ -501,6 +501,11 @@ local movementUpdateInterval = 0.5 -- Update interval in seconds
 local movementTimer = nil
 local lastClosestEngraving
 local glowFrame
+local optionsFrame
+local ENGR_FILTERS = {
+  ["HOUR_THRESH"] = 720,
+  ["REALMS"] = true,
+}
 
 -- Libraries
 local hbdp = LibStub("HereBeDragons-Pins-2.0")
@@ -585,6 +590,25 @@ StaticPopupDialogs["ENGRAVINGS_CLEAR_CONFIRMATION"] = {
     hideOnEscape = true,
     preferredIndex = 3,
 }
+
+local function IsEngravingAllowedByFilters(engraving)
+    if (engraving == nil) then
+        return false
+    end
+
+    local currentTime = time()
+    local allow = true
+
+    -- Fetch filtering parameters
+    local filter_realms = ENGR_FILTERS["REALMS"]
+    local filter_hour = ENGR_FILTERS["HOUR_THRESH"]
+
+    if (allow == true and filter_hour > 0) then
+        if (engraving.timestamp ~= nil and engraving.timestamp <= (currentTime - (filter_hour * 60 * 60))) then allow = false end
+    end
+    if (allow == true and filter_realms and engraving.realm ~= REALM) then allow = false end
+    return allow
+end
 
 local function IsNewRecordDuplicate(newRecord)
     local isDuplicate = false 
@@ -1115,6 +1139,156 @@ local function BroadcastSyncRequest()
     CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
 end
 
+local function GenerateTombstonesOptionsFrame()
+    if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
+        return
+    elseif (optionsFrame ~= nil and not optionsFrame:IsVisible()) then
+        optionsFrame:Show()
+        return
+    end
+
+    -- Create the main frame
+    optionsFrame = CreateFrame("Frame", "EngravingsOptionsFrame", UIParent)
+    optionsFrame:SetSize(360, 220)
+    optionsFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+    optionsFrame:SetFrameLevel(6000)
+    optionsFrame:SetClampedToScreen(true)
+    optionsFrame:SetPoint("CENTER", 0, 80)
+    
+    optionsFrame.t = optionsFrame:CreateTexture(nil, "BACKGROUND")
+    optionsFrame.t:SetAllPoints()
+    optionsFrame.t:SetColorTexture(0, 0, 0, 0.75)
+
+    optionsFrame.title = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionsFrame.title:SetPoint("TOP", optionsFrame, "TOP", 0, -10)
+    optionsFrame.title:SetText("|cFFBF4500Engravings Options|r")
+
+    local optionText1 = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionText1:SetPoint("TOP", optionsFrame, "TOPLEFT", 40, -40)
+    optionText1:SetText("I want...")
+    optionText1:SetTextColor(1, 1, 1)
+
+    -- TOGGLE OPTIONS
+    local toggle1 = CreateFrame("CheckButton", "Visiting", optionsFrame, "OptionsCheckButtonTemplate")
+    toggle1:SetPoint("TOPLEFT", 20, -60)
+    toggle1:SetChecked(engravingsDB.participating)
+    local toggle1Text = toggle1:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    toggle1Text:SetPoint("LEFT", toggle1, "RIGHT", 5, 0)
+    toggle1Text:SetText("To visit and decode engravings.")
+
+    -- TOGGLE OPTIONS
+
+    -- Callback function for toggle button click event
+    local function ToggleOnClick(self)
+        local isChecked = self:GetChecked()
+        local toggleName = self:GetName()
+        
+        if isChecked then
+            -- Perform actions for selected state
+            if (toggleName == "Visiting") then
+                engravingsDB.participating = true
+                engravingsDB.minimapDB["hide"] = false
+                icon:Show("Engravings")
+            end
+        else
+            -- Perform actions for unselected state
+            if (toggleName == "Visiting") then
+                engravingsDB.participating = false
+                engravingsDB.minimapDB["hide"] = true
+                icon:Hide("Engravings")
+                engravingsDB.offerSync = false
+                hbdp:RemoveAllMinimapIcons("EngravingsMM")
+            end
+        end
+    end
+
+    -- Assign the callback function to toggle buttons' OnClick event
+    toggle1:SetScript("OnClick", ToggleOnClick)
+
+    optionsFrame.c = CreateFrame("Button", "CloseButton", optionsFrame, "UIPanelCloseButton")
+    optionsFrame.c:SetPoint("TOPRIGHT", 0, 0)
+
+    local filtersText = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    filtersText:SetPoint("TOP", optionsFrame, "TOP", 0, -100)
+    filtersText:SetText("|cFFBF4500Filters|r")
+
+    local optionText2 = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    optionText2:SetPoint("TOP", filtersText, "TOPLEFT", -35, -30)
+    optionText2:SetText("I only want to see Engravings that...")
+    optionText2:SetTextColor(1, 1, 1)
+
+    local realmsOption = CreateFrame("CheckButton", "Realms", optionsFrame, "OptionsCheckButtonTemplate")
+    realmsOption:SetPoint("TOPLEFT", 20, -150)
+    realmsOption:SetChecked(ENGR_FILTERS["REALMS"])
+    local realmsOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    realmsOptionText:SetPoint("LEFT", realmsOption, "RIGHT", 5, 0)
+    realmsOptionText:SetText("Are from this realm.")
+
+    local hourSlider = CreateFrame("Slider", "HourSlider", optionsFrame, "OptionsSliderTemplate")
+    hourSlider:SetWidth(180)
+    hourSlider:SetHeight(20)
+    hourSlider:SetPoint("TOPLEFT", 20, -180)
+    hourSlider:SetOrientation("HORIZONTAL")
+    hourSlider:SetMinMaxValues(0.5, 30) -- Set the minimum and maximum values for the slider
+    hourSlider:SetValueStep(0.5) -- Set the step value for the slider
+    hourSlider:SetValue(30.5 - roundNearestHalf(ENGR_FILTERS["HOUR_THRESH"]/24)) -- Set the default value for the slider
+    local hourSliderOptionText = realmsOption:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    hourSliderOptionText:SetPoint("LEFT", hourSlider, "RIGHT", 10, 0)
+    hourSliderOptionText:SetText("Days old, at most.")
+    -- Add labels for minimum and maximum values
+    hourSlider.Low:SetText("30")
+    hourSlider.High:SetText("0.5")
+
+    -- Add a label for the current value
+    local hourText = hourSlider:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    hourText:SetPoint("TOP", hourSlider, "BOTTOM", 0, 0)
+    hourText:SetText(roundNearestHalf(ENGR_FILTERS["HOUR_THRESH"]/24)) -- Set the initial value
+    hourSlider.hourText = hourText
+
+    -- Set the OnValueChanged callback function
+    hourSlider:SetScript("OnValueChanged", function(self, value)
+        value = 30.5 - roundNearestHalf(value)
+        hourText:SetText(string.format("%.1f", value))
+    end)
+
+    hourSlider:SetScript("OnMouseUp", function(self)
+        local value = 30.5 - roundNearestHalf(hourSlider:GetValue())
+        ENGR_FILTERS["HOUR_THRESH"] = value * 24
+        hbdp:RemoveAllMinimapIcons("EngravingsMM")
+        lastClosestEngraving = nil
+    end)
+
+        -- Callback function for toggle button click event
+    local function ToggleFilter(self)
+        local isChecked = self:GetChecked()
+        local toggleName = self:GetName()
+        
+        if isChecked then
+            -- Perform actions for selected state
+            if (toggleName == "Realms") then
+                ENGR_FILTERS["REALMS"] = true
+            end
+        else
+            -- Perform actions for unselected state
+            if (toggleName == "Realms") then
+                ENGR_FILTERS["REALMS"] = false
+            end
+        end
+        hbdp:RemoveAllMinimapIcons("EngravingsMM")
+        lastClosestEngraving = nil
+    end
+
+    realmsOption:SetScript("OnClick", ToggleFilter)
+
+    optionsFrame:SetMovable(true)
+    optionsFrame:SetClampedToScreen(true)
+    optionsFrame:EnableMouse(true)
+    optionsFrame:RegisterForDrag("LeftButton")
+    optionsFrame:SetScript("OnDragStart", optionsFrame.StartMoving)
+    optionsFrame:SetScript("OnDragStop", optionsFrame.StopMovingOrSizing)
+    table.insert(UISpecialFrames, "EngravingsOptionsFrame")
+end
+
 local function MakeMinimapButton()
     -- Minimap button click function
     local function MiniBtnClickFunc(btn)
@@ -1354,13 +1528,12 @@ local function ActOnNearestEngraving()
     for index, engraving in ipairs(zoneMarkers) do
         -- Calculate the distance between the player and the marker
         local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, engraving.posX, engraving.posY, engraving.mapID)
+        local allowed = IsEngravingAllowedByFilters(engraving)
 
         -- Check if this marker is closer than the previous closest marker
-        if not engraving.visited then
-            if distance < closestDistance then
-                closestEngraving = engraving
-                closestDistance = distance
-            end
+        if allowed and not engraving.visited and distance < closestDistance then
+            closestEngraving = engraving
+            closestDistance = distance
         end
     end
 
@@ -1418,9 +1591,10 @@ local function FlashWhenNearEngraving()
 
         -- Calculate the distance between the player and the marker
         local distance = GetDistanceBetweenPositions(playerX, playerY, playerInstance, engravingPosX, engravingPosY, engravingMapID)
+        local allowed = IsEngravingAllowedByFilters(engraving)
 
         -- Check if this marker is closer than the previous closest marker
-        if (not engraving.visited and distance < closestDistance) then
+        if (allowed and not engraving.visited and distance < closestDistance) then
                 closestEngraving = engraving
                 closestDistance = distance
         end
@@ -1797,6 +1971,8 @@ local function SlashCommandHandler(msg)
         print("Engravings offering sync service: " .. tostring(engravingsDB.offerSync) .. ".")
     elseif command == "usage" then
         print("Usage: /engravings or /eng [info | make | clear]")
+    else
+      GenerateTombstonesOptionsFrame()
     end
 end
 SlashCmdList["ENGRAVINGS"] = SlashCommandHandler
