@@ -29,6 +29,19 @@ local classIDToIcon = {
     [9] = "classicon_warlock",
     [11] = "classicon_druid",
 }
+local classColors = {
+    [0] = "|cFFFFFFFF", -- Default White
+    [1] = "|cFFC79C6E", -- Warrior
+    [2] = "|cFFF58CBA", -- Paladin
+    [3] = "|cFFABD473", -- Hunter
+    [4] = "|cFFFFF569", -- Rogue
+    [5] = "|cFFFFFFFF", -- Priest
+    [6] = "|cFFC41F3B", -- Death Knight
+    [7] = "|cFF0070DE", -- Shaman
+    [8] = "|cFF69CCF0", -- Mage
+    [9] = "|cFF9482C9", -- Warlock
+    [11] = "|cFFA330C9", -- Druid
+}
 local PLAYER_CLASS = select(3, UnitClass("player"))
 local raceNameToID = {
     ["human"] = 1,
@@ -2686,7 +2699,8 @@ local function ShowLastWordsDialogueBox(marker)
     text:SetPoint("TOPLEFT", dialogueBox, "TOPLEFT", 110, -10)
     text:SetJustifyH("LEFT")
     text:SetJustifyV("TOP")
-    text:SetText(marker.user..":\n\n\"" .. linedBreakedLastWords .. "\"")
+    local colorCode = marker.class_id or 0
+    text:SetText(classColors[colorCode]..marker.user.."|r:\n\n\"" .. linedBreakedLastWords .. "\"")
 
     -- Apply fade-out animation to the splash frame
     dialogueBox.fade = dialogueBox:CreateAnimationGroup()
