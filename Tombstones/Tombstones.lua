@@ -3345,6 +3345,7 @@ local function SlashCommandHandler(msg)
         print("Tombstones saw " .. deathRecordCount .. " records this session.")
         print("You have visited " .. deathVisitCount .. " tombstones.")
         print("You have seen " .. ratingsSeenTotal .. " ratings broadcasted.")
+        print("Tombstones offering sync service: " .. tostring(deathRecordsDB.offerSync) .. ".")
     elseif command == "export" then
         local serializedData = ls:Serialize(deathRecordsDB.deathRecords)
         printDebug("Serialized data size is: " .. tostring(string.len(serializedData)))

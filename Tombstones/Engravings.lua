@@ -494,6 +494,7 @@ local engravingsZoneCache = {}
 local phraseFrame
 local engravingsRecordCount = 0
 local engravingsSeenCount = 0
+local engravingVisitCount = 0
 local debug = false
 local iconSize = 12
 local isPlayerMoving = false
@@ -532,6 +533,9 @@ local function CacheEngraving(engraving)
         else
             table.insert(engravingsZoneCache[engraving.mapID], engraving)
         end
+    end
+    if engraving.visited and engraving.visited == true then
+        engravingVisitCount = engravingVisitCount + 1
     end
 end
 
@@ -1968,6 +1972,7 @@ local function SlashCommandHandler(msg)
     elseif command == "info" then
         print("Engravings has " .. #engravingsDB.engravingRecords.. " records in total.")
         print("Engravings saw " .. engravingsRecordCount .. " records this session.")
+        print("You have found and decoded " .. engravingVisitCount .. " engravings.")
         print("Engravings offering sync service: " .. tostring(engravingsDB.offerSync) .. ".")
     elseif command == "usage" then
         print("Usage: /engravings or /eng [info | make | clear]")
