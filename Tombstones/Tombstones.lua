@@ -679,26 +679,6 @@ local function UnrateAllMarkers()
     end
 end
 
-local function PruneDeathRecords()
-    local prunedRecords = {}
-    local recordsToPrune = 0
-    local totalRecords = #deathRecordsDB.deathRecords
-
-    for i = 1, totalRecords do
-        local marker = deathRecordsDB.deathRecords[i]
-        local allow = IsMarkerAllowedByFilters(marker)
-
-        if (allow == true) then
-            table.insert(prunedRecords, marker)
-        else
-            recordsToPrune = recordsToPrune + 1
-        end
-    end
-
-    deathRecordsDB.deathRecords = prunedRecords
-    return recordsToPrune
-end
-
 local function HideDangerFrames()
     if (splashFrame ~= nil) then
       splashFrame:Hide()
@@ -806,6 +786,26 @@ local function IsMarkerAllowedByFilters(marker)
     end
     if (allow == true and filter_realms and marker.realm ~= REALM) then allow = false end
     return allow
+end
+
+local function PruneDeathRecords()
+    local prunedRecords = {}
+    local recordsToPrune = 0
+    local totalRecords = #deathRecordsDB.deathRecords
+
+    for i = 1, totalRecords do
+        local marker = deathRecordsDB.deathRecords[i]
+        local allow = IsMarkerAllowedByFilters(marker)
+
+        if (allow == true) then
+            table.insert(prunedRecords, marker)
+        else
+            recordsToPrune = recordsToPrune + 1
+        end
+    end
+
+    deathRecordsDB.deathRecords = prunedRecords
+    return recordsToPrune
 end
 
 local function IsNewRecordDuplicate(newRecord)
