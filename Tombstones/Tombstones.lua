@@ -432,13 +432,16 @@ end
 local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp, mapID)
     local commMessage = { msg = TS_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
     CTL:SendAddonMessage("BULK", TS_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
+    print("Tombstones is accepting sync from " .. player_name_short .. ".")
 end
 
 local function WhisperSyncDataTo(player_name_short, tombstones_data) 
+    print("Tombstones is sending sync data to " .. player_name_short .. ".")
+
     local serialized = ls:Serialize(tombstones_data)
     local compressed = ld:CompressDeflate(serialized)
     local encoded = ld:EncodeForWoWAddonChannel(compressed)
-   
+
     local chunkSize = 200 -- Set the desired chunk size
     local totalChunks = math.ceil(#encoded / chunkSize)
    
@@ -2197,6 +2200,13 @@ local function MakeMinimapButton()
     local function MiniBtnClickFunc(btn)
         if (IsControlKeyDown()) then
           BroadcastSyncRequest()
+          -- Set minimap icon to indicate sync running
+          miniButton.icon = "Interface\\Icons\\inv_misc_eye_01"
+          icon:Refresh("Tombstones")
+          C_Timer.After(10.0, function()
+              miniButton.icon = "Interface\\Icons\\Ability_fiegndead"
+              icon:Refresh("Tombstones")
+          end)
         else
           if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
               optionsFrame:Hide()
@@ -2217,6 +2227,7 @@ local function MakeMinimapButton()
             if not tooltip or not tooltip.AddLine then return end
             tooltip:AddLine("Tombstones")
             tooltip:AddLine("|cff9d9d9drecords:|r "..tostring(#deathRecordsDB.deathRecords))
+            tooltip:AddLine("|cffffffffctrl-click to sync|r")
         end,
     })
 

@@ -1121,6 +1121,13 @@ local function MakeMinimapButton()
     local function MiniBtnClickFunc(btn)
         if (IsControlKeyDown()) then
           BroadcastSyncRequest()
+          -- Set minimap icon to indicate sync running
+          miniButton.icon = "Interface\\Icons\\inv_misc_eye_01"
+          icon:Refresh("Engravings")
+          C_Timer.After(10.0, function()
+              miniButton.icon = "Interface\\Icons\\inv_misc_rune_04"
+              icon:Refresh("Engravings")
+          end)
         else
           if (phraseFrame ~= nil and phraseFrame:IsVisible()) then
               phraseFrame:Hide()
@@ -1141,6 +1148,7 @@ local function MakeMinimapButton()
             if not tooltip or not tooltip.AddLine then return end
             tooltip:AddLine("Engravings")
             tooltip:AddLine("|cFFBF4500records:|r "..tostring(#engravingsDB.engravingRecords))
+            tooltip:AddLine("|cffffffffctrl-click to sync|r")
         end,
     })
 
@@ -1644,9 +1652,12 @@ end
 local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp, mapID)
     local commMessage = { msg = EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"]..COMM_COMMAND_DELIM..oldest_timestamp..COMM_FIELD_DELIM..mapID, player_name_short = player_name_short }
     CTL:SendAddonMessage("BULK", EN_COMM_NAME, commMessage.msg, "WHISPER", commMessage.player_name_short)
+    print("Engravings is accepting sync from " .. player_name_short .. ".")
 end
 
 local function WhisperSyncDataTo(player_name_short, engravings_data) 
+    print("Engravings is sending sync data to " .. player_name_short .. ".")
+
     local serialized = ls:Serialize(engravings_data)
     local compressed = ld:CompressDeflate(serialized)
     local encoded = ld:EncodeForWoWAddonChannel(compressed)
