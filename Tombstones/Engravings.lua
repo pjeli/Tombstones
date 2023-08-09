@@ -1010,7 +1010,6 @@ local function CreatePhraseGenerationInterface()
   
     -- Reset frame options OnHide
     phraseFrame:SetScript("OnHide", function(self)
-        PlaySound(39514)
         templateIndex = 0
         categoryIndex = 0
         wordIndex = 0
