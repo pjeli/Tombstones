@@ -1165,9 +1165,9 @@ local function MakeInterfacePage()
 			InterfaceOptions_AddCategory(interPanel)
 end
 
-local function BroadcastSyncRequest()
+local function BroadcastSyncRequest(custom_timestamp)
     local playerMap = C_Map.GetBestMapForUnit("player")
-    local oldest_engraving_timestamp = GetOldestEngravingTimestamp(playerMap)
+    local oldest_engraving_timestamp = custom_timestamp or GetOldestEngravingTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
     CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
@@ -1327,7 +1327,7 @@ local function MakeMinimapButton()
     -- Minimap button click function
     local function MiniBtnClickFunc(btn)
         if (IsControlKeyDown()) then
-          BroadcastSyncRequest()
+          BroadcastSyncRequest(nil)
           -- Set minimap icon to indicate sync running
           miniButton.icon = "Interface\\Icons\\inv_misc_eye_01"
           icon:Refresh("Engravings")
@@ -1998,7 +1998,17 @@ local function SlashCommandHandler(msg)
         if (not debug) then return end
         UnvisitAllEngravings()
     elseif command == "sync" then
-        BroadcastSyncRequest()
+        local argsArray = {}
+        if args then
+           for word in string.gmatch(args, "%S+") do
+               table.insert(argsArray, word)
+           end
+        end
+        if(#argsArray > 0) then
+            BroadcastSyncRequest(tonumber(argsArray[1]))
+        else
+            BroadcastSyncRequest(nil)
+        end
     elseif command == "info" then
         print("Engravings has " .. #engravingsDB.engravingRecords.. " records in total.")
         print("Engravings saw " .. engravingsRecordCount .. " records this session.")

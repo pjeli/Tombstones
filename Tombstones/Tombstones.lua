@@ -539,13 +539,13 @@ local function GetTombstonesBeyondTimestamp(request_timestamp, max_to_fetch, map
     return fetchedTombstones
 end
 
-local function BroadcastSyncRequest()
+local function BroadcastSyncRequest(custom_timestamp)
     if (IsInInstance()) then 
       print("Tombstones cannot sync while in instance.")
       return 
     end
     local playerMap = C_Map.GetBestMapForUnit("player")
-    local oldest_tombstone_timestamp = GetOldestTombstoneTimestamp(playerMap)
+    local oldest_tombstone_timestamp = custom_timestamp or GetOldestTombstoneTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
     CTL:SendChatMessage("BULK", TS_COMM_NAME, TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_tombstone_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
@@ -2222,7 +2222,7 @@ local function MakeMinimapButton()
     -- Minimap button click function
     local function MiniBtnClickFunc(btn)
         if (IsControlKeyDown()) then
-          BroadcastSyncRequest()
+          BroadcastSyncRequest(nil)
           -- Set minimap icon to indicate sync running
           miniButton.icon = "Interface\\Icons\\inv_misc_eye_01"
           icon:Refresh("Tombstones")
@@ -3525,7 +3525,17 @@ local function SlashCommandHandler(msg)
             PrintDeadliestClasses()
         end
     elseif command == "sync" then
-        BroadcastSyncRequest()
+        local argsArray = {}
+        if args then
+           for word in string.gmatch(args, "%S+") do
+               table.insert(argsArray, word)
+           end
+        end
+        if(#argsArray > 0) then
+            BroadcastSyncRequest(tonumber(argsArray[1]))
+        else
+            BroadcastSyncRequest(nil)
+        end
     elseif command == "usage" then
        -- Display command usage information
         print("Usage: /tombstones or /ts [show | hide | export | import | sync | prune | clear | info | icon_size {#SIZE} | max_render {#COUNT} | highlight {PLAYER}]")
