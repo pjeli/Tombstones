@@ -1077,15 +1077,22 @@ local function MakeInterfacePage()
       participateToggleText:SetPoint("LEFT", participateToggle, "RIGHT", 5, 0)
       participateToggleText:SetText("Participate")
       
+      local mmToggle = CreateFrame("CheckButton", "MMB_Show", interPanel, "OptionsCheckButtonTemplate")
+      mmToggle:SetPoint("TOPLEFT", 10, -60)
+      mmToggle:SetChecked(not engravingsDB.minimapDB["hide"])
+      local mmToggleText = mmToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      mmToggleText:SetPoint("LEFT", mmToggle, "RIGHT", 5, 0)
+      mmToggleText:SetText("Show Minimap button")
+      
       local offerSyncToggle = CreateFrame("CheckButton", "OfferSync", interPanel, "OptionsCheckButtonTemplate")
-      offerSyncToggle:SetPoint("TOPLEFT", 10, -60)
+      offerSyncToggle:SetPoint("TOPLEFT", 10, -80)
       offerSyncToggle:SetChecked(engravingsDB.offerSync)
       local offerSyncToggleText = offerSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
       offerSyncToggleText:SetText("Offer Engravings sync service")
       
       local announcePlacementToggle = CreateFrame("CheckButton", "AnnouncePlacement", interPanel, "OptionsCheckButtonTemplate")
-      announcePlacementToggle:SetPoint("TOPLEFT", 10, -80)
+      announcePlacementToggle:SetPoint("TOPLEFT", 10, -100)
       announcePlacementToggle:SetChecked(engravingsDB.announcePlacement)
       local announcePlacementToggleText = announcePlacementToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       announcePlacementToggleText:SetPoint("LEFT", announcePlacementToggle, "RIGHT", 5, 0)
@@ -1106,6 +1113,9 @@ local function MakeInterfacePage()
                   engravingsDB.minimapDB["hide"] = false
                   icon:Show("Engravings")
                   offerSyncToggle:Enable()
+              elseif (toggleName == "MMB_Show") then
+                  engravingsDB.minimapDB["hide"] = false
+                  icon:Show("Engravings")
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = true
               elseif (toggleName == "AnnouncePlacement") then
@@ -1121,6 +1131,9 @@ local function MakeInterfacePage()
                   offerSyncToggle:SetChecked(false)
                   offerSyncToggle:Disable()
                   hbdp:RemoveAllMinimapIcons("EngravingsMM")
+              elseif (toggleName == "MMB_Show") then
+                  engravingsDB.minimapDB["hide"] = true
+                  icon:Hide("Engravings")
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = false
               elseif (toggleName == "AnnouncePlacement") then
@@ -1129,6 +1142,7 @@ local function MakeInterfacePage()
           end
       end
       participateToggle:SetScript("OnClick", ToggleOnClick)
+      mmToggle:SetScript("OnClick", ToggleOnClick)
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
       announcePlacementToggle:SetScript("OnClick", ToggleOnClick)
 
