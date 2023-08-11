@@ -526,7 +526,10 @@ local function GetTombstonesBeyondTimestamp(request_timestamp, max_to_fetch, map
     -- Iterate over the death records in reverse
     for index = numRecords, 1, -1 do
         local marker = zoneMarkers[index]
-        if (marker.timestamp > request_timestamp and marker.realm == REALM) then 
+        local badKarma = marker.karma ~= nil and marker.karma < 0
+        local sameFaction = marker.race_id ~= nil and raceIDToFactionID[marker.race_id] == PLAYER_FACTION
+        -- Do not send sync for anything out of realm or out of faction or has bad karma.
+        if (marker.timestamp > request_timestamp and marker.realm == REALM and not badKarma and sameFaction) then
             table.insert(fetchedTombstones, marker)
         end
         if #fetchedTombstones >= max_to_fetch then
