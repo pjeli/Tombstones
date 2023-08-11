@@ -551,6 +551,7 @@ local function LoadEngravingRecords()
         engravingsDB.minimapDB.minimapPos = 204
         engravingsDB.minimapDB.hide = false
         engravingsDB.announcePlacement = true
+        engravingsDB.reduceChatMsgs = false
     end
     if (engravingsDB.minimapDB == nil) then
         engravingsDB.minimapDB = {}
@@ -566,6 +567,9 @@ local function LoadEngravingRecords()
     end
     if (engravingsDB.announcePlacement == nil) then
         engravingsDB.announcePlacement = true
+    end
+    if (engravingsDB.reduceChatMsgs == nil) then
+        engravingsDB.reduceChatMsgs = false
     end
     for _, engraving in ipairs(engravingsDB.engravingRecords) do
         CacheEngraving(engraving)  
@@ -1084,15 +1088,22 @@ local function MakeInterfacePage()
       mmToggleText:SetPoint("LEFT", mmToggle, "RIGHT", 5, 0)
       mmToggleText:SetText("Show Minimap button")
       
+      local reduceChatMessageToggle = CreateFrame("CheckButton", "ReduceChatMsgs", interPanel, "OptionsCheckButtonTemplate")
+      reduceChatMessageToggle:SetPoint("TOPLEFT", 10, -80)
+      reduceChatMessageToggle:SetChecked(engravingsDB.reduceChatMsgs)
+      local reduceChatMessageToggleText = reduceChatMessageToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      reduceChatMessageToggleText:SetPoint("LEFT", reduceChatMessageToggle, "RIGHT", 5, 0)
+      reduceChatMessageToggleText:SetText("Remove Engravings add-on messages on login")
+      
       local offerSyncToggle = CreateFrame("CheckButton", "OfferSync", interPanel, "OptionsCheckButtonTemplate")
-      offerSyncToggle:SetPoint("TOPLEFT", 10, -80)
+      offerSyncToggle:SetPoint("TOPLEFT", 10, -100)
       offerSyncToggle:SetChecked(engravingsDB.offerSync)
       local offerSyncToggleText = offerSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
       offerSyncToggleText:SetText("Offer Engravings sync service")
       
       local announcePlacementToggle = CreateFrame("CheckButton", "AnnouncePlacement", interPanel, "OptionsCheckButtonTemplate")
-      announcePlacementToggle:SetPoint("TOPLEFT", 10, -100)
+      announcePlacementToggle:SetPoint("TOPLEFT", 10, -120)
       announcePlacementToggle:SetChecked(engravingsDB.announcePlacement)
       local announcePlacementToggleText = announcePlacementToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       announcePlacementToggleText:SetPoint("LEFT", announcePlacementToggle, "RIGHT", 5, 0)
@@ -1116,6 +1127,8 @@ local function MakeInterfacePage()
               elseif (toggleName == "MMB_Show") then
                   engravingsDB.minimapDB["hide"] = false
                   icon:Show("Engravings")
+              elseif (toggleName == "ReduceChatMsgs") then  
+                  engravingsDB.reduceChatMsgs = true
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = true
               elseif (toggleName == "AnnouncePlacement") then
@@ -1134,6 +1147,8 @@ local function MakeInterfacePage()
               elseif (toggleName == "MMB_Show") then
                   engravingsDB.minimapDB["hide"] = true
                   icon:Hide("Engravings")
+              elseif (toggleName == "ReduceChatMsgs") then  
+                  engravingsDB.reduceChatMsgs = false
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = false
               elseif (toggleName == "AnnouncePlacement") then
@@ -1143,6 +1158,7 @@ local function MakeInterfacePage()
       end
       participateToggle:SetScript("OnClick", ToggleOnClick)
       mmToggle:SetScript("OnClick", ToggleOnClick)
+      reduceChatMessageToggle:SetScript("OnClick", ToggleOnClick)
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
       announcePlacementToggle:SetScript("OnClick", ToggleOnClick)
 
@@ -2256,6 +2272,10 @@ function Engravings:PLAYER_LOGIN()
   
   C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME)
   C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME_SERIAL)
+  
+  if (engravingsDB.participating and not engravingsDB.reduceChatMsgs) then
+      print("|cFFBF4500[Engravings]|r loaded successfully. Type /eng to get started, or click the minimap button.")
+  end
 
   self:RegisterEvent("PLAYER_STARTED_MOVING")
   self:RegisterEvent("PLAYER_STOPPED_MOVING")

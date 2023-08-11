@@ -371,7 +371,9 @@ local function TdeathlogJoinChannel()
                 if channel_num == 0 then
                 print("Failed to join death alerts channel via Tombstones.")
             else
-                print("Successfully joined deathlog channel via Tombstones.")
+                if (not deathRecordsDB.reduceChatMsgs) then
+                    print("Successfully joined deathlog channel via Tombstones.")
+                end
             end
             for i = 1, 10 do
                 if _G['ChatFrame'..i] then
@@ -379,7 +381,9 @@ local function TdeathlogJoinChannel()
                 end
             end
         else
-            print("Successfully joined deathlog channel via Tombstones.")
+            if (not deathRecordsDB.reduceChatMsgs) then
+                print("Successfully joined deathlog channel via Tombstones.")
+            end
         end
     end
 end
@@ -575,6 +579,7 @@ local function LoadDeathRecords()
         deathRecordsDB.useClassIcons = false
         deathRecordsDB.broadcastPvpDeath = true
         deathRecordsDB.filteredTombsChat = true
+        deathRecordsDB.reduceChatMsgs = false
         deathRecordsDB.offerSync = false
     end
     if (deathRecordsDB.showMarkers == nil) then
@@ -612,6 +617,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.filteredTombsChat == nil) then
         deathRecordsDB.filteredTombsChat = true
+    end
+    if (deathRecordsDB.reduceChatMsgs == nil) then
+        deathRecordsDB.reduceChatMsgs = false
     end
     if (deathRecordsDB.offerSync == nil) then
         deathRecordsDB.offerSync = false
@@ -1387,8 +1395,15 @@ local function MakeInterfacePage()
       filtedTombsInChatToggleText:SetPoint("LEFT", filtedTombsInChatToggle, "RIGHT", 5, 0)
       filtedTombsInChatToggleText:SetText("Show new filtered Tombstones in Default Chat")
       
+      local reduceChatMessageToggle = CreateFrame("CheckButton", "ReduceChatMsgs", interPanel, "OptionsCheckButtonTemplate")
+      reduceChatMessageToggle:SetPoint("TOPLEFT", 10, -140)
+      reduceChatMessageToggle:SetChecked(deathRecordsDB.reduceChatMsgs)
+      local reduceChatMessageToggleText = reduceChatMessageToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      reduceChatMessageToggleText:SetPoint("LEFT", reduceChatMessageToggle, "RIGHT", 5, 0)
+      reduceChatMessageToggleText:SetText("Remove Tombstones add-on messages on login")
+      
       local offerSyncToggle = CreateFrame("CheckButton", "OfferSync", interPanel, "OptionsCheckButtonTemplate")
-      offerSyncToggle:SetPoint("TOPLEFT", 10, -140)
+      offerSyncToggle:SetPoint("TOPLEFT", 10, -160)
       offerSyncToggle:SetChecked(deathRecordsDB.offerSync)
       local offerSyncToggleText = offerSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
@@ -1417,6 +1432,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.broadcastPvpDeath = true
               elseif (toggleName == "FiltedTombsInChat") then
                   deathRecordsDB.filteredTombsChat = true
+              elseif (toggleName == "ReduceChatMsgs") then  
+                  deathRecordsDB.reduceChatMsgs = true
               elseif (toggleName == "OfferSync") then
                   deathRecordsDB.offerSync = true
               end
@@ -1435,6 +1452,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.broadcastPvpDeath = false
               elseif (toggleName == "FiltedTombsInChat") then
                   deathRecordsDB.filteredTombsChat = false
+              elseif (toggleName == "ReduceChatMsgs") then  
+                  deathRecordsDB.reduceChatMsgs = false
               elseif (toggleName == "OfferSync") then
                   deathRecordsDB.offerSync = false
               end
@@ -1445,6 +1464,7 @@ local function MakeInterfacePage()
       classIconsToggle:SetScript("OnClick", ToggleOnClick)
       broadcastPvpToggle:SetScript("OnClick", ToggleOnClick)
       filtedTombsInChatToggle:SetScript("OnClick", ToggleOnClick)
+      reduceChatMessageToggle:SetScript("OnClick", ToggleOnClick)
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
@@ -3950,8 +3970,6 @@ function Tombstones:ADDON_LOADED(addonName)
         TdeathlogJoinChannel()
         TombstonesJoinChannel()
       end)
-
-      print("Tombstones loaded successfully!")
   end
 end
 
@@ -3961,6 +3979,10 @@ function Tombstones:PLAYER_LOGIN()
   MakeWorldMapButton()
   MakeMinimapButton()
   MakeInterfacePage()
+  
+  if (not deathRecordsDB.reduceChatMsgs) then
+      print("|cff9d9d9d[Tombstones]|r loaded successfully. Type /ts to get started, or click the minimap button.")
+  end
   
   self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
   self:RegisterEvent("PLAYER_TARGET_CHANGED")
