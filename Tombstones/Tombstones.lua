@@ -1671,7 +1671,7 @@ local function FlashWhenNearTombstone()
         -- Proximity flavor text
         if(proximityUnvisitedCount >= 10 and (lastProximityWarning < (time() - 900))) then
           lastProximityWarning = time()
-          DEFAULT_CHAT_FRAME:AddMessage("You feel the gaze of " .. tostring(proximityUnvisitedCount) .. " nearby unvisited spirits...", 1, 1, 0)
+          --DEFAULT_CHAT_FRAME:AddMessage("You feel the gaze of " .. tostring(proximityUnvisitedCount) .. " nearby unvisited spirits...", 1, 1, 0)
         end
         -- Now you have the closest death marker to the player
         if closestMarker then
