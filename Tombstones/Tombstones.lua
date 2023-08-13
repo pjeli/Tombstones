@@ -2706,9 +2706,16 @@ local function ShowLastWordsDialogueBox(marker)
     if (lastWords == nil or lastWords == "") then
         return
     end
+    
     -- Create the dialogue box frame
     dialogueBox = CreateFrame("Frame", "MyDialogueBox", UIParent)
-    dialogueBox:SetSize(300, 100)
+    
+    local killerDisplayId = (marker.source_id ~= nil and id_to_display[marker.source_id]) or nil
+    if (killerDisplayId ~= nil) then 
+      dialogueBox:SetSize(380, 100)
+    else
+      dialogueBox:SetSize(300, 100)
+    end
     dialogueBox:SetPoint("CENTER", 0, 0.3 * UIParent:GetHeight())
 
     -- Add a background texture
@@ -2720,12 +2727,23 @@ local function ShowLastWordsDialogueBox(marker)
     dialogueBox.model = CreateFrame("PlayerModel", nil, dialogueBox)
     dialogueBox.model:SetPoint("BOTTOMLEFT", 10, 10)
     dialogueBox.model:SetSize(80, 80)
-    --dialogueBox.model:SetDisplayInfo(146)
-    dialogueBox.model:SetDisplayInfo(21587)
+    dialogueBox.model:SetDisplayInfo(146) -- Default spirit ghost
     --dialogueBox.model:SetUnit("player") -- Set the model to the player's character
     dialogueBox.model:SetAnimation(60)
-    dialogueBox.model:SetCamDistanceScale(0.7) -- Adjust the camera distance as needed
+    dialogueBox.model:SetCamDistanceScale(0.8) -- Adjust the camera distance as needed
     dialogueBox.model:SetPosition(0, 0, -0.7)
+    
+    --Add a model for whatever killed the dead
+    if (killerDisplayId ~= nil) then 
+      dialogueBox.model_killer = CreateFrame("PlayerModel", nil, dialogueBox)
+      dialogueBox.model_killer:SetPoint("BOTTOMRIGHT", -10, 10)
+      dialogueBox.model_killer:SetSize(80, 80)
+      dialogueBox.model_killer:SetCamDistanceScale(1.6) -- Adjust the camera distance as needed
+      dialogueBox.model_killer:SetPosition(0, 0, -0.3)
+      dialogueBox.model_killer:SetDisplayInfo(killerDisplayId)
+      dialogueBox.model_killer:SetAnimation(17)
+      dialogueBox.model_killer:SetScript("OnAnimFinished", function() dialogueBox.model_killer:SetAnimation(17); end); -- Loop attack animation
+    end
 
     -- Add a text area for the dialogue text
     local text = dialogueBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

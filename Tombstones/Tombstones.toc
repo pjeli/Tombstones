@@ -26,3 +26,4 @@ Tombstones.lua
 Engravings.lua
 id_to_npc_classic.lua
 npc_to_id_classic.lua
+id_to_display_classic.lua
