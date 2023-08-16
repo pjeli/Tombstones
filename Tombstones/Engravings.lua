@@ -572,6 +572,9 @@ local function LoadEngravingRecords()
     if (engravingsDB.reduceChatMsgs == nil) then
         engravingsDB.reduceChatMsgs = false
     end
+    if (engravingsDB.autoSync == nil) then
+        engravingsDB.autoSync = true
+    end
     if (engravingsDB.ENGR_FILTERS ~= nil) then
         ENGR_FILTERS = engravingsDB.ENGR_FILTERS
         if (ENGR_FILTERS["HOUR_THRESH"] <= 0) then
@@ -1109,8 +1112,15 @@ local function MakeInterfacePage()
       offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
       offerSyncToggleText:SetText("Offer Engravings sync service")
       
+      local autoSyncToggle = CreateFrame("CheckButton", "AutoSync", interPanel, "OptionsCheckButtonTemplate")
+      autoSyncToggle:SetPoint("TOPLEFT", 10, -120)
+      autoSyncToggle:SetChecked(engravingsDB.autoSync)
+      local autoSyncToggleText = autoSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      autoSyncToggleText:SetPoint("LEFT", autoSyncToggle, "RIGHT", 5, 0)
+      autoSyncToggleText:SetText("Auto-sync on Zone change")
+      
       local announcePlacementToggle = CreateFrame("CheckButton", "AnnouncePlacement", interPanel, "OptionsCheckButtonTemplate")
-      announcePlacementToggle:SetPoint("TOPLEFT", 10, -120)
+      announcePlacementToggle:SetPoint("TOPLEFT", 10, -140)
       announcePlacementToggle:SetChecked(engravingsDB.announcePlacement)
       local announcePlacementToggleText = announcePlacementToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       announcePlacementToggleText:SetPoint("LEFT", announcePlacementToggle, "RIGHT", 5, 0)
@@ -1138,6 +1148,8 @@ local function MakeInterfacePage()
                   engravingsDB.reduceChatMsgs = true
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = true
+              elseif (toggleName == "AutoSync") then
+                  engravingsDB.autoSync = true
               elseif (toggleName == "AnnouncePlacement") then
                   engravingsDB.announcePlacement = true
               end
@@ -1158,6 +1170,8 @@ local function MakeInterfacePage()
                   engravingsDB.reduceChatMsgs = false
               elseif (toggleName == "OfferSync") then
                   engravingsDB.offerSync = false
+              elseif (toggleName == "AutoSync") then
+                  engravingsDB.autoSync = false
               elseif (toggleName == "AnnouncePlacement") then
                   engravingsDB.announcePlacement = false
               end
@@ -1167,6 +1181,7 @@ local function MakeInterfacePage()
       mmToggle:SetScript("OnClick", ToggleOnClick)
       reduceChatMessageToggle:SetScript("OnClick", ToggleOnClick)
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
+      autoSyncToggle:SetScript("OnClick", ToggleOnClick)
       announcePlacementToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
@@ -1178,6 +1193,14 @@ local function BroadcastSyncRequest(custom_timestamp)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
     CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
+end
+
+local function QueueSyncRequest()
+    local playerMap = C_Map.GetBestMapForUnit("player")
+    local oldest_engraving_timestamp = GetOldestEngravingTimestamp(playerMap)
+    local channel_num = GetChannelName(tombstones_channel)
+    requestedSync = true
+    table.insert(engravings_sync_request_queue, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap)
 end
 
 local function GenerateEngravingsOptionsFrame()
@@ -2071,6 +2094,12 @@ function Engravings:PLAYER_STARTED_MOVING()
   -- Movement monitoring started
 end
 
+function Engravings:ZONE_CHANGED_NEW_AREA()
+  if (engravingsDB.participating and engravingsDB.autoSync) then
+      QueueSyncRequest()
+  end
+end
+
 local receivedChunks = {} -- Table to store the received chunks
 local totalChunks = 0 -- Total number of expected chunks
 
@@ -2305,6 +2334,7 @@ function Engravings:PLAYER_LOGIN()
       print("|cFFBF4500[Engravings]|r loaded successfully. Type /eng to get started, or click the minimap button.")
   end
 
+  self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
   self:RegisterEvent("PLAYER_STARTED_MOVING")
   self:RegisterEvent("PLAYER_STOPPED_MOVING")
   self:RegisterEvent("CHAT_MSG_CHANNEL")
