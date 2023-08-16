@@ -2742,6 +2742,7 @@ local function ShowLastWordsDialogueBox(marker)
       dialogueBox.model_killer:SetPosition(0, 0, -0.3)
       dialogueBox.model_killer:SetDisplayInfo(killerDisplayId)
       dialogueBox.model_killer:SetAnimation(17)
+      dialogueBox.model_killer:SetFacing(-0.9) -- Facing left?
       dialogueBox.model_killer:SetScript("OnAnimFinished", function() dialogueBox.model_killer:SetAnimation(17); end); -- Loop attack animation
     end
 
