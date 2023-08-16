@@ -2095,7 +2095,7 @@ function Engravings:PLAYER_STARTED_MOVING()
 end
 
 function Engravings:ZONE_CHANGED_NEW_AREA()
-  if (engravingsDB.participating and engravingsDB.autoSync) then
+  if (engravingsDB.participating and engravingsDB.autoSync and not IsInInstance()) then
       QueueSyncRequest()
   end
 end
