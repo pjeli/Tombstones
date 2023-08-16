@@ -523,6 +523,7 @@ local function printDebug(msg)
 end
 
 local function SaveEngravingRecords()
+    engravingsDB.ENGR_FILTERS = ENGR_FILTERS
     _G["engravingsDB"] = engravingsDB
 end
 
@@ -570,6 +571,12 @@ local function LoadEngravingRecords()
     end
     if (engravingsDB.reduceChatMsgs == nil) then
         engravingsDB.reduceChatMsgs = false
+    end
+    if (engravingsDB.ENGR_FILTERS ~= nil) then
+        ENGR_FILTERS = engravingsDB.ENGR_FILTERS
+        if (ENGR_FILTERS["HOUR_THRESH"] <= 0) then
+            ENGR_FILTERS["HOUR_THRESH"] = 720 -- 30 days in hours
+        end
     end
     for _, engraving in ipairs(engravingsDB.engravingRecords) do
         CacheEngraving(engraving)  
@@ -1173,7 +1180,7 @@ local function BroadcastSyncRequest(custom_timestamp)
     CTL:SendChatMessage("BULK", EN_COMM_NAME, EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_engraving_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
 end
 
-local function GenerateTombstonesOptionsFrame()
+local function GenerateEngravingsOptionsFrame()
     if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
         return
     elseif (optionsFrame ~= nil and not optionsFrame:IsVisible()) then
@@ -1335,11 +1342,17 @@ local function MakeMinimapButton()
               miniButton.icon = "Interface\\Icons\\inv_misc_rune_04"
               icon:Refresh("Engravings")
           end)
-        else
+        elseif (IsShiftKeyDown()) then
           if (phraseFrame ~= nil and phraseFrame:IsVisible()) then
               phraseFrame:Hide()
           else
               CreatePhraseGenerationInterface()
+          end
+        else
+          if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
+              optionsFrame:Hide()
+          else
+              GenerateEngravingsOptionsFrame()
           end
         end
     end
@@ -1356,6 +1369,7 @@ local function MakeMinimapButton()
             tooltip:AddLine("Engravings")
             tooltip:AddLine("|cFFBF4500records:|r "..tostring(#engravingsDB.engravingRecords))
             tooltip:AddLine("|cffffffffctrl-click to sync|r")
+            tooltip:AddLine("|cffffffffshift-click to make|r")
         end,
     })
 
@@ -2017,7 +2031,11 @@ local function SlashCommandHandler(msg)
     elseif command == "usage" then
         print("Usage: /engravings or /eng [info | make | clear]")
     else
-      GenerateTombstonesOptionsFrame()
+      if (optionsFrame ~= nil and optionsFrame:IsVisible()) then
+        optionsFrame:Hide()
+      else
+        GenerateEngravingsOptionsFrame()
+      end
     end
 end
 SlashCmdList["ENGRAVINGS"] = SlashCommandHandler
