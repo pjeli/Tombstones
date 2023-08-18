@@ -2353,7 +2353,7 @@ function Engravings:PLAYER_LOGIN()
   C_ChatInfo.RegisterAddonMessagePrefix(EN_COMM_NAME_SERIAL)
   
   if (engravingsDB.participating and not engravingsDB.reduceChatMsgs) then
-      print("|cFFBF4500[Engravings]|r loaded successfully. Type /eng to get started, or click the minimap button.")
+      print("|cFFBF4500[Engravings]|r loaded successfully. Type /eng to get started, or click the minimap button. Additional options in Interface Options.")
   end
 
   self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
