@@ -158,6 +158,7 @@ local deathlog_death_queue = {}
 local deathlog_last_words_queue = {}
 -- Tombstones Queue Variables
 local tombstones_pvp_death_queue = {}
+local tombstones_sync_request_queue = {}
 
 -- Variables
 local deathRecordsDB
@@ -551,6 +552,14 @@ local function BroadcastSyncRequest(custom_timestamp)
     CTL:SendChatMessage("BULK", TS_COMM_NAME, TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_tombstone_timestamp..COMM_FIELD_DELIM..playerMap, "CHANNEL", nil, channel_num)
 end
 
+local function QueueSyncRequest()
+    local playerMap = C_Map.GetBestMapForUnit("player")
+    local oldest_tombstone_timestamp = GetOldestTombstoneTimestamp(playerMap)
+    local channel_num = GetChannelName(tombstones_channel)
+    requestedSync = true
+    table.insert(tombstones_sync_request_queue, TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"]..COMM_COMMAND_DELIM..oldest_tombstone_timestamp..COMM_FIELD_DELIM..playerMap)
+end
+
 local function TombstonesLeaveChannel()
     local channel_num = GetChannelName(tombstones_channel)
     if channel_num ~= 0 then
@@ -626,6 +635,9 @@ local function LoadDeathRecords()
     end
     if (deathRecordsDB.offerSync == nil) then
         deathRecordsDB.offerSync = false
+    end
+    if (deathRecordsDB.autoSync == nil) then
+        deathRecordsDB.autoSync = true
     end
     if (deathRecordsDB.TOMB_FILTERS ~= nil) then
         TOMB_FILTERS = deathRecordsDB.TOMB_FILTERS
@@ -1412,6 +1424,13 @@ local function MakeInterfacePage()
       offerSyncToggleText:SetPoint("LEFT", offerSyncToggle, "RIGHT", 5, 0)
       offerSyncToggleText:SetText("Offer Tombstones sync service")
       
+      local autoSyncToggle = CreateFrame("CheckButton", "AutoSync", interPanel, "OptionsCheckButtonTemplate")
+      autoSyncToggle:SetPoint("TOPLEFT", 10, -180)
+      autoSyncToggle:SetChecked(deathRecordsDB.autoSync)
+      local autoSyncToggleText = autoSyncToggle:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      autoSyncToggleText:SetPoint("LEFT", autoSyncToggle, "RIGHT", 5, 0)
+      autoSyncToggleText:SetText("Auto-sync on Zone change")
+      
       local slashHelpText = interPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       slashHelpText:SetPoint("CENTER", interPanel, "CENTER", 0, 0)
       slashHelpText:SetText("/ts for menu.\n/ts usage for slash command options.")
@@ -1439,6 +1458,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.reduceChatMsgs = true
               elseif (toggleName == "OfferSync") then
                   deathRecordsDB.offerSync = true
+              elseif (toggleName == "AutoSync") then
+                  deathRecordsDB.autoSync = true
               end
           else
               -- Perform actions for unselected state
@@ -1459,6 +1480,8 @@ local function MakeInterfacePage()
                   deathRecordsDB.reduceChatMsgs = false
               elseif (toggleName == "OfferSync") then
                   deathRecordsDB.offerSync = false
+              elseif (toggleName == "AutoSync") then
+                  deathRecordsDB.autoSync = false
               end
           end
       end
@@ -1469,6 +1492,7 @@ local function MakeInterfacePage()
       filtedTombsInChatToggle:SetScript("OnClick", ToggleOnClick)
       reduceChatMessageToggle:SetScript("OnClick", ToggleOnClick)
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
+      autoSyncToggle:SetScript("OnClick", ToggleOnClick)
 
 			InterfaceOptions_AddCategory(interPanel)
 end
@@ -3176,6 +3200,19 @@ local function TsendNextInQueue()
 		return
 	end
   
+  if #tombstones_sync_request_queue > 0 then 
+		local ts_channel_num = GetChannelName(tombstones_channel)
+		if ts_channel_num == 0 then
+		  TombstonesJoinChannel()
+		  return
+		end
+    
+		local commMessage = tombstones_sync_request_queue[1]
+		CTL:SendChatMessage("BULK", TS_COMM_NAME, commMessage, "CHANNEL", nil, ts_channel_num)
+		table.remove(tombstones_sync_request_queue, 1)
+		return
+	end
+  
   if #tombstones_pvp_death_queue > 0 then
     local ts_channel_num = GetChannelName(tombstones_channel)
 		if ts_channel_num == 0 then
@@ -3930,6 +3967,9 @@ end
 
 function Tombstones:ZONE_CHANGED_NEW_AREA()
   ShowZoneSplashText()
+  if (deathRecordsDB.autoSync and not IsInInstance()) then
+      QueueSyncRequest()
+  end
 end
 
 function Tombstones:PLAYER_DEAD()
