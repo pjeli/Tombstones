@@ -3584,13 +3584,13 @@ function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
   -- TALLY RESPONSE HANDLING
   if (command == TS_COMM_COMMANDS["WHISPER_TALLY_REPLY"] and expectingTallyReply and prefix == TS_COMM_NAME and channel == "WHISPER") then
-      -- CONSIDER: We only process messages we expect; and we only take 1 message; so, should be fine...
-      --if not isPlayerMessageAllowed(player_name_short) then return end 
+      if not isPlayerMessageAllowed(player_name_short) then return end 
       TcountWhisperedRatingForMarkerFrom(msg, player_name_short)
   end
   -- RESPOND TO SYNC AVAILABILITY IF STILL VALID
   if (command == TS_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"] and prefix == TS_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:TombstoneSyncAvailability from " .. player_name_short .. ".") 
+      if not isPlayerMessageAllowed(player_name_short) then return end
       if (requestedSync == false) then return end -- We didn't request a sync? Spammer...
       if (agreedSender ~= nil) then return end -- We already have a sender
       local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
@@ -3605,6 +3605,7 @@ function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   -- RESPOND TO SYNC ACCEPTANCE; SEND THE DATA
   elseif (command == TS_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"] and prefix == TS_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:TombstoneSyncAccept from " .. player_name_short .. ".") 
+      if not isPlayerMessageAllowed(player_name_short) then return end
       if (deathRecordsDB.offerSync == false) then return end -- We are not offering sync service
       if (player_name_short ~= agreedReceiver) then return end -- The accepter is not the same player as we agreed upon? Spam / hacker.
       local timestampAgreedUpon, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
@@ -3623,6 +3624,7 @@ function Tombstones:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   -- RECEIVE THE CHUNKED DATA
   elseif (prefix == TS_COMM_NAME_SERIAL and channel == "WHISPER") then
       printDebug("Receiving TS:TombstoneSyncData from " .. player_name_short .. ".") 
+      if not isPlayerMessageAllowed(player_name_short) then return end
       if (player_name_short ~= agreedSender) then
           printDebug("Rejecting "..player_name_short.." because non-agreed sender.")
           return
@@ -3760,6 +3762,7 @@ function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
       end
       if command == TS_COMM_COMMANDS["BROADCAST_TOMBSTONE_SYNC_REQUEST"] then
           printDebug("Receiving TS:TombstoneSyncRequest from " .. player_name_short .. ".")
+          if not isPlayerMessageAllowed(player_name_short) then return end
           if (deathRecordsDB.offerSync == false) then return end -- We are not offering syncing service
           if (agreedReceiver ~= nil) then return end -- We already have an agreed upon receiver of sync
           local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
@@ -4013,7 +4016,7 @@ function Tombstones:PLAYER_LOGIN()
   MakeInterfacePage()
   
   if (not deathRecordsDB.reduceChatMsgs) then
-      print("|cff9d9d9d[Tombstones]|r loaded successfully. Type /ts to get started, or click the minimap button.")
+      print("|cff9d9d9d[Tombstones]|r loaded successfully. Type /ts to get started, or click the minimap button. Additional options in Interface Options.")
   end
   
   self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
