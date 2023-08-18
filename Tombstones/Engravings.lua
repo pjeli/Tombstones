@@ -472,6 +472,8 @@ local tombstones_channel = "tsbroadcastchannel"
 local tombstones_channel_pw = "tsbroadcastchannelpw"
 
 -- Message Variables
+local throttle_player = {}
+local shadowbanned = {}
 local engravings_readout_queue = {}
 local engravings_sync_request_queue = {}
 local engravings_sync_availability_queue = {}
@@ -1926,6 +1928,21 @@ local function WhisperSyncDataTo(player_name_short, engravings_data)
     syncAccepted = false
 end
 
+local function isPlayerMessageAllowed(player_name_short)
+    if shadowbanned[player_name_short] then return false end
+    if throttle_player[player_name_short] == nil then
+        throttle_player[player_name_short] = 0
+        return true
+    end
+    throttle_player[player_name_short] = throttle_player[player_name_short] + 1
+    if throttle_player[player_name_short] > 300 then
+        print("Engravings has shadowbanned "..player_name_short..".")
+        shadowbanned[player_name_short] = 1
+        return false
+    end
+    return true
+end
+
 
 --[[ Self Report Handling]]
 --
@@ -2109,6 +2126,7 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   -- RESPOND TO SYNC AVAILABILITY IF STILL VALID
   if (command == EN_COMM_COMMANDS["WHISPER_SYNC_AVAILABILITY"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:EngravingSyncAvailability from " .. player_name_short .. ".") 
+      if not isPlayerMessageAllowed(player_name_short) then return end
       if (requestedSync == false) then return end -- We didn't request a sync? Spammer...
       if (agreedSender ~= nil) then return end -- We already have a sender
       local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
@@ -2123,6 +2141,7 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   -- RESPOND TO SYNC ACCEPTANCE; SEND THE DATA
   elseif (command == EN_COMM_COMMANDS["WHISPER_SYNC_ACCEPT"] and prefix == EN_COMM_NAME and channel == "WHISPER") then
       printDebug("Receiving TS:EngravingSyncAccept from " .. player_name_short .. ".") 
+      if not isPlayerMessageAllowed(player_name_short) then return end
       if (engravingsDB.offerSync == false) then return end -- We are not offering sync service
       if (player_name_short ~= agreedReceiver) then return end -- The accepter is not the same player as we agreed upon? Spam / hacker.
       local timestampAgreedUpon, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
@@ -2141,6 +2160,7 @@ function Engravings:CHAT_MSG_ADDON(prefix, data_str, channel, sender_name_long)
   -- RECEIVE THE CHUNKED DATA
   elseif (prefix == EN_COMM_NAME_SERIAL and channel == "WHISPER") then
       printDebug("Receiving TS:EngravingSyncData from " .. player_name_short .. ".") 
+      if not isPlayerMessageAllowed(player_name_short) then return end
       if (player_name_short ~= agreedSender) then
           printDebug("Rejecting "..player_name_short.." because non-agreed sender.")
           return
@@ -2214,6 +2234,7 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
       if command == EN_COMM_COMMANDS["BROADCAST_ENGRAVING_PING"] then
           printDebug("Receiving TS:EngravingPing from " .. player_name_short .. ".")
+          if not isPlayerMessageAllowed(player_name_short) then return end
           --(name, map_id, map_pos, templ_index, cat_index, word_index, conj_index, conj_templ_index, conj_cat_index, conj_word_index)
           local engravingLocPing = EdecodeMessage(msg)
           if (engravingLocPing ~= nil) then
@@ -2251,6 +2272,7 @@ function Engravings:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name
           end
       elseif command == EN_COMM_COMMANDS["BROADCAST_ENGRAVING_SYNC_REQUEST"] then
           printDebug("Receiving TS:EngravingSyncRequest from " .. player_name_short .. ".")
+          if not isPlayerMessageAllowed(player_name_short) then return end
           if (engravingsDB.offerSync == false) then return end -- We are not offering syncing service
           if (agreedReceiver ~= nil) then return end -- We already have an agreed upon receiver of sync
           local oldestTimestampInRequest, mapID = strsplit(COMM_FIELD_DELIM, msg, 2)
