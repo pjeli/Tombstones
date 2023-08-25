@@ -546,6 +546,7 @@ local function BroadcastSyncRequest(custom_timestamp)
       return 
     end
     local playerMap = C_Map.GetBestMapForUnit("player")
+    if (playerMap == nil) then return end
     local oldest_tombstone_timestamp = custom_timestamp or GetOldestTombstoneTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
@@ -553,7 +554,9 @@ local function BroadcastSyncRequest(custom_timestamp)
 end
 
 local function QueueSyncRequest()
+    if (IsInInstance()) then return end
     local playerMap = C_Map.GetBestMapForUnit("player")
+    if (playerMap == nil) then return end
     local oldest_tombstone_timestamp = GetOldestTombstoneTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
@@ -1644,6 +1647,7 @@ local function FlashWhenNearTombstone()
     end
 
     local playerInstance = C_Map.GetBestMapForUnit("player")
+    if (playerInstance == nil) then return end
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
     local playerX, playerY = playerPosition:GetXY()
     local playerLevel = UnitLevel("player")

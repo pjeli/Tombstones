@@ -1190,7 +1190,12 @@ local function MakeInterfacePage()
 end
 
 local function BroadcastSyncRequest(custom_timestamp)
+    if (IsInInstance()) then 
+      print("Engravings cannot sync while in instance.")
+      return 
+    end
     local playerMap = C_Map.GetBestMapForUnit("player")
+    if (playerMap == nil) then return end
     local oldest_engraving_timestamp = custom_timestamp or GetOldestEngravingTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
@@ -1198,7 +1203,9 @@ local function BroadcastSyncRequest(custom_timestamp)
 end
 
 local function QueueSyncRequest()
+    if (IsInInstance()) then return end
     local playerMap = C_Map.GetBestMapForUnit("player")
+    if (playerMap == nil) then return end
     local oldest_engraving_timestamp = GetOldestEngravingTimestamp(playerMap)
     local channel_num = GetChannelName(tombstones_channel)
     requestedSync = true
@@ -1647,6 +1654,7 @@ local function FlashWhenNearEngraving()
     end
 
     local playerInstance = C_Map.GetBestMapForUnit("player")
+    if (playerInstance == nil) then return end
     local playerPosition = C_Map.GetPlayerMapPosition(playerInstance, "player")
     local playerX, playerY = playerPosition:GetXY()
 
