@@ -441,7 +441,7 @@ local function WhisperSyncAcceptanceTo(player_name_short, oldest_timestamp, mapI
 end
 
 local function WhisperSyncDataTo(player_name_short, tombstones_data) 
-    print("Tombstones is sending sync data to " .. player_name_short .. ".")
+    printDebug("Tombstones is sending sync data to " .. player_name_short .. ".")
 
     local serialized = ls:Serialize(tombstones_data)
     local compressed = ld:CompressDeflate(serialized)
