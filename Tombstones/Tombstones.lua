@@ -514,7 +514,9 @@ local function haveTombstonesBeyondTimestamp(request_timestamp, mapID)
     -- Iterate over the death records in reverse
     for index = numRecords, 1, -1 do
         local marker = zoneMarkers[index]
-        if (marker.timestamp > request_timestamp and marker.realm == REALM) then return true end
+        local badKarma = marker.karma ~= nil and marker.karma < 0
+        local sameFaction = marker.race_id ~= nil and raceIDToFactionID[marker.race_id] == PLAYER_FACTION
+        if (marker.timestamp > request_timestamp and marker.realm == REALM and not badKarma and sameFaction) then return true end
     end
     return false
 end
