@@ -2757,7 +2757,8 @@ local function ShowLastWordsDialogueBox(marker)
     dialogueBox.model = CreateFrame("PlayerModel", nil, dialogueBox)
     dialogueBox.model:SetPoint("BOTTOMLEFT", 10, 10)
     dialogueBox.model:SetSize(80, 80)
-    dialogueBox.model:SetDisplayInfo(146) -- Default spirit ghost
+    dialogueBox.model:SetCreature(2056, 146) -- Default spirit ghost
+    --dialogueBox.model:SetDisplayInfo(146)
     --dialogueBox.model:SetUnit("player") -- Set the model to the player's character
     dialogueBox.model:SetAnimation(60)
     dialogueBox.model:SetCamDistanceScale(0.8) -- Adjust the camera distance as needed
@@ -2770,7 +2771,8 @@ local function ShowLastWordsDialogueBox(marker)
       dialogueBox.model_killer:SetSize(80, 80)
       dialogueBox.model_killer:SetCamDistanceScale(1.6) -- Adjust the camera distance as needed
       dialogueBox.model_killer:SetPosition(0, 0, -0.3)
-      dialogueBox.model_killer:SetDisplayInfo(killerDisplayId)
+      dialogueBox.model_killer:SetCreature(marker.source_id, killerDisplayId)
+      --dialogueBox.model_killer:SetDisplayInfo(killerDisplayId)
       dialogueBox.model_killer:SetAnimation(17)
       dialogueBox.model_killer:SetFacing(-0.9) -- Facing left?
       dialogueBox.model_killer:SetScript("OnAnimFinished", function() dialogueBox.model_killer:SetAnimation(17); end); -- Loop attack animation
@@ -2809,9 +2811,13 @@ local function ShowLastWordsDialogueBox(marker)
             dialogueBox = nil
         end
     end)
+    if (dialogueBox.model ~= nil) then dialogueBox.model.fade = dialogueBox.fade end
+    if (dialogueBox.model_killer ~= nil) then dialogueBox.model_killer.fade = dialogueBox.fade end
 
     dialogueBox:Show()
     dialogueBox.fade:Play()
+    if (dialogueBox.model ~= nil) then dialogueBox.model.fade:Play() end
+    if (dialogueBox.model_killer ~= nil) then dialogueBox.model_killer.fade:Play() end
 end
 
 -- Function to show the zone splash text
@@ -2841,13 +2847,13 @@ local function ShowNearestTombstoneSplashText(marker)
     local lastWords = marker.last_words
     local heroText
     if (marker.realm == REALM) then
-        if marker.guild then 
+        if marker.guild and marker.guild ~= "" then 
             heroText = marker.user .. ", a " ..race_info.. " "..class_str .. " from " .. marker.guild .. ", perished here at level " .. level .. "."
         else 
             heroText = marker.user .. ", a " ..race_info.. " "..class_str .. ", perished here at level " .. level .. "."
         end
     else
-        if marker.guild then 
+        if marker.guild and marker.guild ~= "" then 
             heroText = marker.user .. ", a " ..race_info.. " "..class_str .. " from " .. marker.guild .. " of the realm " .. marker.realm ..", perished here at level " .. level .. "."
         else
             heroText = marker.user .. ", a " ..race_info.. " "..class_str .. " of the realm " .. marker.realm .. ", perished here at level " .. level .. "."
