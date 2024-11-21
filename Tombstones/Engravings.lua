@@ -1186,7 +1186,8 @@ local function MakeInterfacePage()
       autoSyncToggle:SetScript("OnClick", ToggleOnClick)
       announcePlacementToggle:SetScript("OnClick", ToggleOnClick)
 
-			InterfaceOptions_AddCategory(interPanel)
+      local category, layout = _G.Settings.RegisterCanvasLayoutCategory(interPanel, interPanel.name)
+      _G.Settings.RegisterAddOnCategory(category)
 end
 
 local function BroadcastSyncRequest(custom_timestamp)

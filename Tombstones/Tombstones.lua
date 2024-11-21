@@ -134,28 +134,17 @@ local tombstones_channel = "tsbroadcastchannel"
 local tombstones_channel_pw = "tsbroadcastchannelpw"
 
 -- DeathLog Constants
-local death_alerts_channel = "hcdeathalertschannel"
-local death_alerts_channel_pw = "hcdeathalertschannelpw"
 local COMM_COMMAND_DELIM = "$"
 local COMM_FIELD_DELIM = "~"
-local COMM_NAME = "HCDeathAlerts"
-local COMM_COMMANDS = {
-  ["BROADCAST_DEATH_PING"] = "1",
-  ["BROADCAST_DEATH_PING_CHECKSUM"] = "2",
-  ["LAST_WORDS"] = "3",
-}
 local environment_damage = {
   [-2] = "Drowning",
   [-3] = "Falling",
   [-4] = "Fatigue",
   [-5] = "Fire",
   [-6] = "Lava",
-  [-7] = "Slime",
-  [-8] = "PvP" -- Added for Tombstones
+  [-7] = "Slime"
 }
--- DeathLog Variables
-local deathlog_death_queue = {}
-local deathlog_last_words_queue = {}
+
 -- Tombstones Queue Variables
 local tombstones_pvp_death_queue = {}
 local tombstones_sync_request_queue = {}
@@ -359,34 +348,6 @@ local function LastWordsSmartParser(last_words)
         return last_words
     end
     return nil
-end
-
-local function TdeathlogJoinChannel()
-    if _G["deathlogJoinChannel"] ~= nil then
-        return
-    else
-        local channel_num = GetChannelName(death_alerts_channel)
-        if channel_num == 0 then
-            JoinChannelByName(death_alerts_channel, death_alerts_channel_pw)
-            local channel_num = GetChannelName(death_alerts_channel)
-                if channel_num == 0 then
-                print("Failed to join death alerts channel via Tombstones.")
-            else
-                if (not deathRecordsDB.reduceChatMsgs) then
-                    print("Successfully joined deathlog channel via Tombstones.")
-                end
-            end
-            for i = 1, 10 do
-                if _G['ChatFrame'..i] then
-                    ChatFrame_RemoveChannel(_G['ChatFrame'..i], death_alerts_channel)
-                end
-            end
-        else
-            if (not deathRecordsDB.reduceChatMsgs) then
-                print("Successfully joined deathlog channel via Tombstones.")
-            end
-        end
-    end
 end
 
 local function TwhisperRatingForMarkerTo(msg, player_name_short)
@@ -1070,11 +1031,9 @@ local function UpdateWorldMapMarkers()
                             if (source_id ~= nil) then 
                                 GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
                             elseif (env_dmg ~= nil) then
-                                if (marker.source_id == -8 and marker.pvpKiller ~= nil) then 
-                                    GameTooltip:AddLine("Died from: " .. env_dmg .. " w/ " .. marker.pvpKiller, 1, 0, 0, true)
-                                else 
-                                    GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true)
-                                end
+                                GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true)
+                            elseif (source_id == nil and env_dmg == nil) then
+                                GameTooltip:AddLine(deathlog_decode_pvp_source(marker.source_id), 1, 0, 0, true) 
                             end
                         end
                         if (marker.last_words ~= nil) then
@@ -1499,7 +1458,8 @@ local function MakeInterfacePage()
       offerSyncToggle:SetScript("OnClick", ToggleOnClick)
       autoSyncToggle:SetScript("OnClick", ToggleOnClick)
 
-			InterfaceOptions_AddCategory(interPanel)
+      local category, layout = _G.Settings.RegisterCanvasLayoutCategory(interPanel, interPanel.name)
+      _G.Settings.RegisterAddOnCategory(category)
 end
 
 local function CreateTargetDangerFrame()
@@ -2332,53 +2292,128 @@ function TdeathlogReceiveLastWords(sender, data)
   end
 end
 
-function TdeathlogReceiveChannelMessage(sender, data)
-  if data == nil then return end
-  local decoded_player_data = TdecodeMessage(data)
-  printDebug("Tombstones decoded a DeathLog death for " .. sender .. "!")
-  if sender ~= decoded_player_data["name"] then return end
-  local x, y = strsplit(",", decoded_player_data["map_pos"],2)
-  
-  local mapID = tonumber(decoded_player_data["map_id"])
-  local posX = tonumber(x)
-  local posY = tonumber(y)
+-- @param _player_data metadata for player entry.
+-- 	@field name Player's name
+-- 	@field guild Player's guild
+-- 	@field source_id ID of creature that killed the player
+-- 	@field class_id Class ID of the player
+-- 	@field level Player's level
+-- 	@field instance_id Instance that player died in. Nil if player did not die in an instance
+-- 	@field map_id Zone ID that player died in. Nil if player died in an instance instead
+-- 	@field map_pos Map coordinates within zone specified by map_id, nil if player died in an instance instead
+-- 	@field date Date that the player died.  Unix Epoch.
+-- 	@field last_words Player's last words.
+-- @param _checksum A checksum for the player data
+-- @param _peer_report Number of guildmates that verified the death
+-- @param _in_guild Whether the player is in your guild
+DeathNotificationLib_HookOnNewEntry(
+  function(_player_data, _checksum, _peer_report, _in_guild) 
 
-  local success, marker = AddDeathMarker(mapID, decoded_player_data["instance_id"], posX, posY, tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]), decoded_player_data["guild"])
-  
-  local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
-  local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
-  local textureIcon = "Interface\\Icons\\Ability_Creature_Cursed_03"
-  overlayFrameTexture:SetAllPoints()
-  overlayFrameTexture:SetTexture(textureIcon)
+    printDebug("Tombstones decoded a DeathLog death for " .. _player_data["name"] .. "!")
+    
+    local playerX, playerY = strsplit(",", _player_data["map_pos"], 2)
+    
+    --ImportDeathMarker(realm, mapID, instID, posX, posY, timestamp, user, level, source_id, class_id, race_id, last_words, guild, pvpKiller)
+    local success, marker = ImportDeathMarker(REALM, tonumber(_player_data["map_id"]), tonumber(_player_data["instance_id"]), tonumber(playerX), tonumber(playerY), tonumber(_player_data["date"]), _player_data["name"], tonumber(_player_data["level"]), _player_data["source_id"], tonumber(_player_data["class_id"]), tonumber(_player_data["race_id"]), LastWordsSmartParser(_player_data["last_words"]), _player_data["guild"], nil)
+    
+    local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+    local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
+    local textureIcon = "Interface\\Icons\\Ability_Creature_Cursed_03"
+    overlayFrameTexture:SetAllPoints()
+    overlayFrameTexture:SetTexture(textureIcon)
 
-  ratingsSeenCount = ratingsSeenCount + 1
+    ratingsSeenCount = ratingsSeenCount + 1
 
-  miniButton.icon = textureIcon
-  icon:Refresh("Tombstones")
-  
-  C_Timer.After(7.0, function()
-      ratingsSeenCount = ratingsSeenCount - 1
-      if overlayFrame ~= nil then
-          overlayFrame:Hide()
-          overlayFrame = nil 
-      end
-      if(ratingsSeenCount == 0) then
-        miniButton.icon = "Interface\\Icons\\Ability_fiegndead"
-        icon:Refresh("Tombstones")
-      end
-  end)
+    miniButton.icon = textureIcon
+    icon:Refresh("Tombstones")
+    
+    C_Timer.After(7.0, function()
+        ratingsSeenCount = ratingsSeenCount - 1
+        if overlayFrame ~= nil then
+            overlayFrame:Hide()
+            overlayFrame = nil 
+        end
+        if(ratingsSeenCount == 0) then
+          miniButton.icon = "Interface\\Icons\\Ability_fiegndead"
+          icon:Refresh("Tombstones")
+        end
+    end)
 
-  if (success and not IsInInstance() and deathRecordsDB.filteredTombsChat) then
-      C_Timer.After(7.0, function()
-          if (IsMarkerAllowedByFilters(marker)) then
-              local last_words = marker.last_words or ""
-              local _, santizedLastWords = extractBracketTextWithColor(last_words)
-              local encodedLastWords = encodeColorizedText(santizedLastWords)
-              local msg = "|cff9d9d9d|Hgarrmission:tombstones:"..marker.guild..":"..marker.timestamp..":"..marker.level..":"..marker.class_id..":"..marker.race_id..":"..marker.source_id..":"..marker.mapID..":"..marker.posX..":"..marker.posY..":\""..encodedLastWords.."\"|h["..marker.user.."'s Tombstone]|h|r"
-              DEFAULT_CHAT_FRAME:AddMessage(msg .. " has been added to your collection.")
-          end
-      end)
+    if (success and not IsInInstance() and deathRecordsDB.filteredTombsChat) then
+        C_Timer.After(7.0, function()
+            if (IsMarkerAllowedByFilters(marker)) then
+                local last_words = marker.last_words or ""
+                local _, santizedLastWords = extractBracketTextWithColor(last_words)
+                local encodedLastWords = encodeColorizedText(santizedLastWords)
+                local msg = "|cff9d9d9d|Hgarrmission:tombstones:"..marker.guild..":"..marker.timestamp..":"..marker.level..":"..marker.class_id..":"..marker.race_id..":"..marker.source_id..":"..marker.mapID..":"..marker.posX..":"..marker.posY..":\""..encodedLastWords.."\"|h["..marker.user.."'s Tombstone]|h|r"
+                DEFAULT_CHAT_FRAME:AddMessage(msg .. " has been added to your collection.")
+            end
+        end)
+    end
   end
+)
+-- @param _player_data metadata for player entry.
+-- 	@field name Player's name
+-- 	@field guild Player's guild
+-- 	@field source_id ID of creature that killed the player
+-- 	@field class_id Class ID of the player
+-- 	@field level Player's level
+-- 	@field instance_id Instance that player died in. Nil if player did not die in an instance
+-- 	@field map_id Zone ID that player died in. Nil if player died in an instance instead
+-- 	@field map_pos Map coordinates within zone specified by map_id, nil if player died in an instance instead
+-- 	@field date Date that the player died.  Unix Epoch.
+-- 	@field last_words Player's last words.
+-- @param _checksum A checksum for the player data
+-- @param _peer_report Number of guildmates that verified the death
+-- @param _in_guild Whether the player is in your guild
+
+function TdeathlogReceiveChannelMessage(sender, data)
+--  if data == nil then return end
+--  local decoded_player_data = TdecodeMessage(data)
+--  printDebug("Tombstones decoded a DeathLog death for " .. sender .. "!")
+--  if sender ~= decoded_player_data["name"] then return end
+--  local x, y = strsplit(",", decoded_player_data["map_pos"],2)
+  
+--  local mapID = tonumber(decoded_player_data["map_id"])
+--  local posX = tonumber(x)
+--  local posY = tonumber(y)
+
+--  local success, marker = AddDeathMarker(mapID, decoded_player_data["instance_id"], posX, posY, tonumber(decoded_player_data["date"]), sender, tonumber(decoded_player_data["level"]), tonumber(decoded_player_data["source_id"]), tonumber(decoded_player_data["class_id"]), tonumber(decoded_player_data["race_id"]), decoded_player_data["guild"])
+  
+--  local overlayFrame = CreateFrame("Frame", nil, WorldMapFrame)
+--  local overlayFrameTexture = overlayFrame:CreateTexture(nil, "ARTWORK")
+--  local textureIcon = "Interface\\Icons\\Ability_Creature_Cursed_03"
+--  overlayFrameTexture:SetAllPoints()
+--  overlayFrameTexture:SetTexture(textureIcon)
+
+--  ratingsSeenCount = ratingsSeenCount + 1
+
+--  miniButton.icon = textureIcon
+--  icon:Refresh("Tombstones")
+  
+--  C_Timer.After(7.0, function()
+--      ratingsSeenCount = ratingsSeenCount - 1
+--      if overlayFrame ~= nil then
+--          overlayFrame:Hide()
+--          overlayFrame = nil 
+--      end
+--      if(ratingsSeenCount == 0) then
+--        miniButton.icon = "Interface\\Icons\\Ability_fiegndead"
+--        icon:Refresh("Tombstones")
+--      end
+--  end)
+
+--  if (success and not IsInInstance() and deathRecordsDB.filteredTombsChat) then
+--      C_Timer.After(7.0, function()
+--          if (IsMarkerAllowedByFilters(marker)) then
+--              local last_words = marker.last_words or ""
+--              local _, santizedLastWords = extractBracketTextWithColor(last_words)
+--              local encodedLastWords = encodeColorizedText(santizedLastWords)
+--              local msg = "|cff9d9d9d|Hgarrmission:tombstones:"..marker.guild..":"..marker.timestamp..":"..marker.level..":"..marker.class_id..":"..marker.race_id..":"..marker.source_id..":"..marker.mapID..":"..marker.posX..":"..marker.posY..":\""..encodedLastWords.."\"|h["..marker.user.."'s Tombstone]|h|r"
+--              DEFAULT_CHAT_FRAME:AddMessage(msg .. " has been added to your collection.")
+--          end
+--      end)
+--  end
 end
 
 function TdecodeMessage(msg)
@@ -3186,32 +3221,6 @@ end
 --[[ Self Report Handling]]
 --
 local function TsendNextInQueue()
-	if #deathlog_death_queue > 0 then 
-		local dl_channel_num = GetChannelName(death_alerts_channel)
-		if dl_channel_num == 0 then
-		  TdeathlogJoinChannel()
-		  return
-		end
-    
-		local commMessage = deathlog_death_queue[1]
-		CTL:SendChatMessage("BULK", COMM_NAME, commMessage, "CHANNEL", nil, dl_channel_num)
-		table.remove(deathlog_death_queue, 1)
-		return
-	end
-
-	if #deathlog_last_words_queue > 0 then 
-		local dl_channel_num = GetChannelName(death_alerts_channel)
-		if dl_channel_num == 0 then
-		  TdeathlogJoinChannel()
-		  return
-		end
-
-		local commMessage = deathlog_last_words_queue[1]
-		CTL:SendChatMessage("BULK", COMM_NAME, commMessage, "CHANNEL", nil, dl_channel_num)
-		table.remove(deathlog_last_words_queue, 1)
-		return
-	end
-  
   if #tombstones_sync_request_queue > 0 then 
 		local ts_channel_num = GetChannelName(tombstones_channel)
 		if ts_channel_num == 0 then
@@ -3350,6 +3359,8 @@ hooksecurefunc("SetItemRef", function(link, text)
                         GameTooltip:AddLine("Killed by: " .. source_id, 1, 0, 0, true) 
                     elseif (env_dmg ~= nil) then
                         GameTooltip:AddLine("Died from: " .. env_dmg, 1, 0, 0, true) 
+                    elseif (source_id == nil and env_dmg == nil) then
+                        GameTooltip:AddLine("Fell to: " .. deathlog_decode_pvp_source(sourceID), 1, 0, 0, true) 
                     end
                 end
                 if (decoded_last_words ~= nil and decoded_last_words ~= "\"\"") then
@@ -3740,19 +3751,7 @@ end
 function Tombstones:CHAT_MSG_CHANNEL(data_str, sender_name_long, _, channel_name_long)
   local _, channel_name = string.split(" ", channel_name_long)
   local player_name_short, _ = string.split("-", sender_name_long)
-  if channel_name == death_alerts_channel then
-      local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
-      if command == COMM_COMMANDS["BROADCAST_DEATH_PING"] then
-          if not isPlayerMessageAllowed(player_name_short) then return end
-          printDebug("Receiving HC:DeathLog death for " .. player_name_short .. ".")
-          TdeathlogReceiveChannelMessage(player_name_short, msg)
-      end
-      if command == COMM_COMMANDS["LAST_WORDS"] then
-          if not isPlayerMessageAllowed(player_name_short) then return end
-          printDebug("Receiving HC:DeathLog last_words for " .. player_name_short .. ".")
-          TdeathlogReceiveLastWords(player_name_short, msg)
-      end
-  elseif channel_name == tombstones_channel then
+  if channel_name == tombstones_channel then
       local command, msg = string.split(COMM_COMMAND_DELIM, data_str)
       if command == TS_COMM_COMMANDS["BROADCAST_PVP_DEATH"] then
           if not isPlayerMessageAllowed(player_name_short) then return end
@@ -4054,7 +4053,6 @@ function Tombstones:ADDON_LOADED(addonName)
       printDebug("Tombstones is loading...")
       
       C_Timer.After(5.0, function()
-        TdeathlogJoinChannel()
         TombstonesJoinChannel()
       end)
   end

@@ -20,6 +20,7 @@ libs\HereBeDragons\HereBeDragons-2.0.lua
 libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
 libs\LibBase64-1.0\LibBase64-1.0.xml
 libs\ChatThrottleLib.lua
+libs\DeathNotificationLib\DeathNotificationLib.lua
 
 Helpers.lua
 Tombstones.lua
