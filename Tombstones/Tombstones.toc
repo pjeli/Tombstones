@@ -1,9 +1,9 @@
-## Interface: 100100
+## Interface: 11505
 
 ## Title: Tombstones
 ## Notes: See the tombstones the fallen.
 
-## Version: 1.0
+## Version: 0.35.0
 ## Author: pjeli
 ## SavedVariables: deathRecordsDB, engravingsDB
 
